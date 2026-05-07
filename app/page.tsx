@@ -1,28 +1,56 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { animate, onScroll, stagger } from 'animejs';
+import { useEffect, useRef, useState } from 'react';
+import { animate, morphTo, onScroll, scrambleText, stagger } from 'animejs';
 import Image from 'next/image';
 import Link from 'next/link';
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-full">
-      <Navbar />
-      <main className="flex-1">
-        <Hero />
-        <BookingCalendar />
-        <Features />
-        <HowItWorks />
-        <Stats />
-        <CTA />
-      </main>
-      <Footer />
-    </div>
+    <>
+      {/* Portrait-only overlay */}
+      <div className="hidden portrait:flex fixed inset-0 z-[9999] flex-col items-center justify-center gap-6 px-8 text-center bg-gray-950">
+        <div
+          className="flex h-20 w-20 items-center justify-center rounded-2xl bg-[#c8ff00]/10 border border-[#c8ff00]/30"
+          style={{ boxShadow: '0 0 40px rgba(200,255,0,0.15)' }}
+        >
+          <RotateIcon />
+        </div>
+        <div>
+          <p className="text-white text-xl font-semibold tracking-tight">
+            กรุณาหมุนหน้าจอ
+          </p>
+          <p className="mt-2 text-gray-500 text-sm leading-6">
+            เว็บไซต์นี้ออกแบบสำหรับหน้าจอแนวนอน<br />
+            (Landscape) เท่านั้น
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[#c8ff00]/60 border border-[#c8ff00]/20 rounded-full px-4 py-2">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse" />
+          หมุนอุปกรณ์เพื่อดูเนื้อหา
+        </div>
+      </div>
+
+      {/* Main content — landscape only */}
+      <div className="flex portrait:hidden flex-col min-h-full">
+        <Navbar />
+        <main className="flex-1">
+          <Hero />
+          <BookingCalendar />
+          <Features />
+          <HowItWorks />
+          <Stats />
+          <CTA />
+        </main>
+        <Footer />
+      </div>
+    </>
   );
 }
 
 function Navbar() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-gray-950/80 backdrop-blur-md">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -45,10 +73,10 @@ function Navbar() {
             <Link href="#pricing" className="hover:text-white transition-colors">ราคา</Link>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-3">
             <Link
               href="/login"
-              className="hidden sm:block text-sm text-gray-400 hover:text-white transition-colors px-4 py-2"
+              className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-2"
             >
               เข้าสู่ระบบ
             </Link>
@@ -60,8 +88,54 @@ function Navbar() {
               เริ่มต้นฟรี
             </Link>
           </div>
+
+          <button
+            className="md:hidden flex items-center justify-center h-9 w-9 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            onClick={() => setMobileOpen((o) => !o)}
+            aria-label="Toggle menu"
+          >
+            {mobileOpen ? <XIcon /> : <MenuIcon />}
+          </button>
         </div>
       </div>
+
+      {mobileOpen && (
+        <div className="md:hidden border-t border-white/10 bg-gray-950/95 backdrop-blur-md">
+          <div className="mx-auto max-w-7xl px-6 py-4 flex flex-col gap-1">
+            {[
+              { href: '#features', label: 'ฟีเจอร์' },
+              { href: '#how-it-works', label: 'วิธีใช้งาน' },
+              { href: '#pricing', label: 'ราคา' },
+            ].map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className="py-3 text-sm text-gray-400 hover:text-white transition-colors border-b border-white/5"
+                onClick={() => setMobileOpen(false)}
+              >
+                {label}
+              </Link>
+            ))}
+            <div className="pt-4 flex flex-col gap-3">
+              <Link
+                href="/login"
+                className="text-center py-2.5 text-sm text-gray-400 hover:text-white transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                เข้าสู่ระบบ
+              </Link>
+              <Link
+                href="/signup"
+                className="text-center rounded-full bg-[#c8ff00] px-4 py-2.5 text-sm font-medium text-gray-950 hover:bg-white transition-colors"
+                style={{ boxShadow: '0 0 20px rgba(200,255,0,0.35)' }}
+                onClick={() => setMobileOpen(false)}
+              >
+                เริ่มต้นฟรี
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
@@ -84,9 +158,17 @@ function Hero() {
       animate(lines, {
         opacity: [0, 1],
         translateY: [48, 0],
-        duration: 900,
-        delay: stagger(120, { start: 250 }),
+        duration: 700,
+        delay: stagger(220, { start: 250 }),
         ease: 'outCubic',
+      });
+      animate(lines, {
+        innerHTML: scrambleText({
+          chars: 'braille',
+          from: 'left',
+          override: '',
+          delay: stagger(220, { start: 250 }),
+        }),
       });
     }
 
@@ -127,7 +209,7 @@ function Hero() {
         }}
       />
 
-      <div className="relative flex-1 flex flex-col justify-center px-6 sm:px-10 lg:px-16 py-16 max-w-7xl mx-auto w-full">
+      <div className="relative z-10 flex-1 flex flex-col justify-center px-6 sm:px-10 lg:px-16 py-16 max-w-7xl mx-auto w-full">
         {/* Live status badge */}
         <div
           ref={badgeRef}
@@ -153,13 +235,13 @@ function Hero() {
           </span>
           <span
             className="block text-[clamp(3rem,9vw,8.5rem)]"
-            style={{ opacity: 0, WebkitTextStroke: '3px #c8ff00', color: 'transparent' }}
+            style={{ opacity: 0, WebkitTextStroke: '3px #c8ff00', color: 'transparent', textShadow: '0 0 24px rgba(200,255,0,0.25)' }}
           >
             ควบคุมได้
           </span>
           <span
             className="block text-[clamp(2.5rem,7.5vw,7rem)]"
-            style={{ opacity: 0, WebkitTextStroke: '2px #c8ff0066', color: 'transparent' }}
+            style={{ opacity: 0, WebkitTextStroke: '2px #c8ff0066', color: 'transparent', textShadow: '0 0 24px rgba(200,255,0,0.25)' }}
           >
             จากทุกที่
           </span>
@@ -186,40 +268,20 @@ function Hero() {
               ดูวิธีใช้งาน
             </Link>
           </div>
-
-          {/* Social proof */}
-          <div className="mt-12 flex items-center gap-4">
-            <div className="flex -space-x-2">
-              {[
-                'from-cyan-400 to-blue-600',
-                'from-violet-400 to-blue-600',
-                'from-emerald-400 to-cyan-600',
-                'from-amber-400 to-orange-500',
-              ].map((g, i) => (
-                <div
-                  key={i}
-                  className={`h-8 w-8 rounded-full border-2 border-[#07108a] bg-linear-to-br ${g}`}
-                />
-              ))}
-            </div>
-            <p className="text-xs text-white/50">
-              <span className="font-semibold text-white">12,000+</span>{' '}
-              นักวิจัยและนักศึกษาไว้วางใจ Remote Lab แล้ว
-            </p>
-          </div>
         </div>
       </div>
 
       <div
-        className="absolute right-50 bottom-0 w-[55%] lg:w-[48%] h-[88%] pointer-events-none hidden sm:block"
+        className="absolute z-0 right-170 bottom-0 w-[55%] lg:w-[24%] pointer-events-none hidden sm:block"
         aria-hidden
       >
         <Image
-          src="/img.png"
+          src="/index.png"
           alt="นักวิทยาศาสตร์และแขนหุ่นยนต์"
-          fill
-          className="object-contain object-bottom"
-          sizes="(max-width: 1024px) 55vw, 48vw"
+          width={4600}
+          height={4912}
+          className="w-full h-auto"
+          sizes="(max-width: 1024px) 55vw, 24vw"
           priority
         />
       </div>
@@ -263,17 +325,13 @@ function BookingCalendar() {
     const rows = sectionRef.current.querySelectorAll('.slot-row');
     animate(rows, { opacity: 0, duration: 0 });
 
+    const playIn = () => animate(rows, {
+      opacity: [0, 1], translateX: [-16, 0], duration: 500, delay: stagger(40), ease: 'outCubic',
+    });
     const observer = onScroll({
       target: sectionRef.current,
-      onEnterForward: () => {
-        animate(rows, {
-          opacity: [0, 1],
-          translateX: [-16, 0],
-          duration: 500,
-          delay: stagger(40),
-          ease: 'outCubic',
-        });
-      },
+      onEnterForward: () => { animate(rows, { opacity: 0, translateX: -16, duration: 0 }); playIn(); },
+      onEnterBackward: () => { animate(rows, { opacity: 0, translateX: -16, duration: 0 }); playIn(); },
     });
 
     return () => { observer.revert(); };
@@ -408,18 +466,13 @@ function Features() {
     const cards = sectionRef.current.querySelectorAll('.feature-card');
     animate(cards, { opacity: 0, translateY: 32, scale: 0.96, duration: 0 });
 
+    const playIn = () => animate(cards, {
+      opacity: [0, 1], translateY: [32, 0], scale: [0.96, 1], duration: 650, delay: stagger(90), ease: 'outCubic',
+    });
     const observer = onScroll({
       target: sectionRef.current,
-      onEnterForward: () => {
-        animate(cards, {
-          opacity: [0, 1],
-          translateY: [32, 0],
-          scale: [0.96, 1],
-          duration: 650,
-          delay: stagger(90),
-          ease: 'outCubic',
-        });
-      },
+      onEnterForward: () => { animate(cards, { opacity: 0, translateY: 32, scale: 0.96, duration: 0 }); playIn(); },
+      onEnterBackward: () => { animate(cards, { opacity: 0, translateY: 32, scale: 0.96, duration: 0 }); playIn(); },
     });
 
     return () => { observer.revert(); };
@@ -493,24 +546,15 @@ function HowItWorks() {
     const texts = sectionRef.current.querySelectorAll('.step-text');
     animate([circles, texts], { opacity: 0, duration: 0 });
 
+    const playIn = () => {
+      animate(circles, { opacity: [0, 1], scale: [0.6, 1], duration: 700, delay: stagger(150), ease: 'outBack' });
+      animate(texts, { opacity: [0, 1], translateY: [16, 0], duration: 600, delay: stagger(150, { start: 300 }), ease: 'outCubic' });
+    };
+    const reset = () => animate([circles, texts], { opacity: 0, duration: 0 });
     const observer = onScroll({
       target: sectionRef.current,
-      onEnterForward: () => {
-        animate(circles, {
-          opacity: [0, 1],
-          scale: [0.6, 1],
-          duration: 700,
-          delay: stagger(150),
-          ease: 'outBack',
-        });
-        animate(texts, {
-          opacity: [0, 1],
-          translateY: [16, 0],
-          duration: 600,
-          delay: stagger(150, { start: 300 }),
-          ease: 'outCubic',
-        });
-      },
+      onEnterForward: () => { reset(); playIn(); },
+      onEnterBackward: () => { reset(); playIn(); },
     });
 
     return () => { observer.revert(); };
@@ -578,23 +622,26 @@ function Stats() {
   useEffect(() => {
     if (!sectionRef.current) return;
 
+    const playIn = () => {
+      statItems.forEach((stat, i) => {
+        const el = ddRefs.current[i];
+        if (!el) return;
+        el.textContent = stat.render(0);
+        const obj = { val: 0 };
+        animate(obj, {
+          val: [0, stat.end],
+          duration: 1800,
+          delay: i * 120,
+          ease: 'outExpo',
+          onUpdate: () => { el.textContent = stat.render(obj.val); },
+          onComplete: () => { el.textContent = stat.display; },
+        });
+      });
+    };
     const observer = onScroll({
       target: sectionRef.current,
-      onEnterForward: () => {
-        statItems.forEach((stat, i) => {
-          const el = ddRefs.current[i];
-          if (!el) return;
-          const obj = { val: 0 };
-          animate(obj, {
-            val: [0, stat.end],
-            duration: 1800,
-            delay: i * 120,
-            ease: 'outExpo',
-            onUpdate: () => { el.textContent = stat.render(obj.val); },
-            onComplete: () => { el.textContent = stat.display; },
-          });
-        });
-      },
+      onEnterForward: () => playIn(),
+      onEnterBackward: () => playIn(),
     });
 
     return () => { observer.revert(); };
@@ -631,16 +678,11 @@ function CTA() {
     if (!inner) return;
     animate(inner, { opacity: 0, translateY: 32, duration: 0 });
 
+    const playIn = () => animate(inner, { opacity: [0, 1], translateY: [32, 0], duration: 800, ease: 'outCubic' });
     const observer = onScroll({
       target: sectionRef.current,
-      onEnterForward: () => {
-        animate(inner, {
-          opacity: [0, 1],
-          translateY: [32, 0],
-          duration: 800,
-          ease: 'outCubic',
-        });
-      },
+      onEnterForward: () => { animate(inner, { opacity: 0, translateY: 32, duration: 0 }); playIn(); },
+      onEnterBackward: () => { animate(inner, { opacity: 0, translateY: 32, duration: 0 }); playIn(); },
     });
 
     return () => { observer.revert(); };
@@ -800,6 +842,54 @@ function ClockIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <path d="M12 6v6l4 2" />
+    </svg>
+  );
+}
+
+function RotateIcon() {
+  const bodyRef   = useRef<SVGPathElement>(null);
+  const targetRef = useRef<SVGPathElement>(null);
+
+  const portrait  = 'M 25.5 10 L 38.5 10 Q 42 10 42 13.5 L 42 42.5 Q 42 46 38.5 46 L 25.5 46 Q 22 46 22 42.5 L 22 13.5 Q 22 10 25.5 10 Z';
+  const landscape = 'M 17.5 22 L 46.5 22 Q 50 22 50 25.5 L 50 38.5 Q 50 42 46.5 42 L 17.5 42 Q 14 42 14 38.5 L 14 25.5 Q 14 22 17.5 22 Z';
+
+  useEffect(() => {
+    if (!bodyRef.current || !targetRef.current) return;
+    animate(bodyRef.current, {
+      d: morphTo(targetRef.current),
+      duration: 850,
+      ease: 'inOutCubic',
+      loop: true,
+      alternate: true,
+      loopDelay: 700,
+    });
+  }, []);
+
+  return (
+    <svg width="52" height="52" viewBox="0 0 64 64" fill="none">
+      {/* Hidden target shape for morphTo — must exist in DOM */}
+      <path ref={targetRef} d={landscape} style={{ visibility: 'hidden', pointerEvents: 'none' }} />
+      {/* Phone body — morphs portrait → landscape → portrait */}
+      <path ref={bodyRef} d={portrait} stroke="#c8ff00" strokeWidth="2" fill="rgba(200,255,0,0.07)" />
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   );
 }

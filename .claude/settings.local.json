@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Add-Type -AssemblyName System.Drawing; $img = [System.Drawing.Image]::FromFile\\('d:\\\\GitHub\\\\remote-lab\\\\public\\\\index0.png'\\); \"$\\($img.Width\\) x $\\($img.Height\\)\"; $img.Dispose\\(\\))",
+      "PowerShell(Add-Type -AssemblyName System.Drawing; foreach \\($f in @\\('index.png','index0.png'\\)\\) { $img = [System.Drawing.Image]::FromFile\\(\"d:\\\\GitHub\\\\remote-lab\\\\public\\\\$f\"\\); \"$f : $\\($img.Width\\) x $\\($img.Height\\)\"; $img.Dispose\\(\\) })",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(npx tsc *)",
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression; try { $pdfPath = \"d:\\\\GitHub\\\\remote-lab\\\\public\\\\doc\\\\การทดลองที่ 08.pdf\"; $bytes = [System.IO.File]::ReadAllBytes\\($pdfPath\\); $text = [System.Text.Encoding]::UTF8.GetString\\($bytes\\); $text | Select-String -Pattern \"[฀-๿]+\" | Select-Object -First 50 | ForEach-Object { $_.Matches.Value } } catch { $_.Exception.Message })",
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression; $bytes = [System.IO.File]::ReadAllBytes\\(\"d:\\\\GitHub\\\\remote-lab\\\\public\\\\doc\\\\data 8 สนามแม่เหล็ก.pdf\"\\); $text = [System.Text.Encoding]::Latin1.GetString\\($bytes\\); $lines = $text -split '\\\\n' | Where-Object { $_ -match 'BT|ET|Tf|Tj|TJ' } | Select-Object -First 80; $lines -join \"`n\")",
+      "PowerShell($files = @\\(\"การทดลองที่ 08.pdf\", \"data 8 สนามแม่เหล็ก.pdf\", \"การทดลองที่ 08 สนามแม่เหล็ก.pdf\"\\); foreach \\($f in $files\\) { $path = \"d:\\\\GitHub\\\\remote-lab\\\\public\\\\doc\\\\$f\"; $bytes = [System.IO.File]::ReadAllBytes\\($path\\); Write-Host \"=== $f \\($\\($bytes.Length\\) bytes\\) ===\"; $ascii = [System.Text.Encoding]::ASCII.GetString\\($bytes\\) -replace '[^\\\\x20-\\\\x7E]',' '; $words = \\($ascii -split '\\\\s+'\\) | Where-Object { $_.Length -gt 3 -and $_ -notmatch '^[^a-zA-Z0-9]+$' } | Select-Object -Unique -First 100; Write-Host \\($words -join ' '\\); Write-Host '' })",
+      "PowerShell(pip install pypdf --quiet 2>&1)",
+      "PowerShell(tail -3)",
+      "PowerShell(pip install pypdf -q)"
+    ]
+  }
+}
