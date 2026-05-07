@@ -824,56 +824,116 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
 
 function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
   if (inst.type === 'coil') {
+    const { turns: n, R } = inst;
+    const result = calcBCoil(n, I, R);
     return (
-      <div className="rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5 py-2 space-y-1.5">
-        <div className="text-[8px] font-semibold text-gray-600 uppercase tracking-wider">Biot–Savart — ขดลวดเดี่ยว</div>
-        <div className="font-mono text-[9px]">
-          <span style={{ color: '#c8ff00' }}>B₀</span>
-          <span className="text-gray-500"> = μ₀ · n · I / (2R)</span>
+      <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5">
+        <div className="text-[8px] font-semibold text-gray-600 uppercase tracking-wider shrink-0">
+          Biot–Savart · ขดลวดเดี่ยว
         </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono text-[8.5px]">
-          {[
-            { k: 'n',   v: `${inst.turns} รอบ`,              c: '#a3e635' },
-            { k: 'R',   v: `${(inst.R * 1000).toFixed(0)} มม.` },
-            { k: 'μ₀',  v: '4π×10⁻⁷ H/m' },
-            { k: 'I',   v: `${I.toFixed(3)} A`,              c: '#22d3ee' },
-          ].map(p => (
-            <span key={p.k} className="flex gap-1">
-              <span className="text-gray-600">{p.k} =</span>
-              <span style={{ color: (p as { c?: string }).c }} className={(p as { c?: string }).c ? '' : 'text-gray-400'}>{p.v}</span>
-            </span>
-          ))}
+
+        <div className="flex-1 flex flex-col justify-evenly min-h-0 font-mono">
+          {/* Algebraic form */}
+          <div className="text-[10px]">
+            <span style={{ color: '#c8ff00' }}>B₀</span>
+            <span className="text-gray-400"> = μ₀ · n · I / (2R)</span>
+          </div>
+
+          {/* Substituted fraction */}
+          <div className="text-[8.5px] text-gray-400 pl-3 space-y-0.5">
+            <div className="text-gray-500">=</div>
+            <div className="text-gray-300">4π×10⁻⁷ × {n} × {I.toFixed(3)}</div>
+            <div className="h-px bg-gray-700" />
+            <div className="text-gray-300">2 × {(R * 1000).toFixed(0)}×10⁻³</div>
+          </div>
+
+          {/* Parameters */}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[8.5px]">
+            {([
+              { k: 'n',  v: `${n} รอบ`,                    c: '#a3e635' },
+              { k: 'R',  v: `${(R*1000).toFixed(0)} มม.` },
+              { k: 'μ₀', v: '4π×10⁻⁷ H/m' },
+              { k: 'I',  v: `${I.toFixed(3)} A`,            c: '#22d3ee' },
+            ] as { k: string; v: string; c?: string }[]).map(p => (
+              <div key={p.k} className="flex gap-1">
+                <span className="text-gray-600">{p.k} =</span>
+                <span style={{ color: p.c }} className={p.c ? '' : 'text-gray-400'}>{p.v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Result */}
+        <div className="shrink-0 pt-2 mt-1 border-t border-white/[0.07] flex items-baseline gap-2">
+          <span className="font-mono text-[9px] text-gray-500">B₀ =</span>
+          <span className="font-mono text-2xl font-bold tabular-nums"
+            style={{ color: '#c8ff00', textShadow: '0 0 18px rgba(200,255,0,0.45)' }}>
+            {result.toFixed(3)}
+          </span>
+          <span className="text-[10px] text-gray-500">mT</span>
         </div>
       </div>
     );
   }
 
-  const a = (inst.L / 2 + z) * 100;  // cm
-  const b = (inst.L / 2 - z) * 100;  // cm
+  // Solenoid
+  const { N, L, R } = inst;
+  const a = L / 2 + z;
+  const b = L / 2 - z;
+  const cosA1 = a / Math.sqrt(R * R + a * a);
+  const cosA2 = b / Math.sqrt(R * R + b * b);
+  const result = calcBSolenoid(N, I, L, R, z);
+  const halfLcm = (L / 2 * 100).toFixed(0);
+  const zCm = (z * 100).toFixed(0);
+
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5 py-2 space-y-1.5">
-      <div className="text-[8px] font-semibold text-gray-600 uppercase tracking-wider">โซลีนอยด์จำกัดความยาว</div>
-      <div className="font-mono text-[9px] leading-snug">
-        <span style={{ color: '#c8ff00' }}>B_z</span>
-        <span className="text-gray-500"> = (μ₀NI/2L) × [cosα₁ + cosα₂]</span>
+    <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5">
+      <div className="text-[8px] font-semibold text-gray-600 uppercase tracking-wider shrink-0">
+        โซลีนอยด์จำกัดความยาว
       </div>
-      <div className="font-mono text-[8.5px] text-gray-600 leading-snug">
-        cosα = <span className="text-gray-400">x / √(R² + x²)</span>
+
+      <div className="flex-1 flex flex-col justify-evenly min-h-0 font-mono">
+        {/* Formula */}
+        <div className="text-[9px] space-y-0.5">
+          <div><span style={{ color: '#c8ff00' }}>B_z</span><span className="text-gray-400"> = (μ₀NI / 2L)</span></div>
+          <div className="text-gray-400 pl-4">× [cosα₁ + cosα₂]</div>
+          <div className="text-[8px] text-gray-600 pl-4">cosα = x / √(R² + x²)</div>
+        </div>
+
+        {/* a and b */}
+        <div className="text-[8.5px] space-y-0.5">
+          <div className="text-gray-600">
+            a = {halfLcm} + {zCm} = <span style={{ color: '#a78bfa' }}>{(a*100).toFixed(0)} cm</span>
+          </div>
+          <div className="text-gray-600">
+            b = {halfLcm} − {zCm} = <span style={{ color: '#a78bfa' }}>{(b*100).toFixed(0)} cm</span>
+          </div>
+        </div>
+
+        {/* cosα values */}
+        <div className="text-[8.5px] space-y-0.5">
+          <div className="text-gray-600">cosα₁ = <span className="text-gray-300">{cosA1.toFixed(4)}</span></div>
+          <div className="text-gray-600">cosα₂ = <span className="text-gray-300">{cosA2.toFixed(4)}</span></div>
+          <div className="text-gray-600">cosα₁ + cosα₂ = <span className="text-gray-200">{(cosA1 + cosA2).toFixed(4)}</span></div>
+        </div>
+
+        {/* Parameters */}
+        <div className="grid grid-cols-3 gap-x-2 gap-y-0.5 text-[8px]">
+          <span className="text-gray-600">N=<span style={{ color: '#a3e635' }}>{N}</span></span>
+          <span className="text-gray-600">L=<span className="text-gray-400">{(L*1000).toFixed(0)}mm</span></span>
+          <span className="text-gray-600">R=<span className="text-gray-400">{(R*1000).toFixed(0)}mm</span></span>
+          <span className="col-span-3 text-gray-600">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(3)} A</span></span>
+        </div>
       </div>
-      <div className="grid grid-cols-3 gap-x-3 gap-y-0.5 font-mono text-[8.5px]">
-        {[
-          { k: 'N',  v: String(inst.N),                       c: '#a3e635' },
-          { k: 'L',  v: `${(inst.L * 1000).toFixed(0)} มม.` },
-          { k: 'R',  v: `${(inst.R * 1000).toFixed(0)} มม.` },
-          { k: 'a',  v: `${a.toFixed(0)} ซม.`,                c: '#a78bfa' },
-          { k: 'b',  v: `${b.toFixed(0)} ซม.`,                c: '#a78bfa' },
-          { k: 'I',  v: `${I.toFixed(3)} A`,                  c: '#22d3ee' },
-        ].map(p => (
-          <span key={p.k} className="flex gap-1">
-            <span className="text-gray-600">{p.k} =</span>
-            <span style={{ color: (p as { c?: string }).c }} className={(p as { c?: string }).c ? '' : 'text-gray-400'}>{p.v}</span>
-          </span>
-        ))}
+
+      {/* Result */}
+      <div className="shrink-0 pt-2 mt-1 border-t border-white/[0.07] flex items-baseline gap-2">
+        <span className="font-mono text-[9px] text-gray-500">B_z =</span>
+        <span className="font-mono text-2xl font-bold tabular-nums"
+          style={{ color: '#c8ff00', textShadow: '0 0 18px rgba(200,255,0,0.45)' }}>
+          {result.toFixed(3)}
+        </span>
+        <span className="text-[10px] text-gray-500">mT</span>
       </div>
     </div>
   );
@@ -884,7 +944,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 function FormulaPanel({ inst, I, z }: { inst: Inst; I: number; z: number }) {
   return (
     <div className="shrink-0 w-[220px] rounded-xl border border-white/10 bg-gray-900/50 p-3 flex flex-col">
-      <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5 shrink-0">สูตรการคำนวณ</h2>
+      <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 shrink-0">สูตรการคำนวณ</h2>
       <FormulaCard inst={inst} I={I} z={z} />
     </div>
   );
