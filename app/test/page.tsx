@@ -164,10 +164,6 @@ export default function RemoteLabPage() {
     ? calcBCoil(inst.turns, I, inst.R)
     : calcBSolenoid(inst.N, I, inst.L, inst.R, z);
 
-  const formulaLabel = inst.type === 'coil'
-    ? `B₀=μ₀nI/2R  (n=${inst.turns})`
-    : `Bz=μ₀NI(a+b)/2L  (N=${inst.N})`;
-
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
       <SessionBar />
@@ -185,7 +181,6 @@ export default function RemoteLabPage() {
               instType={inst.type}
               bTheory={bTheory} bMeasured={bMeasured}
               I={I} I0={I0} z={z}
-              formulaLabel={formulaLabel}
             />
           </div>
           <div
@@ -335,7 +330,7 @@ function CamTimestamp() {
     const t = setInterval(() => setTime(nowTime()), 1000);
     return () => clearInterval(t);
   }, []);
-  return <div className="absolute bottom-2 right-2 text-[8px] font-mono text-[#c8ff00]/40 z-20 select-none">{time}</div>;
+  return <div className="absolute bottom-2 right-2 text-[9px] font-mono text-[#c8ff00]/40 z-20 select-none">{time}</div>;
 }
 
 // ── Instrument Selector ───────────────────────────────────────────────────────
@@ -367,8 +362,8 @@ function InstrumentSelector({ active, onSelect }: { active: number; onSelect: (i
           if (inst.type !== 'coil') return null;
           return (
             <button key={inst.id} onClick={() => handleSelect(i)}
-              className={`inst-card relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
-              style={{ opacity: 0, boxShadow: i === active ? '0 0 20px rgba(200,255,0,0.06) inset' : undefined }}
+              className={`inst-card opacity-0 relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
+              style={{ boxShadow: i === active ? '0 0 20px rgba(200,255,0,0.06) inset' : undefined }}
             >
               {i === active && <div className="absolute top-0 left-3 right-3 h-px bg-linear-to-r from-transparent via-[#c8ff00]/50 to-transparent" />}
               <div className="flex items-center gap-2">
@@ -387,8 +382,8 @@ function InstrumentSelector({ active, onSelect }: { active: number; onSelect: (i
           if (inst.type !== 'solenoid') return null;
           return (
             <button key={inst.id} onClick={() => handleSelect(i)}
-              className={`inst-card relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
-              style={{ opacity: 0, boxShadow: i === active ? '0 0 20px rgba(200,255,0,0.06) inset' : undefined }}
+              className={`inst-card opacity-0 relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
+              style={{ boxShadow: i === active ? '0 0 20px rgba(200,255,0,0.06) inset' : undefined }}
             >
               {i === active && <div className="absolute top-0 left-3 right-3 h-px bg-linear-to-r from-transparent via-[#c8ff00]/50 to-transparent" />}
               <div className="flex items-center gap-2">
@@ -409,12 +404,11 @@ function InstrumentSelector({ active, onSelect }: { active: number; onSelect: (i
 
 // ── Split Field Panel ─────────────────────────────────────────────────────────
 
-function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z, formulaLabel }: {
+function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z }: {
   instType: 'solenoid' | 'coil';
   bTheory: number; bMeasured: number;
   I: number; I0: number;
   z: number;
-  formulaLabel: string;
 }) {
   const [split, setSplit] = useState(50);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -441,10 +435,12 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z, formulaLabel 
           <span className="text-gray-600 font-normal">vs</span>
           <span style={{ color: '#22d3ee' }}>วัดจริง · {bMeasured.toFixed(3)} mT</span>
         </div>
-        <div className="flex items-center gap-3 text-[9px] font-mono text-gray-600 shrink-0">
-          {instType === 'solenoid' && <span>Z={( z * 100).toFixed(0)} cm</span>}
-          <span>I₀={I0.toFixed(2)} A · I={I.toFixed(3)} A</span>
-          <span className="border border-white/10 rounded-full px-2 py-0.5">{formulaLabel}</span>
+        <div className="flex items-center gap-3 text-[9px] font-mono shrink-0">
+          {instType === 'solenoid' && (
+            <span className="text-gray-500">Z = <span style={{ color: '#a78bfa' }}>{(z * 100).toFixed(0)} cm</span></span>
+          )}
+          <span className="text-gray-600">I₀ = {I0.toFixed(2)} A</span>
+          <span className="text-gray-500">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(3)} A</span></span>
         </div>
       </div>
 
@@ -587,14 +583,15 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
 
   useEffect(() => {
     if (!panelRef.current) return;
-    animate(panelRef.current.querySelectorAll('.s-card'), {
+    const cards = panelRef.current.querySelectorAll<HTMLElement>('.s-card');
+    cards.forEach(c => { c.style.opacity = '0'; });
+    animate(cards, {
       opacity: [0, 1], scale: [0.92, 1], translateY: [10, 0],
       duration: 450, delay: stagger(70, { start: 300 }), ease: 'outCubic',
     });
-  }, []);
+  }, [inst.id]);
 
   const delta = bMeasured - bTheory;
-  const formula = inst.type === 'coil' ? `B₀=μ₀nI/2R` : `Bz=μ₀NI(a+b)/2L`;
 
   const rows = inst.type === 'coil'
     ? [
@@ -616,10 +613,7 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
 
   return (
     <div ref={panelRef} className="shrink-0 w-[220px] rounded-xl border border-white/10 bg-gray-900/50 p-3">
-      <div className="flex items-center justify-between mb-2.5">
-        <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ค่าที่วัดได้</h2>
-        <span className="text-[9px] text-gray-600 border border-white/[0.08] rounded-full px-2 py-0.5 font-mono">{formula}</span>
-      </div>
+      <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">ค่าที่วัดได้</h2>
       <div className="space-y-1.5">
         {rows.map(r => (
           <SensorRow key={r.label} {...r} />
@@ -639,11 +633,11 @@ function SensorRow({ label, value, unit, color }: { label: string; value: string
     prevRef.current = value;
   }, [value]);
   return (
-    <div className="s-card flex items-center justify-between rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5 py-2" style={{ opacity: 0 }}>
-      <span className="text-[10px] text-gray-500">{label}</span>
+    <div className="s-card flex items-center justify-between rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5 py-2">
+      <span className="text-[10px] text-gray-400">{label}</span>
       <div className="flex items-baseline gap-1">
         <span ref={valRef} className="text-sm font-mono font-bold tabular-nums" style={{ color }}>{value}</span>
-        <span className="text-[9px] text-gray-600">{unit}</span>
+        <span className="text-[9px] text-gray-500">{unit}</span>
       </div>
     </div>
   );
@@ -828,7 +822,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
     const result = calcBCoil(n, I, R);
     return (
       <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5">
-        <div className="text-[8px] font-semibold text-gray-600 uppercase tracking-wider shrink-0">
+        <div className="text-[9px] font-semibold text-gray-600 uppercase tracking-wider shrink-0">
           Biot–Savart · ขดลวดเดี่ยว
         </div>
 
@@ -888,7 +882,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5">
-      <div className="text-[8px] font-semibold text-gray-600 uppercase tracking-wider shrink-0">
+      <div className="text-[9px] font-semibold text-gray-600 uppercase tracking-wider shrink-0">
         โซลีนอยด์จำกัดความยาว
       </div>
 
@@ -897,7 +891,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
         <div className="text-[9px] space-y-0.5">
           <div><span style={{ color: '#c8ff00' }}>B_z</span><span className="text-gray-400"> = (μ₀NI / 2L)</span></div>
           <div className="text-gray-400 pl-4">× [cosα₁ + cosα₂]</div>
-          <div className="text-[8px] text-gray-600 pl-4">cosα = x / √(R² + x²)</div>
+          <div className="text-[9px] text-gray-600 pl-4">cosα = x / √(R² + x²)</div>
         </div>
 
         {/* a and b */}
@@ -918,7 +912,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
         </div>
 
         {/* Parameters */}
-        <div className="grid grid-cols-3 gap-x-2 gap-y-0.5 text-[8px]">
+        <div className="grid grid-cols-3 gap-x-2 gap-y-0.5 text-[9px]">
           <span className="text-gray-600">N=<span style={{ color: '#a3e635' }}>{N}</span></span>
           <span className="text-gray-600">L=<span className="text-gray-400">{(L*1000).toFixed(0)}mm</span></span>
           <span className="text-gray-600">R=<span className="text-gray-400">{(R*1000).toFixed(0)}mm</span></span>
@@ -982,8 +976,70 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
     c.scrollTo({ left: idx * COL_W - c.clientWidth / 2 + COL_W / 2, behavior: 'smooth' });
   }, [zCm]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-scan state ──
+  const [scanning, setScanning] = useState(false);
+  const scanRef = useRef({ active: false, dir: 1 as 1 | -1, z, bMeasured, bTheory });
+
+  useEffect(() => {
+    scanRef.current.z = z;
+    scanRef.current.bMeasured = bMeasured;
+    scanRef.current.bTheory = bTheory;
+  }, [z, bMeasured, bTheory]);
+
+  useEffect(() => () => { scanRef.current.active = false; }, []);
+
+  function startScan(dir: 1 | -1) {
+    if (scanRef.current.active) {
+      scanRef.current.active = false;
+      setScanning(false);
+      return;
+    }
+    scanRef.current.active = true;
+    scanRef.current.dir = dir;
+    setScanning(true);
+
+    function step() {
+      if (!scanRef.current.active) return;
+      const curCm = Math.round(scanRef.current.z * 100);
+      setMeasData(prev => new Map(prev).set(curCm, {
+        bMeasured: scanRef.current.bMeasured,
+        bTheory:   scanRef.current.bTheory,
+      }));
+      const nextCm = curCm + scanRef.current.dir;
+      if (nextCm < -15 || nextCm > 15) {
+        scanRef.current.active = false;
+        setScanning(false);
+        return;
+      }
+      setZ(nextCm / 100);
+      setTimeout(step, 900);
+    }
+    step();
+  }
+
   function record()  { setMeasData(prev => new Map(prev).set(zCm, { bMeasured, bTheory })); }
-  function clearAll(){ setMeasData(new Map()); }
+  function clearAll(){ scanRef.current.active = false; setScanning(false); setMeasData(new Map()); }
+
+  function downloadCSV() {
+    const allZ = Array.from({ length: 31 }, (_, i) => i - 15);
+    const header = 'Z (cm),B_theory (mT),B_measured (mT),delta_B (mT),delta_B (%)\n';
+    const rows = allZ
+      .filter(zv => measData.has(zv))
+      .map(zv => {
+        const p = measData.get(zv)!;
+        const d = p.bMeasured - p.bTheory;
+        const pct = (d / p.bTheory) * 100;
+        return `${zv},${p.bTheory.toFixed(4)},${p.bMeasured.toFixed(4)},${d.toFixed(4)},${pct.toFixed(2)}`;
+      })
+      .join('\n');
+    const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lab8_N${N}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const dataRows: { key: string; label: string; color: string; getValue: (p: MeasRecord) => { text: string; color?: string } }[] = [
     {
@@ -1027,15 +1083,53 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button onClick={record}
-            className="text-[9px] px-2 py-1 rounded-md bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] hover:bg-[#c8ff00]/20 transition-colors font-semibold leading-none">
-            บันทึก {zCm > 0 ? `+${zCm}` : zCm} cm
-          </button>
-          {recorded > 0 && (
-            <button onClick={clearAll}
-              className="text-[9px] px-1.5 py-1 rounded-md border border-white/10 text-gray-600 hover:text-gray-400 transition-colors leading-none">
-              ล้าง
-            </button>
+          {/* Scan ‹ */}
+          <button
+            onClick={() => startScan(-1)}
+            disabled={!scanning && zCm <= -15}
+            title={scanning && scanRef.current.dir === -1 ? 'หยุด' : 'สแกนถอยหลัง'}
+            className={`h-6 w-6 flex items-center justify-center rounded-md border text-[11px] font-bold transition-colors ${
+              scanning && scanRef.current.dir === -1
+                ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed'
+            }`}
+          >{scanning && scanRef.current.dir === -1 ? '■' : '‹'}</button>
+
+          {/* Record */}
+          <button
+            onClick={record}
+            disabled={scanning}
+            className="text-[9px] px-2 py-1 rounded-md bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] hover:bg-[#c8ff00]/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-semibold leading-none"
+          >บันทึก {zCm > 0 ? `+${zCm}` : zCm} cm</button>
+
+          {/* Scan › */}
+          <button
+            onClick={() => startScan(1)}
+            disabled={!scanning && zCm >= 15}
+            title={scanning && scanRef.current.dir === 1 ? 'หยุด' : 'สแกนไปหน้า'}
+            className={`h-6 w-6 flex items-center justify-center rounded-md border text-[11px] font-bold transition-colors ${
+              scanning && scanRef.current.dir === 1
+                ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed'
+            }`}
+          >{scanning && scanRef.current.dir === 1 ? '■' : '›'}</button>
+
+          {recorded > 0 && !scanning && (
+            <>
+              <button
+                onClick={downloadCSV}
+                title="ดาวน์โหลด CSV"
+                className="h-6 w-6 flex items-center justify-center rounded-md border border-white/10 text-gray-400 hover:border-[#c8ff00]/40 hover:text-[#c8ff00] transition-colors"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v13M5 14l7 7 7-7"/><path d="M3 21h18"/>
+                </svg>
+              </button>
+              <button onClick={clearAll}
+                className="text-[9px] px-1.5 py-1 rounded-md border border-white/10 text-gray-600 hover:text-gray-400 transition-colors leading-none">
+                ล้าง
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1046,7 +1140,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
         {/* Sticky row-label column */}
         <div className="shrink-0 flex flex-col border-r border-white/[0.06]" style={{ width: LABEL_W }}>
           {/* Z-header cell */}
-          <div className="shrink-0 h-[26px] px-2 flex items-center text-[8px] font-semibold text-gray-600 uppercase tracking-wider border-b border-white/5 select-none">
+          <div className="shrink-0 h-[26px] px-2 flex items-center text-[9px] font-semibold text-gray-600 uppercase tracking-wider border-b border-white/5 select-none">
             Z (cm)
           </div>
           {dataRows.map(r => (
