@@ -11,7 +11,10 @@
       "PowerShell($files = @\\(\"การทดลองที่ 08.pdf\", \"data 8 สนามแม่เหล็ก.pdf\", \"การทดลองที่ 08 สนามแม่เหล็ก.pdf\"\\); foreach \\($f in $files\\) { $path = \"d:\\\\GitHub\\\\remote-lab\\\\public\\\\doc\\\\$f\"; $bytes = [System.IO.File]::ReadAllBytes\\($path\\); Write-Host \"=== $f \\($\\($bytes.Length\\) bytes\\) ===\"; $ascii = [System.Text.Encoding]::ASCII.GetString\\($bytes\\) -replace '[^\\\\x20-\\\\x7E]',' '; $words = \\($ascii -split '\\\\s+'\\) | Where-Object { $_.Length -gt 3 -and $_ -notmatch '^[^a-zA-Z0-9]+$' } | Select-Object -Unique -First 100; Write-Host \\($words -join ' '\\); Write-Host '' })",
       "PowerShell(pip install pypdf --quiet 2>&1)",
       "PowerShell(tail -3)",
-      "PowerShell(pip install pypdf -q)"
+      "PowerShell(pip install pypdf -q)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\({deps:p.dependencies,dev:p.devDependencies},null,2\\)\\)\")",
+      "Bash(npm install *)",
+      "Bash(Get-ChildItem -Path \"d:\\\\GitHub\\\\remote-lab\" -Force)"
     ]
   }
 }

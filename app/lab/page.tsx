@@ -118,9 +118,119 @@ const instruments: Inst[] = [
   },
 ];
 
+// ── Access Gate ───────────────────────────────────────────────────────────────
+
+type AccessState =
+  | { status: 'loading' }
+  | { status: 'denied'; reason: 'auth' }
+  | { status: 'denied'; reason: 'no_booking'; next: { start_time: string; experiment_name: string } | null }
+  | { status: 'allowed'; end_time: string; experiment_name: string };
+
+function useAccessGate() {
+  const [access, setAccess] = useState<AccessState>({ status: 'loading' });
+
+  useEffect(() => {
+    fetch('/api/bookings/active-session')
+      .then(async r => {
+        if (r.status === 401) { setAccess({ status: 'denied', reason: 'auth' }); return; }
+        const d = await r.json();
+        if (!d.ok) { setAccess({ status: 'denied', reason: 'auth' }); return; }
+        if (d.active) {
+          // Mark booking as in_progress → stops repeat notifications
+          fetch(`/api/bookings/${d.booking.booking_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'start' }),
+          }).catch(() => {});
+          setAccess({ status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name });
+        } else {
+          setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
+        }
+      })
+      .catch(() => setAccess({ status: 'denied', reason: 'auth' }));
+  }, []);
+
+  // Re-check every 60 seconds — kick out when booking expires
+  useEffect(() => {
+    if (access.status !== 'allowed') return;
+    const id = setInterval(() => {
+      fetch('/api/bookings/active-session')
+        .then(r => r.json())
+        .then(d => {
+          if (!d.ok || !d.active) setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
+        })
+        .catch(() => {});
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [access.status]);
+
+  return access;
+}
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function AccessDeniedScreen({ access }: { access: Extract<AccessState, { status: 'denied' }> }) {
+  return (
+    <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center px-6 text-center">
+      <div className="fixed inset-0 pointer-events-none" style={{
+        backgroundImage: 'linear-gradient(rgba(200,255,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.03) 1px, transparent 1px)',
+        backgroundSize: '64px 64px',
+      }} />
+      <div className="relative z-10 max-w-sm w-full">
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
+
+        {access.reason === 'auth' ? (
+          <>
+            <h1 className="text-xl font-bold text-white mb-2">กรุณาเข้าสู่ระบบก่อน</h1>
+            <p className="text-sm text-gray-500 mb-6">ต้องเข้าสู่ระบบและมีการจองที่ถูกต้องจึงจะเข้าใช้งานห้องแลปได้</p>
+            <a href="/login"
+              className="inline-block rounded-full bg-[#c8ff00] px-6 py-2.5 text-sm font-semibold text-gray-950 hover:bg-white transition-colors"
+              style={{ boxShadow: '0 0 20px rgba(200,255,0,0.25)' }}>
+              เข้าสู่ระบบ
+            </a>
+          </>
+        ) : (
+          <>
+            <h1 className="text-xl font-bold text-white mb-2">ไม่สามารถเข้าใช้งานได้</h1>
+            <p className="text-sm text-gray-400 mb-1">ขณะนี้ไม่มีการจองที่ active อยู่</p>
+            <p className="text-xs text-gray-600 mb-6">สามารถเข้าใช้งานได้เฉพาะในช่วงเวลาที่จองไว้เท่านั้น</p>
+
+            {access.next ? (
+              <div className="mb-6 rounded-xl border border-[#c8ff00]/20 bg-[#c8ff00]/5 px-4 py-3 text-sm">
+                <p className="text-xs text-gray-500 mb-1">การจองถัดไป</p>
+                <p className="font-semibold text-white">{access.next.experiment_name}</p>
+                <p className="text-xs text-[#c8ff00] mt-0.5">{formatDateTime(access.next.start_time)}</p>
+              </div>
+            ) : (
+              <div className="mb-6 rounded-xl border border-white/10 bg-gray-900/50 px-4 py-3 text-sm text-gray-500">
+                ยังไม่มีการจองที่กำลังจะมา
+              </div>
+            )}
+
+            <a href="/dashboard"
+              className="inline-block rounded-full bg-[#c8ff00] px-6 py-2.5 text-sm font-semibold text-gray-950 hover:bg-white transition-colors"
+              style={{ boxShadow: '0 0 20px rgba(200,255,0,0.25)' }}>
+              ไปจองห้องแลป
+            </a>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function RemoteLabPage() {
+  const access = useAccessGate();
   const [instrument, setInstrument] = useState(0);
   const [I, setI] = useState(5.0);
   const [z, setZ] = useState(0); // Z position in metres (solenoid only, ±0.15 m)
@@ -154,6 +264,18 @@ export default function RemoteLabPage() {
     if (btmRowRef.current) animate(btmRowRef.current, { opacity: [0, 1], translateY: [16, 0], duration: 650, delay: 120, ease: 'outCubic' });
     if (rightRef.current)  animate(rightRef.current,  { opacity: [0, 1], translateX: [24, 0], duration: 650, delay: 80,  ease: 'outCubic' });
   }, []);
+
+  // ── Access gate ───────────────────────────────────────────────────────────
+  if (access.status === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+        <svg className="animate-spin text-[#c8ff00]" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+        </svg>
+      </div>
+    );
+  }
+  if (access.status === 'denied') return <AccessDeniedScreen access={access} />;
 
   const inst = instruments[instrument];
   const I0 = inst.I0;
@@ -469,102 +591,150 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z }: {
   );
 }
 
-// ── Solenoid SVG ──────────────────────────────────────────────────────────────
+// ── Field SVGs ────────────────────────────────────────────────────────────────
+// Path directions follow physical field flow:
+//   Solenoid inside: left → right (B field direction)
+//   Solenoid outside: right → left (returning via top and bottom arcs)
+//   Coil upper arcs: right (162) → left (158) via top
+//   Coil lower arcs: right (162) → left (158) via bottom  ← corrected
 
 const SOLENOID_OUTER: Record<'theory' | 'measured', string[]> = {
   theory: [
-    'M 60,90 C 28,70 26,32 160,32 C 294,32 292,70 260,90',
-    'M 260,90 C 292,110 294,148 160,148 C 26,148 28,110 60,90',
-    'M 60,90 C 10,55 8,5 160,5 C 312,5 310,55 260,90',
-    'M 260,90 C 310,125 312,175 160,175 C 8,175 10,125 60,90',
+    'M 260,90 C 292,70 294,32 160,32 C 26,32 28,70 60,90',    // top small  RIGHT→LEFT ✓
+    'M 260,90 C 292,110 294,148 160,148 C 26,148 28,110 60,90', // btm small  RIGHT→LEFT ✓
+    'M 260,90 C 310,55 312,5 160,5 C 8,5 10,55 60,90',          // top large  RIGHT→LEFT ✓
+    'M 260,90 C 310,125 312,175 160,175 C 8,175 10,125 60,90',  // btm large  RIGHT→LEFT ✓
   ],
   measured: [
-    'M 60,90 C 24,68 23,30 160,34 C 296,30 294,72 260,90',
+    'M 260,90 C 294,72 296,30 160,34 C 23,30 24,68 60,90',
     'M 260,90 C 296,110 298,150 160,146 C 22,150 24,112 60,90',
-    'M 60,90 C 8,53 6,3 160,7 C 314,3 312,57 260,90',
+    'M 260,90 C 312,57 314,3 160,7 C 6,3 8,53 60,90',
     'M 260,90 C 314,125 316,177 160,173 C 4,177 8,127 60,90',
   ],
 };
-const SOLENOID_INSIDE = ['M 65,74 L 255,74', 'M 65,90 L 255,90', 'M 65,106 L 255,106'];
+// Inside: L→R (correct field direction)
+const SOLENOID_INSIDE = ['M 60,74 L 260,74', 'M 60,90 L 260,90', 'M 60,106 L 260,106'];
 
 function SolenoidSVG({ mode }: { mode: 'theory' | 'measured' }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const color = mode === 'theory' ? '#c8ff00' : '#22d3ee';
-  useFlPathAnimation(svgRef, (i) => 2400 + i * 220, mode);
-
+  useFlPathAnimation(svgRef, (i) => {
+    // Scale duration to path length: inside lines ~200px, outer arcs ~350-500px
+    if (i < 4) return 2800 + i * 300;   // outer arcs (longer path → slower dash)
+    return 1600 + (i - 4) * 100;         // inside lines (shorter, faster flow)
+  }, mode);
   return (
     <svg ref={svgRef} viewBox="0 0 320 180" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-      <rect x="60" y="64" width="200" height="52" fill={`${color}05`} stroke={`${color}30`} strokeWidth="1.5" rx="2" />
+      {/* Solenoid body */}
+      <rect x="60" y="64" width="200" height="52" fill={`${color}04`} stroke={`${color}25`} strokeWidth="1" />
+      {/* Coil winding bumps — top edge (arcs bulging upward) */}
       {Array.from({ length: 11 }, (_, i) => (
-        <line key={i} x1={64 + i * 18} y1="64" x2={73 + i * 18} y2="64" stroke={`${color}35`} strokeWidth="2.5" />
+        <path key={i} d={`M ${62+i*18},64 A 9,7 0 0 0 ${80+i*18},64`}
+          fill="none" stroke={`${color}60`} strokeWidth="1.8" />
       ))}
+      {/* Coil winding bumps — bottom edge (arcs bulging downward) */}
       {Array.from({ length: 11 }, (_, i) => (
-        <line key={i} x1={64 + i * 18} y1="116" x2={73 + i * 18} y2="116" stroke={`${color}35`} strokeWidth="2.5" />
+        <path key={i} d={`M ${62+i*18},116 A 9,7 0 0 1 ${80+i*18},116`}
+          fill="none" stroke={`${color}60`} strokeWidth="1.8" />
       ))}
-      <text x="263" y="94" fontSize="10" fill={`${color}80`} fontFamily="monospace" fontWeight="bold">N</text>
-      <text x="45" y="94" fontSize="10" fill={`${color}80`} fontFamily="monospace" fontWeight="bold">S</text>
+      {/* N/S labels */}
+      <text x="268" y="94" fontSize="11" fill={`${color}90`} fontFamily="monospace" fontWeight="bold">N</text>
+      <text x="42" y="94" fontSize="11" fill={`${color}90`} fontFamily="monospace" fontWeight="bold">S</text>
+      {/* Current direction arrows at ends */}
+      <text x="268" y="108" fontSize="9" fill={`${color}50`} fontFamily="monospace">↑I</text>
+      <text x="42" y="108" fontSize="9" fill={`${color}50`} fontFamily="monospace">↓I</text>
+      {/* Outer field line loops (animated) */}
       {SOLENOID_OUTER[mode].map((d, i) => (
-        <path key={i} className="fl" d={d} fill="none" stroke={color} strokeWidth="1" opacity="0.5" />
+        <path key={i} className="fl" d={d} fill="none" stroke={color}
+          strokeWidth={i < 2 ? 1.1 : 0.7} opacity={i < 2 ? 0.55 : 0.3} />
       ))}
+      {/* Outer arc direction arrows (static) at midpoints */}
+      <polygon points="165,28 157,32 165,36"   fill={color} opacity="0.55" />  {/* top small arc mid */}
+      <polygon points="165,144 157,148 165,152" fill={color} opacity="0.55" />  {/* btm small arc mid */}
+      <polygon points="165,1 157,5 165,9"       fill={color} opacity="0.3"  />  {/* top large arc mid */}
+      <polygon points="165,171 157,175 165,179" fill={color} opacity="0.3"  />  {/* btm large arc mid */}
+      {/* Inside field lines (animated) */}
       {SOLENOID_INSIDE.map((d, i) => (
-        <path key={i} className="fl" d={d} fill="none" stroke={color} strokeWidth="1.4" opacity="0.85" />
+        <path key={i} className="fl" d={d} fill="none" stroke={color} strokeWidth="1.5" opacity="0.9" />
       ))}
+      {/* Inside direction arrows (static) */}
       {[74, 90, 106].map(y => (
-        <polygon key={y} points={`250,${y - 4} 258,${y} 250,${y + 4}`} fill={color} opacity="0.7" />
+        <polygon key={y} points={`154,${y-4} 162,${y} 154,${y+4}`} fill={color} opacity="0.8" />
       ))}
-      <text x="160" y="170" fontSize="8" fill={`${color}40`} fontFamily="monospace" textAnchor="middle">
+      <text x="160" y="171" fontSize="9" fill={`${color}35`} fontFamily="monospace" textAnchor="middle">
         {mode === 'theory' ? 'THEORETICAL · Bz=μ₀NI(a+b)/2L' : 'MEASURED · sensor data'}
       </text>
     </svg>
   );
 }
 
-// ── Single Coil SVG ───────────────────────────────────────────────────────────
-
-const COIL_AXIAL = ['M 5,90 L 148,90', 'M 172,90 L 315,90'];
+// Coil axis lines: left axis flows RIGHT→LEFT (B points toward S on left side)
+//                 right axis flows LEFT→RIGHT (B points away from N on right side)
+const COIL_AXIAL = ['M 148,90 L 5,90', 'M 172,90 L 315,90'];
 const COIL_LOOPS: Record<'theory' | 'measured', string[]> = {
   theory: [
-    'M 162,88 C 183,78 190,56 160,46 C 130,56 137,78 158,88',
-    'M 158,92 C 137,102 130,124 160,134 C 190,124 183,102 162,92',
-    'M 162,88 C 200,70 206,32 160,20 C 114,32 120,70 158,88',
-    'M 158,92 C 120,110 114,148 160,160 C 206,148 200,110 162,92',
-    'M 162,88 C 214,60 218,8 160,4 C 102,8 106,60 158,88',
-    'M 158,92 C 106,120 102,172 160,176 C 218,172 214,120 162,92',
+    'M 162,88 C 183,78 190,56 160,46 C 130,56 137,78 158,88',   // upper small  R→L via top ✓
+    'M 162,92 C 183,102 190,124 160,134 C 130,124 137,102 158,92', // lower small  R→L via btm ✓
+    'M 162,88 C 200,70 206,32 160,20 C 114,32 120,70 158,88',    // upper mid    R→L via top ✓
+    'M 162,92 C 200,110 206,148 160,160 C 114,148 120,110 158,92', // lower mid    R→L via btm ✓
+    'M 162,88 C 214,60 218,8 160,4 C 102,8 106,60 158,88',       // upper large  R→L via top ✓
+    'M 162,92 C 214,120 218,172 160,176 C 102,172 106,120 158,92', // lower large  R→L via btm ✓
   ],
   measured: [
     'M 162,88 C 186,76 192,54 160,44 C 128,56 135,80 158,88',
-    'M 158,92 C 135,104 128,126 160,136 C 192,122 186,102 162,92',
+    'M 162,92 C 186,102 192,122 160,136 C 128,126 135,104 158,92',
     'M 162,88 C 204,68 208,30 160,18 C 112,34 118,72 158,88',
-    'M 158,92 C 118,112 112,150 160,162 C 208,146 204,108 162,92',
+    'M 162,92 C 204,108 208,146 160,162 C 112,150 118,112 158,92',
     'M 162,88 C 218,58 220,6 160,2 C 100,10 104,62 158,88',
-    'M 158,92 C 104,118 100,170 160,178 C 220,174 218,122 162,92',
+    'M 162,92 C 218,122 220,174 160,178 C 100,170 104,118 158,92',
   ],
 };
 
 function CoilSVG({ mode }: { mode: 'theory' | 'measured' }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const color = mode === 'theory' ? '#c8ff00' : '#22d3ee';
-  useFlPathAnimation(svgRef, (i) => 2600 + i * 180, mode);
-
+  useFlPathAnimation(svgRef, (i) => {
+    if (i < 6) return 2200 + i * 280;   // field line loops
+    return 1800 + i * 100;               // axis lines
+  }, mode);
   return (
     <svg ref={svgRef} viewBox="0 0 320 180" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+      {/* Coil ring (ellipse seen slightly from side) */}
+      <ellipse cx="160" cy="90" rx="7" ry="24"
+        fill={`${color}04`} stroke={`${color}55`} strokeWidth="2" />
+      {/* Wire cross-sections: top = × (into page), bottom = • (out of page) */}
+      <circle cx="160" cy="68" r="5" fill={`${color}12`} stroke={`${color}70`} strokeWidth="1.5" />
+      <line x1="157" y1="65" x2="163" y2="71" stroke={`${color}70`} strokeWidth="1.5" />
+      <line x1="163" y1="65" x2="157" y2="71" stroke={`${color}70`} strokeWidth="1.5" />
+      <circle cx="160" cy="112" r="5" fill={`${color}20`} stroke={`${color}70`} strokeWidth="1.5" />
+      <circle cx="160" cy="112" r="2" fill={color} opacity="0.8" />
+      {/* Field line loops (animated — all R→L via top, R→L via bottom) */}
       {COIL_LOOPS[mode].map((d, i) => (
         <path key={i} className="fl" d={d} fill="none" stroke={color}
-          strokeWidth={i < 2 ? 1.4 : i < 4 ? 1.1 : 0.8}
-          opacity={i < 2 ? 0.8 : i < 4 ? 0.6 : 0.4}
+          strokeWidth={i < 2 ? 1.5 : i < 4 ? 1.1 : 0.75}
+          opacity={i < 2 ? 0.85 : i < 4 ? 0.6 : 0.35}
         />
       ))}
+      {/* Direction arrows on loops (static, at arc midpoints) */}
+      {/* Upper arcs: mid at top, field going LEFT */}
+      <polygon points="165,42 157,46 165,50"  fill={color} opacity="0.75" />
+      <polygon points="165,16 157,20 165,24"  fill={color} opacity="0.55" />
+      <polygon points="165,-1 157,3 165,7"    fill={color} opacity="0.3"  />
+      {/* Lower arcs: mid at bottom, field going LEFT */}
+      <polygon points="165,130 157,134 165,138" fill={color} opacity="0.75" />
+      <polygon points="165,156 157,160 165,164" fill={color} opacity="0.55" />
+      <polygon points="165,172 157,176 165,180" fill={color} opacity="0.3"  />
+      {/* Axis lines (animated) */}
       {COIL_AXIAL.map((d, i) => (
-        <path key={i} className="fl" d={d} fill="none" stroke={color} strokeWidth="1.2" opacity="0.7" />
+        <path key={i} className="fl" d={d} fill="none" stroke={color} strokeWidth="1.2" opacity="0.65" />
       ))}
-      <polygon points="140,86 148,90 140,94" fill={color} opacity="0.6" />
-      <polygon points="180,86 172,90 180,94" fill={color} opacity="0.6" />
-      <circle cx="160" cy="90" r="14" fill={`${color}06`} stroke={`${color}50`} strokeWidth="2" />
-      <circle cx="160" cy="90" r="3.5" fill={color} opacity="0.8" />
-      <circle cx="160" cy="90" r="1.5" fill="#030712" />
-      <text x="274" y="86" fontSize="10" fill={`${color}80`} fontFamily="monospace" fontWeight="bold">N</text>
-      <text x="36" y="86" fontSize="10" fill={`${color}80`} fontFamily="monospace" fontWeight="bold">S</text>
-      <text x="160" y="172" fontSize="8" fill={`${color}40`} fontFamily="monospace" textAnchor="middle">
+      {/* Axis arrows: left axis points LEFT, right axis points RIGHT */}
+      <polygon points="78,86 70,90 78,94"   fill={color} opacity="0.65" />
+      <polygon points="242,86 250,90 242,94" fill={color} opacity="0.65" />
+      {/* N/S labels */}
+      <text x="276" y="86" fontSize="11" fill={`${color}90`} fontFamily="monospace" fontWeight="bold">N</text>
+      <text x="32" y="86" fontSize="11" fill={`${color}90`} fontFamily="monospace" fontWeight="bold">S</text>
+      <text x="160" y="172" fontSize="9" fill={`${color}35`} fontFamily="monospace" textAnchor="middle">
         {mode === 'theory' ? 'THEORETICAL · B₀=μ₀nI/2R' : 'MEASURED · sensor data'}
       </text>
     </svg>

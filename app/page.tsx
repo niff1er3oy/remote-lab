@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { animate, morphTo, onScroll, scrambleText, stagger } from 'animejs';
 import Image from 'next/image';
 import Link from 'next/link';
+import BookingCalendar from './components/BookingCalendar';
 
 export default function Home() {
   return (
@@ -48,8 +49,27 @@ export default function Home() {
   );
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  student: 'นักศึกษา', researcher: 'นักวิจัย', instructor: 'อาจารย์', other: 'ผู้ใช้ทั่วไป',
+};
+
 function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.ok) setUser(d.user); })
+      .catch(() => {});
+  }, []);
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    setUser(null);
+    setUserMenuOpen(false);
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-gray-950/80 backdrop-blur-md">
@@ -74,19 +94,66 @@ function Navbar() {
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-2"
-            >
-              เข้าสู่ระบบ
-            </Link>
-            <Link
-              href="/signup"
-              className="rounded-full bg-[#c8ff00] px-4 py-2 text-sm font-medium text-gray-950 hover:bg-white transition-colors"
-              style={{ boxShadow: '0 0 20px rgba(200,255,0,0.35)' }}
-            >
-              เริ่มต้นฟรี
-            </Link>
+            {user ? (
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen(v => !v)}
+                  className="flex items-center gap-2.5 rounded-full border border-white/10 bg-gray-900/60 pl-1 pr-3 py-1 hover:border-[#c8ff00]/30 transition-colors"
+                >
+                  <div className="h-6 w-6 rounded-full bg-[#c8ff00]/20 border border-[#c8ff00]/40 flex items-center justify-center text-[11px] font-bold text-[#c8ff00]">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm text-white max-w-[120px] truncate">{user.name}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}>
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </button>
+
+                {userMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
+                    <div className="absolute right-0 top-full mt-2 z-20 w-52 rounded-xl border border-white/10 bg-gray-900 shadow-2xl overflow-hidden">
+                      <div className="px-4 py-3 border-b border-white/[0.06]">
+                        <p className="text-xs font-semibold text-white truncate">{user.name}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">{ROLE_LABELS[user.role] ?? user.role}</p>
+                      </div>
+                      <Link href="/dashboard" onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                        </svg>
+                        แดชบอร์ด
+                      </Link>
+                      <div className="border-t border-white/[0.06]" />
+                      <button onClick={handleLogout}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+                        </svg>
+                        ออกจากระบบ
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-2"
+                >
+                  เข้าสู่ระบบ
+                </Link>
+                <Link
+                  href="/signup"
+                  className="rounded-full bg-[#c8ff00] px-4 py-2 text-sm font-medium text-gray-950 hover:bg-white transition-colors"
+                  style={{ boxShadow: '0 0 20px rgba(200,255,0,0.35)' }}
+                >
+                  เริ่มต้นฟรี
+                </Link>
+              </>
+            )}
           </div>
 
           <button
@@ -117,21 +184,30 @@ function Navbar() {
               </Link>
             ))}
             <div className="pt-4 flex flex-col gap-3">
-              <Link
-                href="/login"
-                className="text-center py-2.5 text-sm text-gray-400 hover:text-white transition-colors"
-                onClick={() => setMobileOpen(false)}
-              >
-                เข้าสู่ระบบ
-              </Link>
-              <Link
-                href="/signup"
-                className="text-center rounded-full bg-[#c8ff00] px-4 py-2.5 text-sm font-medium text-gray-950 hover:bg-white transition-colors"
-                style={{ boxShadow: '0 0 20px rgba(200,255,0,0.35)' }}
-                onClick={() => setMobileOpen(false)}
-              >
-                เริ่มต้นฟรี
-              </Link>
+              {user ? (
+                <>
+                  <Link href="/dashboard" onClick={() => setMobileOpen(false)}
+                    className="text-center py-2.5 text-sm text-white transition-colors">
+                    แดชบอร์ด
+                  </Link>
+                  <button onClick={() => { handleLogout(); setMobileOpen(false); }}
+                    className="text-center py-2.5 text-sm text-red-400 hover:text-red-300 transition-colors">
+                    ออกจากระบบ
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link href="/login" onClick={() => setMobileOpen(false)}
+                    className="text-center py-2.5 text-sm text-gray-400 hover:text-white transition-colors">
+                    เข้าสู่ระบบ
+                  </Link>
+                  <Link href="/signup" onClick={() => setMobileOpen(false)}
+                    className="text-center rounded-full bg-[#c8ff00] px-4 py-2.5 text-sm font-medium text-gray-950 hover:bg-white transition-colors"
+                    style={{ boxShadow: '0 0 20px rgba(200,255,0,0.35)' }}>
+                    เริ่มต้นฟรี
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -289,141 +365,6 @@ function Hero() {
   );
 }
 
-const bookingTimeSlots = [
-  '00:00', '02:00', '04:00', '06:00', '08:00', '10:00',
-  '12:00', '14:00', '16:00', '18:00', '20:00', '22:00',
-];
-const bookingSlots = [
-  [false, false, false, false, false, false, false],
-  [false, false, false, false, false, false, false],
-  [true,  false, false, false, true,  false, false],
-  [false, false, true,  false, false, false, true ],
-  [false, true,  true,  false, false, true,  false],
-  [true,  true,  false, true,  false, false, true ],
-  [false, false, true,  true,  true,  false, false],
-  [false, true,  false, false, false, true,  false],
-  [true,  false, false, true,  false, false, false],
-  [false, false, true,  false, true,  true,  false],
-  [false, true,  false, false, false, false, true ],
-  [true,  false, false, true,  false, false, false],
-];
-
-function getBookingDates() {
-  const today = new Date();
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(-2)}`;
-  });
-}
-
-function BookingCalendar() {
-  const sectionRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (!sectionRef.current) return;
-    const rows = sectionRef.current.querySelectorAll('.slot-row');
-    animate(rows, { opacity: 0, duration: 0 });
-
-    const playIn = () => animate(rows, {
-      opacity: [0, 1], translateX: [-16, 0], duration: 500, delay: stagger(40), ease: 'outCubic',
-    });
-    const observer = onScroll({
-      target: sectionRef.current,
-      onEnterForward: () => { animate(rows, { opacity: 0, translateX: -16, duration: 0 }); playIn(); },
-      onEnterBackward: () => { animate(rows, { opacity: 0, translateX: -16, duration: 0 }); playIn(); },
-    });
-
-    return () => { observer.revert(); };
-  }, []);
-
-  const bookingDates = getBookingDates();
-
-  return (
-    <section ref={sectionRef} id="booking" className="py-24 sm:py-32 border-t border-white/5">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center mb-16">
-          <p className="text-sm font-semibold text-[#c8ff00] mb-3 tracking-wider uppercase">
-            ตารางการจอง
-          </p>
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            จองเวลาทดลองแบบ Real-time
-          </h2>
-          <p className="mt-4 text-gray-400">
-            ตรวจสอบสถานะห้องแล็บและเลือกช่วงเวลาที่ว่างได้ทันที ง่ายเพียงไม่กี่คลิก
-          </p>
-        </div>
-
-        <div className="mx-auto max-w-4xl rounded-2xl border border-white/10 bg-gray-900/50 p-6 sm:p-8">
-          <div className="overflow-x-auto">
-            <div className="min-w-[520px]">
-              <div className="grid grid-cols-[52px_repeat(7,1fr)] gap-1.5 mb-3">
-                <div />
-                {bookingDates.map((date, i) => (
-                  <div key={date} className="flex flex-col items-center gap-1">
-                    {i === 0 ? (
-                      <span className="text-[9px] font-bold text-[#c8ff00] uppercase tracking-widest">วันนี้</span>
-                    ) : (
-                      <span className="text-[9px] invisible">-</span>
-                    )}
-                    <span className={`text-[11px] font-semibold ${i === 0 ? 'text-white' : 'text-gray-500'}`}>
-                      {date}
-                    </span>
-                    {i === 0 && <div className="h-0.5 w-6 rounded-full bg-[#c8ff00]" />}
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1.5">
-                {bookingTimeSlots.map((time, ti) => (
-                  <div key={time} className="slot-row grid grid-cols-[52px_repeat(7,1fr)] gap-1.5 items-center">
-                    <span className="text-[11px] text-gray-600 font-mono text-right pr-2 leading-none">
-                      {time}
-                    </span>
-                    {bookingSlots[ti].map((booked, di) => (
-                      <div
-                        key={di}
-                        className={`h-8 rounded-lg transition-all ${
-                          booked
-                            ? 'bg-[#c8ff00]/80 shadow-md shadow-[#c8ff00]/20'
-                            : di === 0
-                              ? 'bg-gray-700/50 ring-1 ring-inset ring-[#c8ff00]/15 cursor-pointer hover:bg-gray-700 hover:ring-[#c8ff00]/30'
-                              : 'bg-gray-800/70 cursor-pointer hover:bg-gray-700/80'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-6 pt-5 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-3 text-xs text-gray-500">
-                  <span>ว่าง</span>
-                  <div className="flex items-center gap-0.5">
-                    {[8, 20, 40, 65, 100].map((pct) => (
-                      <div
-                        key={pct}
-                        className="h-3 w-4 rounded-sm"
-                        style={{ background: `rgba(200,255,0,${pct / 100})` }}
-                      />
-                    ))}
-                  </div>
-                  <span>จองแล้ว</span>
-                </div>
-                <Link
-                  href="/signup"
-                  className="rounded-full bg-[#c8ff00] px-5 py-2 text-xs font-semibold text-gray-950 hover:bg-white transition-colors"
-                >
-                  จองเลย →
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 const featureList = [
   {
