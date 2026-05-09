@@ -13,25 +13,31 @@ export async function GET() {
 
     const [upcoming] = await pool.query<RowDataPacket[]>(
       `SELECT b.booking_id,
-              CONCAT(ex.code, ' — ', ex.name_th) AS equipment_name,
+              CONCAT(l.code, ' — ', l.name_th) AS equipment_name,
               b.start_time, b.end_time, b.status
        FROM bookings b
-       JOIN equipment   e  ON e.equipment_id  = b.equipment_id
-       JOIN experiments ex ON ex.experiment_id = e.experiment_id
-       WHERE b.user_id = ? AND b.start_time >= NOW() AND b.status != 'cancelled'
+       JOIN labs l ON l.lab_id = b.lab_id
+       WHERE b.user_id = ?
+         AND b.start_time >= ?
+         AND b.status != 'cancelled'
        ORDER BY b.start_time ASC LIMIT 5`,
-      [uid]
+      [uid, new Date()]
     );
 
     const [[{ count: session_count }]] = await pool.query<RowDataPacket[]>(
       'SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?', [uid]
     ) as [RowDataPacket[], unknown];
 
-    const [[{ count: available_equipment }]] = await pool.query<RowDataPacket[]>(
-      "SELECT COUNT(*) AS count FROM equipment WHERE status = 'available'"
+    const [[{ count: active_labs }]] = await pool.query<RowDataPacket[]>(
+      'SELECT COUNT(*) AS count FROM labs WHERE is_active = 1'
     ) as [RowDataPacket[], unknown];
 
-    return NextResponse.json({ ok: true, upcoming_bookings: upcoming, session_count, available_equipment });
+    return NextResponse.json({
+      ok: true,
+      upcoming_bookings: upcoming,
+      session_count,
+      available_equipment: active_labs,
+    });
   } catch (err) {
     console.error('[dashboard/stats]', err);
     return NextResponse.json({ ok: false }, { status: 500 });

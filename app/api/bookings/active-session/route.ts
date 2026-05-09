@@ -12,13 +12,10 @@ export async function GET() {
     const { uid } = JSON.parse(Buffer.from(session.value, 'base64').toString());
     const now = new Date();
 
-    // ตรวจว่ามีการจองที่ active อยู่ตอนนี้ไหม
     const [activeRows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.booking_id, b.start_time, b.end_time,
-              ex.code, ex.name_th
+      `SELECT b.booking_id, b.start_time, b.end_time, l.code, l.name_th
        FROM bookings b
-       JOIN equipment   e  ON e.equipment_id  = b.equipment_id
-       JOIN experiments ex ON ex.experiment_id = e.experiment_id
+       JOIN labs l ON l.lab_id = b.lab_id
        WHERE b.user_id = ?
          AND b.status IN ('confirmed', 'pending', 'in_progress')
          AND b.start_time <= ?
@@ -42,12 +39,10 @@ export async function GET() {
       });
     }
 
-    // ไม่มี active booking — หาการจองถัดไปเพื่อแสดงข้อมูล
     const [nextRows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.start_time, ex.code, ex.name_th
+      `SELECT b.start_time, l.code, l.name_th
        FROM bookings b
-       JOIN equipment   e  ON e.equipment_id  = b.equipment_id
-       JOIN experiments ex ON ex.experiment_id = e.experiment_id
+       JOIN labs l ON l.lab_id = b.lab_id
        WHERE b.user_id = ?
          AND b.status IN ('confirmed', 'pending')
          AND b.start_time > ?

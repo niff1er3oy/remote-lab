@@ -36,11 +36,17 @@ function slotTimes(di: number, ti: number): { start: Date; end: Date } {
 
 function toISO(d: Date) {
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:00:00`;
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:00:00`;
 }
 
-function slotCls(status: SlotStatus, held: boolean, isToday: boolean, loggedIn: boolean) {
-  if (held) return 'bg-[#c8ff00] shadow-md shadow-[#c8ff00]/40 ring-2 ring-[#c8ff00]/60 scale-[1.03] z-10 relative';
+function isPast(di: number, ti: number): boolean {
+  const { end } = slotTimes(di, ti);
+  return end <= new Date();
+}
+
+function slotCls(status: SlotStatus, held: boolean, past: boolean, isToday: boolean, loggedIn: boolean) {
+  if (past) return 'bg-gray-900/40 cursor-not-allowed opacity-40';
+  if (held) return 'bg-[#c8ff00] shadow-md shadow-[#c8ff00]/40 ring-2 ring-[#c8ff00]/60 z-10 relative';
   switch (status) {
     case 'mine':  return 'bg-cyan-500/40 ring-1 ring-inset ring-cyan-400/50 cursor-pointer hover:bg-cyan-500/60';
     case 'taken': return 'bg-[#c8ff00]/18 cursor-default';
@@ -179,6 +185,7 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
 
   function handleSlotClick(ti: number, di: number) {
     if (!loggedIn) return;
+    if (isPast(di, ti)) return;
     const status = currentSlots[ti][di];
     setBookingMsg(null);
     if (status === 'free') {
@@ -234,7 +241,7 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
             </p>
           )}
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-hidden">
             <div className="min-w-[520px]">
               {/* Date header */}
               <div className="grid grid-cols-[52px_repeat(7,1fr)] gap-1.5 mb-3">
@@ -256,18 +263,20 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
                   <div key={time} className="slot-row grid grid-cols-[52px_repeat(7,1fr)] gap-1.5 items-center">
                     <span className="text-[11px] text-gray-600 font-mono text-right pr-2 leading-none">{time}</span>
                     {currentSlots[ti].map((status, di) => {
-                      const isHeld = held?.ti === ti && held?.di === di;
+                      const isHeld    = held?.ti === ti && held?.di === di;
+                      const pastSlot  = isPast(di, ti);
                       return (
                         <div
                           key={di}
                           onClick={() => handleSlotClick(ti, di)}
                           title={
-                            status === 'mine'  ? 'จองแล้ว (ของคุณ)'
+                            pastSlot && status === 'free' ? 'เวลาผ่านไปแล้ว'
+                            : status === 'mine'  ? 'จองแล้ว (ของคุณ)'
                             : status === 'taken' ? 'จองแล้ว (คนอื่น)'
                             : isHeld ? 'กำลังเลือก — กดยืนยัน'
                             : loggedIn ? 'คลิกเพื่อเลือก' : ''
                           }
-                          className={`h-8 rounded-lg transition-all duration-150 ${slotCls(status, isHeld, di === 0, loggedIn)}`}
+                          className={`h-8 rounded-lg transition-all duration-150 ${slotCls(status, isHeld, pastSlot, di === 0, loggedIn)}`}
                         />
                       );
                     })}

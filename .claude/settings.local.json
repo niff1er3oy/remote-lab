@@ -14,7 +14,20 @@
       "PowerShell(pip install pypdf -q)",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\({deps:p.dependencies,dev:p.devDependencies},null,2\\)\\)\")",
       "Bash(npm install *)",
-      "Bash(Get-ChildItem -Path \"d:\\\\GitHub\\\\remote-lab\" -Force)"
+      "Bash(Get-ChildItem -Path \"d:\\\\GitHub\\\\remote-lab\" -Force)",
+      "Bash(Get-ChildItem -Path \"d:\\\\GitHub\\\\remote-lab\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\GitHub\\\\remote-lab\\\\app\" -Recurse | Where-Object { $_.Extension -in @\\('.ts', '.tsx'\\) } | Select-Object FullName)",
+      "Bash(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\components\\\\NotificationsPanel.tsx\")",
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\components\\\\NotificationsPanel.tsx\" -Confirm:$false)",
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\api\\\\lab\\\\chat\\\\stream\\\\route.ts\" -Confirm:$false)",
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\middleware.ts\" -Confirm:$false)",
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\lib\\\\session.ts\" -Confirm:$false)",
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\lib\\\\chatEmitter.ts\" -Confirm:$false)",
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\server.ts\" -Confirm:$false)",
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\components\\\\useLabChat.ts\" -Confirm:$false)",
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\api\\\\lab\\\\room\\\\route.ts\" -Confirm:$false)",
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\room\" -Recurse -Confirm:$false)"
     ]
   }
 }

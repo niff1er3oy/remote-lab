@@ -19,86 +19,69 @@ export async function GET() {
       if (session) uid = JSON.parse(Buffer.from(session.value, 'base64').toString()).uid;
     } catch {}
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endDate = new Date(today);
-    endDate.setDate(today.getDate() + 7);
+    // Thai midnight as UTC timestamp — works regardless of server timezone
+    const todayThaiStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+    const thaiMidnight = new Date(todayThaiStr + 'T00:00:00+07:00');
+    const endDate = new Date(thaiMidnight.getTime() + 7 * 86400000);
 
-    // Rooms = active experiments
-    const [rooms] = await pool.query<RowDataPacket[]>(
-      'SELECT experiment_id AS room_id, code, name_th, name_en FROM experiments WHERE is_active = 1 ORDER BY code'
+    const [labs] = await pool.query<RowDataPacket[]>(
+      'SELECT lab_id AS room_id, code, name_th, name_en FROM labs WHERE is_active = 1 ORDER BY code'
     );
 
-    // Equipment mapped to each room
-    const [equipRows] = await pool.query<RowDataPacket[]>(
-      "SELECT equipment_id, experiment_id FROM equipment WHERE status != 'offline'"
-    );
-
-    // All bookings in range, with experiment context via equipment
     const [bookingRows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.booking_id, b.equipment_id, b.user_id, b.start_time, b.end_time, e.experiment_id
-       FROM bookings b
-       JOIN equipment e ON e.equipment_id = b.equipment_id
-       WHERE b.status IN ('pending','confirmed','in_progress')
-         AND b.start_time < ? AND b.end_time > ?`,
-      [endDate, today]
+      `SELECT booking_id, lab_id, user_id, start_time, end_time
+       FROM bookings
+       WHERE status IN ('pending','confirmed','in_progress')
+         AND start_time < ? AND end_time > ?`,
+      [endDate, thaiMidnight]
     );
 
+    const THAI_MS = 7 * 3600 * 1000;
     const dates = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(-2)}`;
+      const thaiDay = new Date(thaiMidnight.getTime() + i * 86400000 + THAI_MS);
+      return `${thaiDay.getUTCDate()}/${thaiDay.getUTCMonth() + 1}/${String(thaiDay.getUTCFullYear()).slice(-2)}`;
     });
 
-    // Build slot matrix per room
     const slotsByRoom: Record<string, SlotStatus[][]> = {};
-    // booking_id lookup for 'mine' slots: { room_id: { "ti-di": booking_id } }
     const mineBookingIds: Record<string, Record<string, string>> = {};
 
-    for (const room of rooms as RowDataPacket[]) {
+    for (const lab of labs as RowDataPacket[]) {
       const matrix: SlotStatus[][] = TIME_SLOTS.map(() => Array(7).fill('free') as SlotStatus[]);
 
-      // Equipment IDs belonging to this room
-      const roomEquipIds = new Set(
-        (equipRows as RowDataPacket[])
-          .filter(e => e.experiment_id === room.room_id)
-          .map(e => e.equipment_id as string)
-      );
-
       for (let day = 0; day < 7; day++) {
-        const dayDate = new Date(today);
-        dayDate.setDate(today.getDate() + day);
-
         for (let ti = 0; ti < TIME_SLOTS.length; ti++) {
           const hours = Number(TIME_SLOTS[ti].split(':')[0]);
-          const slotStart = new Date(dayDate);
-          slotStart.setHours(hours, 0, 0, 0);
-          const slotEnd = new Date(dayDate);
-          slotEnd.setHours(hours + 2, 0, 0, 0);
+          const slotStart = new Date(thaiMidnight.getTime() + day * 86400000 + hours * 3600000);
+          const slotEnd   = new Date(slotStart.getTime() + 2 * 3600000);
 
-          // Find any booking in this room for this slot
           const booking = (bookingRows as RowDataPacket[]).find(
-            b =>
-              roomEquipIds.has(b.equipment_id as string) &&
-              new Date(b.start_time) < slotEnd &&
-              new Date(b.end_time) > slotStart
+            b => b.lab_id === lab.room_id &&
+                 new Date(b.start_time) < slotEnd &&
+                 new Date(b.end_time)   > slotStart
           );
 
           if (booking) {
             const isMine = uid && booking.user_id === uid;
             matrix[ti][day] = isMine ? 'mine' : 'taken';
             if (isMine) {
-              if (!mineBookingIds[room.room_id as string]) mineBookingIds[room.room_id as string] = {};
-              mineBookingIds[room.room_id as string][`${ti}-${day}`] = booking.booking_id as string;
+              if (!mineBookingIds[lab.room_id as string]) mineBookingIds[lab.room_id as string] = {};
+              mineBookingIds[lab.room_id as string][`${ti}-${day}`] = booking.booking_id as string;
             }
           }
         }
       }
 
-      slotsByRoom[room.room_id as string] = matrix;
+      slotsByRoom[lab.room_id as string] = matrix;
     }
 
-    return NextResponse.json({ ok: true, rooms, slots_by_room: slotsByRoom, mine_booking_ids: mineBookingIds, dates, logged_in: !!uid });
+    return NextResponse.json({
+      ok: true,
+      rooms: labs,
+      slots_by_room: slotsByRoom,
+      mine_booking_ids: mineBookingIds,
+      dates,
+      logged_in: !!uid,
+    });
   } catch (err) {
     console.error('[availability]', err);
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 });

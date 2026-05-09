@@ -21,22 +21,49 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  const action: 'cancel' | 'start' = body.action ?? 'cancel';
+  const action: 'cancel' | 'start' | 'complete' = body.action ?? 'cancel';
 
   try {
     const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT user_id, status, experiment_id, start_time FROM bookings WHERE booking_id = ?', [id]
+      `SELECT b.user_id, b.status, b.start_time, b.lab_id, l.code, l.name_th
+       FROM bookings b
+       JOIN labs l ON l.lab_id = b.lab_id
+       WHERE b.booking_id = ?`,
+      [id]
     );
     const booking = (rows as RowDataPacket[])[0];
 
     if (!booking) return NextResponse.json({ ok: false, error: 'ไม่พบการจอง' }, { status: 404 });
     if (booking.user_id !== uid) return NextResponse.json({ ok: false, error: 'ไม่มีสิทธิ์' }, { status: 403 });
 
-    // ── เข้าห้อง lab: mark in_progress ────────────────────────────────────────
+    // ── เริ่มใช้งาน → in_progress + สร้าง session ────────────────────────────
     if (action === 'start') {
-      if (['confirmed', 'pending'].includes(booking.status as string)) {
+      if (['confirmed', 'pending'].includes(booking.status as string))
         await pool.query("UPDATE bookings SET status = 'in_progress' WHERE booking_id = ?", [id]);
-      }
+
+      const sessionId = `${booking.code}-${id.slice(0, 8)}`;
+      await pool.query(
+        `INSERT INTO sessions (session_id, user_id, lab_id, booking_id, start_time, status)
+         VALUES (?, ?, ?, ?, UTC_TIMESTAMP(), 'active')
+         ON DUPLICATE KEY UPDATE session_id = session_id`,
+        [sessionId, uid, booking.lab_id, id]
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── เสร็จสิ้น → completed + ปิด session ─────────────────────────────────
+    if (action === 'complete') {
+      if (['in_progress', 'confirmed', 'pending'].includes(booking.status as string))
+        await pool.query("UPDATE bookings SET status = 'completed' WHERE booking_id = ?", [id]);
+
+      await pool.query(
+        `UPDATE sessions
+         SET end_time         = UTC_TIMESTAMP(),
+             duration_seconds = TIMESTAMPDIFF(SECOND, start_time, UTC_TIMESTAMP()),
+             status           = 'completed'
+         WHERE booking_id = ? AND status = 'active'`,
+        [id]
+      );
       return NextResponse.json({ ok: true });
     }
 
@@ -45,21 +72,12 @@ export async function PATCH(
       return NextResponse.json({ ok: false, error: 'ไม่สามารถยกเลิกการจองที่อยู่ในสถานะนี้ได้' }, { status: 400 });
 
     await pool.query("UPDATE bookings SET status = 'cancelled' WHERE booking_id = ?", [id]);
-
-    // Auto-create notification
-    const [roomRows] = await pool.query<RowDataPacket[]>(
-      'SELECT code, name_th FROM experiments WHERE experiment_id = ?', [booking.experiment_id]
-    );
-    const room = (roomRows as RowDataPacket[])[0];
-    const label = String(booking.start_time).slice(0, 10);
+    const label = new Date(booking.start_time).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'Asia/Bangkok' });
     await pool.query(
-      `INSERT INTO notifications (notification_id, user_id, title, message, type)
-       VALUES (UUID(), ?, ?, ?, 'warning')`,
-      [uid,
-       `ยกเลิกการจองแล้ว${room ? ` — ${room.code}` : ''}`,
-       `${room?.name_th ?? 'การจอง'} วันที่ ${label} ถูกยกเลิกเรียบร้อย`]
+      `INSERT INTO notifications (notification_id, user_id, title, message, type, created_at)
+       VALUES (UUID(), ?, ?, ?, 'warning', UTC_TIMESTAMP())`,
+      [uid, `ยกเลิกการจองแล้ว — ${booking.code}`, `${booking.name_th} วันที่ ${label} ถูกยกเลิกเรียบร้อย`]
     );
-
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[bookings PATCH]', err);

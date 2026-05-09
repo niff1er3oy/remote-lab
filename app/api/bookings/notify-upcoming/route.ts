@@ -18,16 +18,14 @@ export async function POST() {
 
   try {
     const now  = new Date();
-    const soon = new Date(now.getTime() + 5 * 60 * 1000); // 5 นาที
+    const soon = new Date(now.getTime() + 5 * 60 * 1000);
     let notified = 0;
 
-    // ── 1. เข้าได้แล้ว: อยู่ในช่วงเวลา, ยังไม่ได้เข้า lab (status ≠ in_progress) ──
-    // แจ้งซ้ำได้ทุก 55 วินาที → ถี่ ~1 นาทีกับ polling 30 วินาที
+    // ── 1. เข้าได้แล้ว: อยู่ในช่วงเวลา ──────────────────────────────────────
     const [activeRows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.booking_id, b.start_time, b.end_time, ex.code, ex.name_th
+      `SELECT b.booking_id, b.start_time, b.end_time, l.code, l.name_th
        FROM bookings b
-       JOIN equipment   e  ON e.equipment_id  = b.equipment_id
-       JOIN experiments ex ON ex.experiment_id = e.experiment_id
+       JOIN labs l ON l.lab_id = b.lab_id
        WHERE b.user_id = ?
          AND b.status IN ('confirmed', 'pending')
          AND b.start_time <= ?
@@ -42,12 +40,12 @@ export async function POST() {
     );
 
     for (const b of activeRows as RowDataPacket[]) {
-      const startStr = new Date(b.start_time).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-      const endStr   = new Date(b.end_time).toLocaleTimeString('th-TH',   { hour: '2-digit', minute: '2-digit' });
+      const startStr = new Date(b.start_time).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+      const endStr   = new Date(b.end_time).toLocaleTimeString('th-TH',   { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
 
       await pool.query(
-        `INSERT INTO notifications (notification_id, user_id, title, message, type, action_url)
-         VALUES (UUID(), ?, ?, ?, 'success', '/lab')`,
+        `INSERT INTO notifications (notification_id, user_id, title, message, type, action_url, created_at)
+         VALUES (UUID(), ?, ?, ?, 'success', '/lab', UTC_TIMESTAMP())`,
         [uid,
          `เข้าห้องแลปได้แล้ว — ${b.code}`,
          `${b.name_th}  ·  ${startStr} – ${endStr}  ·  กรุณาเข้าสู่ห้องปฏิบัติการ`]
@@ -55,12 +53,11 @@ export async function POST() {
       notified++;
     }
 
-    // ── 2. ใกล้ถึงเวลา: เริ่มใน 5 นาที, แจ้งเตือนครั้งเดียว (dedup 30 นาที) ──
+    // ── 2. ใกล้ถึงเวลา: เริ่มใน 5 นาที ──────────────────────────────────────
     const [upcomingRows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.booking_id, b.start_time, ex.code, ex.name_th
+      `SELECT b.booking_id, b.start_time, l.code, l.name_th
        FROM bookings b
-       JOIN equipment   e  ON e.equipment_id  = b.equipment_id
-       JOIN experiments ex ON ex.experiment_id = e.experiment_id
+       JOIN labs l ON l.lab_id = b.lab_id
        WHERE b.user_id = ?
          AND b.status IN ('confirmed', 'pending')
          AND b.start_time > ?
@@ -77,11 +74,11 @@ export async function POST() {
 
     for (const b of upcomingRows as RowDataPacket[]) {
       const diffMin  = Math.max(1, Math.round((new Date(b.start_time).getTime() - now.getTime()) / 60000));
-      const startStr = new Date(b.start_time).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      const startStr = new Date(b.start_time).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
 
       await pool.query(
-        `INSERT INTO notifications (notification_id, user_id, title, message, type, action_url)
-         VALUES (UUID(), ?, ?, ?, 'info', '/lab')`,
+        `INSERT INTO notifications (notification_id, user_id, title, message, type, action_url, created_at)
+         VALUES (UUID(), ?, ?, ?, 'info', '/lab', UTC_TIMESTAMP())`,
         [uid,
          `ใกล้ถึงเวลาแล้ว — ${b.code}`,
          `${b.name_th}  ·  เริ่มเวลา ${startStr}  (อีก ${diffMin} นาที)`]

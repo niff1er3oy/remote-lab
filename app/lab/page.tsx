@@ -1,8 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { animate, stagger, scrambleText } from 'animejs';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useNotifications } from '@/app/components/useNotifications';
+import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 
 // ── Physics (Lab 8: Biot–Savart) ─────────────────────────────────────────────
 
@@ -128,6 +131,17 @@ type AccessState =
 
 function useAccessGate() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
+  const activeBookingId = useRef<string | null>(null);
+
+  // keepalive: true ทำให้ request ส่งได้แม้ระหว่าง page unload
+  function completeBooking(id: string) {
+    fetch(`/api/bookings/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'complete' }),
+      keepalive: true,
+    }).catch(() => {});
+  }
 
   useEffect(() => {
     fetch('/api/bookings/active-session')
@@ -136,8 +150,9 @@ function useAccessGate() {
         const d = await r.json();
         if (!d.ok) { setAccess({ status: 'denied', reason: 'auth' }); return; }
         if (d.active) {
-          // Mark booking as in_progress → stops repeat notifications
-          fetch(`/api/bookings/${d.booking.booking_id}`, {
+          const bookingId: string = d.booking.booking_id;
+          activeBookingId.current = bookingId;
+          fetch(`/api/bookings/${bookingId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'start' }),
@@ -150,26 +165,38 @@ function useAccessGate() {
       .catch(() => setAccess({ status: 'denied', reason: 'auth' }));
   }, []);
 
-  // Re-check every 60 seconds — kick out when booking expires
+  // Re-check ทุก 60 วินาที — ถ้าเวลาหมดให้ mark complete แล้ว kick out
   useEffect(() => {
     if (access.status !== 'allowed') return;
-    const id = setInterval(() => {
+    const intervalId = setInterval(() => {
       fetch('/api/bookings/active-session')
         .then(r => r.json())
         .then(d => {
-          if (!d.ok || !d.active) setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
+          if (!d.ok || !d.active) {
+            if (activeBookingId.current) {
+              completeBooking(activeBookingId.current);
+              activeBookingId.current = null;
+            }
+            setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
+          }
         })
         .catch(() => {});
     }, 60_000);
-    return () => clearInterval(id);
+    return () => clearInterval(intervalId);
   }, [access.status]);
 
-  return access;
+  function onComplete() {
+    if (activeBookingId.current) {
+      completeBooking(activeBookingId.current);
+      activeBookingId.current = null;
+    }
+  }
+
+  return { access, onComplete };
 }
 
 function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
 }
 
 function AccessDeniedScreen({ access }: { access: Extract<AccessState, { status: 'denied' }> }) {
@@ -227,10 +254,144 @@ function AccessDeniedScreen({ access }: { access: Extract<AccessState, { status:
   );
 }
 
+// ── Lab Intro Screen ──────────────────────────────────────────────────────────
+
+const LAB8_DOCS = [
+  { label: 'คู่มือการทดลองที่ 08',            file: 'การทดลองที่ 08.pdf' },
+  { label: 'การทดลองที่ 08 สนามแม่เหล็ก',    file: 'การทดลองที่ 08 สนามแม่เหล็ก.pdf' },
+  { label: 'ข้อมูลการทดลอง 8 สนามแม่เหล็ก', file: 'data 8 สนามแม่เหล็ก.pdf' },
+];
+
+function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => void }) {
+  const cardRef    = useRef<HTMLDivElement>(null);
+  const titleRef   = useRef<HTMLHeadingElement>(null);
+  const docsRef    = useRef<HTMLDivElement>(null);
+  const btnRef     = useRef<HTMLButtonElement>(null);
+  const [remaining, setRemaining] = useState(() => getRemaining(endTime));
+
+  useEffect(() => {
+    const t = setInterval(() => setRemaining(getRemaining(endTime)), 1000);
+    return () => clearInterval(t);
+  }, [endTime]);
+
+  useEffect(() => {
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+    (async () => {
+      if (cardRef.current)
+        animate(cardRef.current, { opacity: [0, 1], translateY: [24, 0], scale: [0.97, 1], duration: 600, ease: 'outCubic' });
+      await delay(150);
+      if (titleRef.current)
+        animate(titleRef.current, { innerHTML: scrambleText({ chars: 'upperCase', seed: 2 }), duration: 1000 });
+      await delay(300);
+      if (docsRef.current)
+        animate(docsRef.current.querySelectorAll('.doc-btn'), {
+          opacity: [0, 1], translateX: [-16, 0], duration: 350, delay: stagger(80), ease: 'outCubic',
+        });
+      await delay(200);
+      if (btnRef.current)
+        animate(btnRef.current, { opacity: [0, 1], scale: [0.95, 1], duration: 400, ease: 'outBack' });
+    })();
+  }, []);
+
+  const zone = remaining < 300 ? 'critical' : remaining < 600 ? 'warn' : 'normal';
+  const timeColor = zone === 'critical' ? 'text-red-400' : zone === 'warn' ? 'text-yellow-400' : 'text-[#c8ff00]';
+
+  return (
+    <div className="min-h-screen bg-[#030712] flex items-center justify-center px-6" style={{
+      backgroundImage: 'linear-gradient(rgba(200,255,0,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.025) 1px, transparent 1px)',
+      backgroundSize: '64px 64px',
+    }}>
+      <div ref={cardRef} className="w-full max-w-lg" style={{ opacity: 0 }}>
+
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#c8ff00]/30 bg-[#c8ff00]/10 px-3 py-1 text-xs font-semibold text-[#c8ff00] mb-4">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse inline-block" />
+            LAB8 · กำลังจะเริ่มการทดลอง
+          </span>
+          <h1 ref={titleRef} className="text-2xl font-bold text-white mb-2">
+            กฎของ Biot-Savart และสนามแม่เหล็ก
+          </h1>
+          <p className="text-sm text-gray-500 leading-relaxed">
+            ศึกษาสนามแม่เหล็กที่เกิดจากลวดตัวนำรูปทรงต่างๆ<br />
+            และตรวจสอบความถูกต้องของกฎ Biot-Savart เชิงทดลอง
+          </p>
+        </div>
+
+        {/* Card */}
+        <div className="rounded-2xl border border-white/10 bg-gray-900/60 p-6 mb-5">
+
+          {/* Time remaining */}
+          <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/[0.06]">
+            <span className="text-xs text-gray-500 flex items-center gap-1.5">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              เวลาที่เหลือสำหรับเซสชันนี้
+            </span>
+            <span className={`font-mono font-bold text-sm tabular-nums ${timeColor} ${zone === 'critical' ? 'animate-pulse' : ''}`}>
+              {fmtCountdown(remaining)}
+            </span>
+          </div>
+
+          {/* Lab info */}
+          <div className="grid grid-cols-2 gap-3 mb-5 text-xs">
+            {[
+              { label: 'รหัสการทดลอง', value: 'LAB8' },
+              { label: 'ระยะเวลา', value: '120 นาที' },
+              { label: 'อุปกรณ์หลัก', value: 'ขดลวด / โซลีนอยด์' },
+              { label: 'ระดับ', value: 'ปฏิบัติการฟิสิกส์' },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-xl bg-gray-950/60 border border-white/[0.06] px-3 py-2.5">
+                <p className="text-gray-600 mb-0.5">{label}</p>
+                <p className="text-white font-medium">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Documents */}
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">เอกสารประกอบการทดลอง</p>
+          <div ref={docsRef} className="flex flex-col gap-2">
+            {LAB8_DOCS.map(({ label, file }) => (
+              <a
+                key={file}
+                href={`/doc/lab8/${encodeURIComponent(file)}`}
+                download={file}
+                className="doc-btn flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gray-950/60 px-4 py-2.5 text-xs text-gray-300 hover:border-[#c8ff00]/30 hover:text-[#c8ff00] transition-colors group"
+                style={{ opacity: 0 }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-600 group-hover:text-[#c8ff00] transition-colors">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="12" y1="18" x2="12" y2="12"/>
+                  <polyline points="9 15 12 18 15 15"/>
+                </svg>
+                <span className="flex-1 truncate">{label}</span>
+                <span className="text-[10px] text-gray-600 font-mono shrink-0">PDF</span>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {/* Start button */}
+        <button
+          ref={btnRef}
+          onClick={onStart}
+          className="w-full rounded-2xl bg-[#c8ff00] py-3.5 text-sm font-bold text-gray-950 hover:bg-white transition-colors"
+          style={{ opacity: 0, boxShadow: '0 0 32px rgba(200,255,0,0.3)' }}
+        >
+          เริ่มการทดลอง →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function RemoteLabPage() {
-  const access = useAccessGate();
+  const { access, onComplete } = useAccessGate();
+  const [labStarted, setLabStarted] = useState(false);
   const [instrument, setInstrument] = useState(0);
   const [I, setI] = useState(5.0);
   const [z, setZ] = useState(0); // Z position in metres (solenoid only, ±0.15 m)
@@ -258,12 +419,13 @@ export default function RemoteLabPage() {
     return () => clearInterval(t);
   }, [instrument]);
 
-  // Entry animations
+  // Entry animations — run only after both access granted AND intro dismissed
   useEffect(() => {
+    if (access.status !== 'allowed' || !labStarted) return;
     if (topRowRef.current) animate(topRowRef.current, { opacity: [0, 1], translateY: [-16, 0], duration: 650, ease: 'outCubic' });
     if (btmRowRef.current) animate(btmRowRef.current, { opacity: [0, 1], translateY: [16, 0], duration: 650, delay: 120, ease: 'outCubic' });
     if (rightRef.current)  animate(rightRef.current,  { opacity: [0, 1], translateX: [24, 0], duration: 650, delay: 80,  ease: 'outCubic' });
-  }, []);
+  }, [access.status, labStarted]);
 
   // ── Access gate ───────────────────────────────────────────────────────────
   if (access.status === 'loading') {
@@ -276,6 +438,7 @@ export default function RemoteLabPage() {
     );
   }
   if (access.status === 'denied') return <AccessDeniedScreen access={access} />;
+  if (!labStarted) return <LabIntroScreen endTime={access.end_time} onStart={() => setLabStarted(true)} />;
 
   const inst = instruments[instrument];
   const I0 = inst.I0;
@@ -288,7 +451,7 @@ export default function RemoteLabPage() {
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
-      <SessionBar />
+      <SessionBar endTime={access.end_time} onComplete={onComplete} />
       <div className="flex-1 overflow-hidden p-3 flex gap-3">
 
         {/* Left ── Camera + FieldViz (top) · InstrSel + Sensor (bottom) */}
@@ -328,14 +491,17 @@ export default function RemoteLabPage() {
           </div>
         </div>
 
-        {/* Right ── Chat + Log */}
+        {/* Right ── AI / Log / Chat tabs */}
         <div
           ref={rightRef}
-          className="w-[260px] shrink-0 flex flex-col gap-3 overflow-hidden"
+          className="w-[260px] shrink-0 flex flex-col overflow-hidden"
           style={{ opacity: 0 }}
         >
-          <ChatPanel inst={inst} I={I} I0={I0} bTheory={bTheory} bMeasured={bMeasured} z={z} />
-          <LogPanel instrument={instrument} I={I} bMeasured={bMeasured} z={z} instType={inst.type} />
+          <RightTabs
+            chatProps={{ inst, I, I0, bTheory, bMeasured, z }}
+            logProps={{ instrument, I, bMeasured, z, instType: inst.type }}
+            labCode="LAB8"
+          />
         </div>
 
       </div>
@@ -343,19 +509,207 @@ export default function RemoteLabPage() {
   );
 }
 
-// ── Session Bar ───────────────────────────────────────────────────────────────
+// ── Right Tabs ───────────────────────────────────────────────────────────────
 
-function SessionBar() {
-  const [secs, setSecs] = useState(0);
-  const barRef = useRef<HTMLElement>(null);
-  const labelRef = useRef<HTMLSpanElement>(null);
+type ChatRoomMsg = { id: number; user_id: string; user_name: string; content: string; created_at: string };
+
+function LabChatPanel({ labCode }: { labCode: string }) {
+  const [messages, setMessages] = useState<ChatRoomMsg[]>([]);
+  const [input,    setInput]    = useState('');
+  const [sending,  setSending]  = useState(false);
+  const [myName,   setMyName]   = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const lastIdRef = useRef(0);
 
   useEffect(() => {
-    if (barRef.current) animate(barRef.current, { opacity: [0, 1], translateY: [-20, 0], duration: 600, ease: 'outCubic' });
-    if (labelRef.current) animate(labelRef.current, { innerHTML: scrambleText({ chars: 'braille', from: 'left', override: '' }) });
-    const t = setInterval(() => setSecs(s => s + 1), 1000);
-    return () => clearInterval(t);
+    fetch('/api/auth/me').then(r => r.json()).then(d => { if (d.ok) setMyName(d.user.name); });
   }, []);
+
+  const fetchMessages = useCallback(async () => {
+    const res = await fetch(`/api/lab/chat?lab=${labCode}&since=${lastIdRef.current}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.messages?.length) {
+      lastIdRef.current = data.messages[data.messages.length - 1].id;
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => m.id));
+        const fresh = (data.messages as ChatRoomMsg[]).filter(m => !seen.has(m.id));
+        if (!fresh.length) return prev;
+        requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }));
+        return [...prev, ...fresh];
+      });
+    }
+  }, [labCode]);
+
+  useEffect(() => {
+    fetchMessages();
+    const t = setInterval(fetchMessages, 5000);
+    return () => clearInterval(t);
+  }, [fetchMessages]);
+
+  async function handleSend() {
+    if (!input.trim() || sending) return;
+    setSending(true);
+    const text = input.trim();
+    setInput('');
+    try {
+      await fetch('/api/lab/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lab: labCode, content: text }),
+      });
+      await fetchMessages();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
+        {messages.length === 0 && (
+          <p className="text-center text-[10px] text-gray-600 pt-4">ยังไม่มีข้อความ</p>
+        )}
+        {messages.map(m => {
+          const isMe = m.user_name === myName;
+          return (
+            <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[88%] text-[11px] rounded-xl px-2.5 py-1.5 leading-relaxed ${
+                isMe
+                  ? 'bg-[#c8ff00]/10 border border-[#c8ff00]/20 text-[#c8ff00]/90'
+                  : 'bg-gray-800/60 border border-white/[0.07] text-gray-300'
+              }`}>
+                {!isMe && <p className="text-[9px] text-gray-500 mb-0.5 font-semibold">{m.user_name}</p>}
+                {m.content}
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+      <div className="shrink-0 p-2 border-t border-white/5 flex gap-1.5 items-center">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          placeholder="ส่งข้อความ…"
+          className="flex-1 rounded-lg border border-white/10 bg-gray-950/80 px-2.5 py-1.5 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-[#c8ff00]/40 transition-colors"
+        />
+        <button onClick={handleSend} disabled={sending || !input.trim()}
+          className="shrink-0 h-8 w-8 rounded-lg bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] flex items-center justify-center hover:bg-[#c8ff00]/20 disabled:opacity-30 transition-colors">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+type RightTabId = 'ai' | 'log' | 'chat';
+
+function RightTabs({ chatProps, logProps, labCode }: {
+  chatProps: { inst: Inst; I: number; I0: number; bTheory: number; bMeasured: number; z: number };
+  logProps:  { instrument: number; I: number; bMeasured: number; z: number; instType: 'coil' | 'solenoid' };
+  labCode: string;
+}) {
+  const [tab, setTab] = useState<RightTabId>('ai');
+
+  const TABS: { id: RightTabId; label: string }[] = [
+    { id: 'ai',   label: 'AI ผู้ช่วย' },
+    { id: 'log',  label: 'บันทึก' },
+    { id: 'chat', label: 'แชทห้อง' },
+  ];
+
+  return (
+    <div className="flex flex-col h-full gap-2">
+      {/* Tab header */}
+      <div className="shrink-0 flex rounded-xl border border-white/10 overflow-hidden bg-gray-900/50">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex-1 py-1.5 text-[10px] font-semibold transition-colors ${
+              tab === t.id
+                ? 'bg-[#c8ff00]/10 text-[#c8ff00] border-b border-[#c8ff00]/50'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Panels — all mounted, hidden by CSS to preserve state */}
+      <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'ai'   ? 'hidden' : ''}`}>
+        <ChatPanel {...chatProps} />
+      </div>
+      <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'log'  ? 'hidden' : ''}`}>
+        <LogPanel {...logProps} />
+      </div>
+      <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'chat' ? 'hidden' : ''}`}>
+        <LabChatPanel labCode={labCode} />
+      </div>
+    </div>
+  );
+}
+
+// ── Session Bar ───────────────────────────────────────────────────────────────
+
+function getRemaining(endTime: string) {
+  return Math.max(0, Math.floor((new Date(endTime).getTime() - Date.now()) / 1000));
+}
+
+function fmtCountdown(secs: number) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function SessionBar({ endTime, onComplete }: { endTime: string; onComplete: () => void }) {
+  const router       = useRouter();
+  const [secs,      setSecs]      = useState(0);
+  const [remaining, setRemaining] = useState(() => getRemaining(endTime));
+  const [panelOpen, setPanelOpen] = useState(false);
+  const barRef       = useRef<HTMLElement>(null);
+  const labelRef     = useRef<HTMLSpanElement>(null);
+  const countdownRef = useRef<HTMLSpanElement>(null);
+  const prevZone        = useRef<'normal' | 'warn' | 'critical'>('normal');
+  const autoCompleted   = useRef(false);
+  const { notifications, unread, markAllRead } = useNotifications();
+
+  // เวลาหมด → mark complete อัตโนมัติ (ทันทีที่ countdown ถึง 0)
+  useEffect(() => {
+    if (remaining <= 0 && !autoCompleted.current) {
+      autoCompleted.current = true;
+      onComplete();
+    }
+  }, [remaining, onComplete]);
+
+  function handleLeave() {
+    onComplete();
+    router.push('/dashboard');
+  }
+
+  useEffect(() => {
+    if (barRef.current)   animate(barRef.current,   { opacity: [0, 1], translateY: [-20, 0], duration: 600, ease: 'outCubic' });
+    if (labelRef.current) animate(labelRef.current, { innerHTML: scrambleText({ chars: 'braille', from: 'left', override: '' }) });
+    const t = setInterval(() => {
+      setSecs(s => s + 1);
+      setRemaining(getRemaining(endTime));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [endTime]);
+
+  // Animate countdown when crossing warning thresholds
+  useEffect(() => {
+    const zone = remaining < 300 ? 'critical' : remaining < 600 ? 'warn' : 'normal';
+    if (zone !== prevZone.current && countdownRef.current) {
+      animate(countdownRef.current, { scale: [1.3, 1], duration: 500, ease: 'outBack' });
+    }
+    prevZone.current = zone;
+  }, [remaining]);
 
   return (
     <header ref={barRef} className="shrink-0 border-b border-white/10 bg-[#030712]/95 h-12 px-4 flex items-center justify-between gap-4" style={{ opacity: 0 }}>
@@ -375,15 +729,72 @@ function SessionBar() {
         <span className="text-gray-600">|</span>
         <span className="text-gray-400">LAB 8: <span ref={labelRef} className="text-white">สนามแม่เหล็กและกฎไบโอต-ซาวัต</span></span>
         <span className="text-gray-600">|</span>
-        <span className="text-gray-400">Session: <span className="text-white font-mono">LAB8-2026-0089</span></span>
-        <span className="text-gray-600">|</span>
         <span className="text-gray-400">เวลา: <span className="font-mono text-white">{hhmmss(secs)}</span></span>
+        <span className="text-gray-600">|</span>
+        <span className="text-gray-400 flex items-center gap-1.5">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          สิ้นสุดใน:
+          <span
+            ref={countdownRef}
+            className={`font-mono font-semibold tabular-nums ${
+              remaining < 300 ? 'text-red-400' : remaining < 600 ? 'text-yellow-400' : 'text-white'
+            } ${remaining < 300 ? 'animate-pulse' : ''}`}
+          >
+            {fmtCountdown(remaining)}
+          </span>
+        </span>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <Link href="/" className="text-xs px-3 py-1.5 rounded-md border border-white/10 text-gray-400 hover:text-white transition-colors">← กลับ</Link>
-        <button className="text-xs px-3 py-1.5 rounded-md bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 font-semibold transition-colors flex items-center gap-1.5">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" /></svg>
-          หยุดฉุกเฉิน
+        {/* Notification bell */}
+        <div className="relative">
+          <button
+            onClick={() => setPanelOpen(v => !v)}
+            className={`relative flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
+              panelOpen
+                ? 'border-[#c8ff00]/40 bg-[#c8ff00]/10 text-[#c8ff00]'
+                : 'border-white/10 text-gray-400 hover:border-[#c8ff00]/30 hover:text-white'
+            }`}
+            aria-label="การแจ้งเตือน"
+          >
+            <BellIcon size={15} />
+            {unread > 0 && <UnreadBadge count={unread} />}
+          </button>
+          {panelOpen && createPortal(
+            <>
+              <div className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-[2px]" onClick={() => setPanelOpen(false)} />
+              <div className="fixed top-12 right-4 z-[100]">
+                <NotifPanel
+                  notifications={notifications}
+                  unread={unread}
+                  onMarkAllRead={markAllRead}
+                  maxH="280px"
+                  panelClass="w-64"
+                />
+              </div>
+            </>,
+            document.body
+          )}
+        </div>
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="text-xs px-3 py-1.5 rounded-md border border-white/10 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          กลับ
+        </button>
+        <button
+          onClick={handleLeave}
+          className="text-xs px-3 py-1.5 rounded-md bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] hover:bg-[#c8ff00]/20 font-semibold transition-colors flex items-center gap-1.5"
+          style={{ boxShadow: '0 0 12px rgba(200,255,0,0.15)' }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+          เสร็จสิ้น
         </button>
       </div>
     </header>
@@ -1425,7 +1836,7 @@ function LogPanel({ instrument, I, bMeasured, z, instType }: {
   }, [logs]);
 
   return (
-    <div className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 flex flex-col overflow-hidden" style={{ maxHeight: '130px' }}>
+    <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex flex-col overflow-hidden">
       <div className="shrink-0 px-3 py-1.5 border-b border-white/5 flex items-center justify-between">
         <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">บันทึก</h2>
         <span className="text-[9px] text-gray-600 font-mono">{logs.length}</span>

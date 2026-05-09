@@ -15,46 +15,40 @@ export async function POST(req: NextRequest) {
     if (!room_id || !start_time || !end_time)
       return NextResponse.json({ ok: false, error: 'ข้อมูลไม่ครบถ้วน' }, { status: 400 });
 
-    // Find equipment in this room not booked in this slot
-    const [equips] = await pool.query<RowDataPacket[]>(
-      `SELECT e.equipment_id FROM equipment e
-       WHERE e.experiment_id = ? AND e.status != 'offline'
-         AND e.equipment_id NOT IN (
-           SELECT b.equipment_id FROM bookings b
-           WHERE b.status IN ('pending','confirmed','in_progress')
-             AND b.start_time < ? AND b.end_time > ?
-         )
-       LIMIT 1`,
-      [room_id, end_time, start_time]
+    if (new Date(end_time.replace(' ', 'T') + 'Z') <= new Date())
+      return NextResponse.json({ ok: false, error: 'ไม่สามารถจองเวลาที่สิ้นสุดไปแล้วได้' }, { status: 400 });
+
+    // ตรวจว่าห้องนี้มีอยู่และเปิดใช้งาน
+    const [labRows] = await pool.query<RowDataPacket[]>(
+      'SELECT lab_id, code, name_th FROM labs WHERE lab_id = ? AND is_active = 1',
+      [room_id]
     );
+    if (!(labRows as RowDataPacket[]).length)
+      return NextResponse.json({ ok: false, error: 'ไม่พบห้องทดลองนี้' }, { status: 404 });
 
-    if (!(equips as RowDataPacket[]).length)
-      return NextResponse.json({ ok: false, error: 'ห้องนี้ถูกจองในช่วงเวลาดังกล่าวแล้ว' }, { status: 409 });
-
-    const equipment_id = (equips as RowDataPacket[])[0].equipment_id;
+    const lab = (labRows as RowDataPacket[])[0];
 
     await pool.query(
-      `INSERT INTO bookings (booking_id, user_id, equipment_id, experiment_id, start_time, end_time, status)
-       VALUES (UUID(), ?, ?, ?, ?, ?, 'confirmed')`,
-      [uid, equipment_id, room_id, start_time, end_time]
+      `INSERT INTO bookings (booking_id, user_id, lab_id, start_time, end_time, status)
+       VALUES (UUID(), ?, ?, ?, ?, 'confirmed')`,
+      [uid, room_id, start_time, end_time]
     );
 
-    // Auto-create notification
-    const [roomRows] = await pool.query<RowDataPacket[]>(
-      'SELECT code, name_th FROM experiments WHERE experiment_id = ?', [room_id]
+    const dt = new Date(start_time.replace(' ', 'T') + 'Z');
+    const thaiDate = dt.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'Asia/Bangkok' });
+    const thaiTime = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+    const label = `${thaiDate} เวลา ${thaiTime}`;
+    await pool.query(
+      `INSERT INTO notifications (notification_id, user_id, title, message, type, created_at)
+       VALUES (UUID(), ?, ?, ?, 'success', UTC_TIMESTAMP())`,
+      [uid, `จองสำเร็จ — ${lab.code}`, `${lab.name_th} วันที่ ${label}`]
     );
-    const room = (roomRows as RowDataPacket[])[0];
-    if (room) {
-      const label = `${start_time.slice(0, 10)} เวลา ${start_time.slice(11, 16)}`;
-      await pool.query(
-        `INSERT INTO notifications (notification_id, user_id, title, message, type)
-         VALUES (UUID(), ?, ?, ?, 'success')`,
-        [uid, `จองสำเร็จ — ${room.code}`, `${room.name_th} วันที่ ${label}`]
-      );
-    }
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('ห้องนี้ถูกจอง') || msg.includes('45000'))
+      return NextResponse.json({ ok: false, error: 'ห้องนี้ถูกจองในช่วงเวลาดังกล่าวแล้ว' }, { status: 409 });
     console.error('[bookings POST]', err);
     return NextResponse.json({ ok: false, error: 'เกิดข้อผิดพลาด กรุณาลองใหม่' }, { status: 500 });
   }
