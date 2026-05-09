@@ -67,6 +67,14 @@ export function useNotifications() {
     return () => clearInterval(id);
   }, [loggedIn, checkUpcoming]);
 
+  // รับ event จาก BookingCalendar → refresh ทันทีโดยไม่ต้องรอ 30 วิ
+  useEffect(() => {
+    if (!loggedIn) return;
+    const handler = () => checkUpcoming();
+    window.addEventListener('booking-created', handler);
+    return () => window.removeEventListener('booking-created', handler);
+  }, [loggedIn, checkUpcoming]);
+
   async function markAllRead() {
     await fetch('/api/notifications', { method: 'PATCH' });
     setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));

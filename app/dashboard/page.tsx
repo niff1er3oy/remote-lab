@@ -181,6 +181,37 @@ export default function DashboardPage() {
     return () => { observer.revert(); };
   }, [loading, user]);
 
+  // ── ตรวจ active session อัตโนมัติ ─────────────────────────────────────────
+  useEffect(() => {
+    if (loading) return;
+
+    async function checkActive() {
+      const res = await fetch('/api/bookings/active-session');
+      if (!res.ok) return;
+      const ad = await res.json();
+      const next = ad.ok && ad.active ? ad.booking : null;
+      setActiveSession(prev => {
+        if (!!prev === !!next) return prev; // ไม่เปลี่ยน → ไม่ re-render
+        return next;
+      });
+      if (!activeSession && next && activeRef.current)
+        animate(activeRef.current, { opacity: [0, 1], translateY: [12, 0], scale: [0.98, 1], duration: 500, ease: 'outBack' });
+    }
+
+    // poll ทุก 60 วิ
+    const interval = setInterval(checkActive, 60_000);
+
+    // timer แม่นยำ: ยิงตอน start_time ของการจองถัดไปพอดี
+    const first = stats?.upcoming_bookings[0];
+    let precise: ReturnType<typeof setTimeout> | null = null;
+    if (first) {
+      const ms = new Date(first.start_time).getTime() - Date.now();
+      if (ms > 0 && ms < 7_200_000) precise = setTimeout(checkActive, ms);
+    }
+
+    return () => { clearInterval(interval); if (precise) clearTimeout(precise); };
+  }, [loading, stats?.upcoming_bookings, activeSession]);
+
   async function refreshStats() {
     const res = await fetch('/api/dashboard/stats');
     if (res.ok) setStats(await res.json());
@@ -236,6 +267,7 @@ export default function DashboardPage() {
       <div className="fixed inset-0 pointer-events-none" style={{
         backgroundImage: 'linear-gradient(rgba(200,255,0,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.025) 1px, transparent 1px)',
         backgroundSize: '64px 64px',
+        animation: 'gridScroll 12s linear infinite',
       }} />
 
       <DashboardNav user={user} />

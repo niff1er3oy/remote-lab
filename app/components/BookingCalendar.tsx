@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { animate, onScroll, stagger } from 'animejs';
 import Link from 'next/link';
 
@@ -81,21 +81,24 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
   // mine_booking_ids: { room_id: { "ti-di": booking_id } }
   const [mineBookingIds, setMineBookingIds] = useState<Record<string, Record<string, string>>>({});
 
-  useEffect(() => {
-    fetch('/api/bookings/availability')
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok && data.rooms?.length > 0) {
-          setRooms(data.rooms);
-          setSlotsByRoom(data.slots_by_room);
-          setMineBookingIds(data.mine_booking_ids ?? {});
-          setDates(data.dates);
-          setSelectedId(data.rooms[0].room_id);
-          setLoggedIn(!!data.logged_in);
-        }
-      })
-      .finally(() => setLoading(false));
+  const loadAvailability = useCallback(async () => {
+    try {
+      const r = await fetch('/api/bookings/availability');
+      const data = await r.json();
+      if (data.ok && data.rooms?.length > 0) {
+        setRooms(data.rooms);
+        setSlotsByRoom(data.slots_by_room);
+        setMineBookingIds(data.mine_booking_ids ?? {});
+        setDates(data.dates);
+        setSelectedId(prev => prev || data.rooms[0].room_id);
+        setLoggedIn(!!data.logged_in);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { loadAvailability(); }, [loadAvailability]);
 
   const currentSlots: SlotStatus[][] =
     selectedId && slotsByRoom[selectedId] ? slotsByRoom[selectedId] : FALLBACK;
@@ -141,6 +144,8 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
         setBookingMsg({ ok: true, text: 'จองสำเร็จ!' });
         setTimeout(() => setBookingMsg(null), 3000);
         onBookingCreated?.();
+        window.dispatchEvent(new CustomEvent('booking-created'));
+        loadAvailability();
       } else {
         setBookingMsg({ ok: false, text: data.error ?? 'เกิดข้อผิดพลาด' });
       }
@@ -173,6 +178,7 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
         setBookingMsg({ ok: true, text: 'ยกเลิกการจองเรียบร้อยแล้ว' });
         setTimeout(() => setBookingMsg(null), 3000);
         onBookingCancelled?.();
+        loadAvailability();
       } else {
         setBookingMsg({ ok: false, text: data.error ?? 'เกิดข้อผิดพลาด' });
       }
