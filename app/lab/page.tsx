@@ -1226,6 +1226,121 @@ function SensorRow({ label, value, unit, color }: { label: string; value: string
 
 // ── Chat Panel ────────────────────────────────────────────────────────────────
 
+// ── Markdown + LaTeX renderer (lightweight, no library) ───────────────────────
+
+function parseInline(text: string, key?: string | number): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g);
+  return (
+    <span key={key}>
+      {parts.map((p, i) => {
+        if (p.startsWith('**') && p.endsWith('**'))
+          return <strong key={i} className="font-semibold text-white">{p.slice(2,-2)}</strong>;
+        if (p.startsWith('*') && p.endsWith('*'))
+          return <em key={i} className="italic text-gray-200">{p.slice(1,-1)}</em>;
+        if (p.startsWith('`') && p.endsWith('`'))
+          return <code key={i} className="font-mono text-[10px] bg-gray-950/90 text-[#c8ff00]/80 px-1 py-0.5 rounded">{p.slice(1,-1)}</code>;
+        if (p.startsWith('$$') && p.endsWith('$$'))
+          return <span key={i} className="block overflow-x-auto font-mono text-[10px] text-violet-300 bg-violet-950/30 border border-violet-500/20 px-2 py-1 rounded my-1 text-center">{p.slice(2,-2).trim()}</span>;
+        if (p.startsWith('$') && p.endsWith('$'))
+          return <span key={i} className="font-mono text-[10px] text-violet-300 bg-violet-950/20 px-0.5 rounded">{p.slice(1,-1)}</span>;
+        return p;
+      })}
+    </span>
+  );
+}
+
+function MarkdownMessage({ content, streaming = false }: { content: string; streaming?: boolean }) {
+  if (!content && !streaming) return null;
+
+  const lines   = content.split('\n');
+  const nodes: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.startsWith('```')) {
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++; }
+      nodes.push(
+        <pre key={`cb-${i}`} className="my-1.5 overflow-x-auto rounded-lg bg-gray-950 border border-white/[0.06] px-3 py-2">
+          <code className="text-[10px] font-mono text-emerald-400/90 leading-relaxed whitespace-pre">{codeLines.join('\n')}</code>
+        </pre>
+      );
+      i++; continue;
+    }
+
+    // Display math $$
+    if (line.startsWith('$$') && !line.endsWith('$$')) {
+      const mathLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('$$')) { mathLines.push(lines[i]); i++; }
+      nodes.push(
+        <div key={`dm-${i}`} className="my-1.5 overflow-x-auto rounded-lg bg-violet-950/20 border border-violet-500/20 px-3 py-2 text-center">
+          <span className="font-mono text-[10px] text-violet-300">{mathLines.join(' ')}</span>
+        </div>
+      );
+      i++; continue;
+    }
+
+    // Heading
+    const h3 = line.match(/^###\s+(.+)/);
+    const h2 = line.match(/^##\s+(.+)/);
+    const h1 = line.match(/^#\s+(.+)/);
+    if (h1) { nodes.push(<p key={i} className="font-bold text-white text-xs mt-2 mb-1">{parseInline(h1[1])}</p>); i++; continue; }
+    if (h2) { nodes.push(<p key={i} className="font-semibold text-[#c8ff00]/90 mt-1.5 mb-0.5">{parseInline(h2[1])}</p>); i++; continue; }
+    if (h3) { nodes.push(<p key={i} className="font-semibold text-gray-200 mt-1 mb-0.5">{parseInline(h3[1])}</p>); i++; continue; }
+
+    // Unordered list
+    const ul = line.match(/^[*\-]\s+(.+)/);
+    if (ul) {
+      nodes.push(
+        <div key={i} className="flex gap-1.5 leading-relaxed">
+          <span className="text-[#c8ff00]/50 shrink-0 mt-px">·</span>
+          <span>{parseInline(ul[1])}</span>
+        </div>
+      );
+      i++; continue;
+    }
+
+    // Ordered list
+    const ol = line.match(/^(\d+)\.\s+(.+)/);
+    if (ol) {
+      nodes.push(
+        <div key={i} className="flex gap-1.5 leading-relaxed">
+          <span className="font-mono text-[10px] text-[#c8ff00]/50 shrink-0 mt-px">{ol[1]}.</span>
+          <span>{parseInline(ol[2])}</span>
+        </div>
+      );
+      i++; continue;
+    }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}$/.test(line.trim())) {
+      nodes.push(<hr key={i} className="border-white/10 my-1.5" />);
+      i++; continue;
+    }
+
+    // Empty line
+    if (!line.trim()) { nodes.push(<div key={i} className="h-1.5" />); i++; continue; }
+
+    // Normal line
+    nodes.push(<p key={i} className="leading-relaxed">{parseInline(line)}</p>);
+    i++;
+  }
+
+  return (
+    <div className="text-[11px] text-gray-300 space-y-0.5">
+      {nodes}
+      {streaming && (
+        <span className="inline-block w-0.5 h-[0.85em] bg-[#c8ff00]/70 ml-0.5 animate-pulse align-middle rounded-sm" />
+      )}
+    </div>
+  );
+}
+
 const SUGGESTIONS: Record<'coil' | 'solenoid', string[]> = {
   coil: [
     'กฎของไบโอต-ซาวัตอธิบายอะไร?',
@@ -1304,8 +1419,9 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
           if (!line.startsWith('data: ')) continue;
           try {
             const ev = JSON.parse(line.slice(6));
-            if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-              accText += ev.delta.text;
+            const chunk = ev.choices?.[0]?.delta?.content;
+            if (chunk) {
+              accText += chunk;
               updated = true;
             }
           } catch { /* skip */ }
@@ -1357,19 +1473,18 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
         )}
         {messages.map(msg => (
           <div key={msg.id} className={`chat-bubble flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} style={{ opacity: 0 }}>
-            <div className={`max-w-[90%] rounded-xl px-2.5 py-1.5 text-[11px] leading-5 whitespace-pre-wrap ${
-              msg.role === 'user'
-                ? 'bg-[#c8ff00]/10 border border-[#c8ff00]/25 text-[#c8ff00]/90'
-                : 'bg-gray-800/60 border border-white/[0.07] text-gray-300'
-            }`}>
-              {msg.content || (streaming && msg.role === 'assistant' ? (
-                <span className="inline-flex gap-1">
-                  <span className="animate-bounce" style={{ animationDelay: '0ms' }}>·</span>
-                  <span className="animate-bounce" style={{ animationDelay: '150ms' }}>·</span>
-                  <span className="animate-bounce" style={{ animationDelay: '300ms' }}>·</span>
-                </span>
-              ) : '')}
-            </div>
+            {msg.role === 'user' ? (
+              <div className="max-w-[90%] rounded-xl px-2.5 py-1.5 text-[11px] leading-5 bg-[#c8ff00]/10 border border-[#c8ff00]/25 text-[#c8ff00]/90 whitespace-pre-wrap">
+                {msg.content}
+              </div>
+            ) : (
+              <div className="max-w-[95%] rounded-xl px-2.5 py-2 bg-gray-800/60 border border-white/[0.07]">
+                <MarkdownMessage
+                  content={msg.content}
+                  streaming={streaming && msg === messages[messages.length - 1]}
+                />
+              </div>
+            )}
           </div>
         ))}
         <div ref={bottomRef} />

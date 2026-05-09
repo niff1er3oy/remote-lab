@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
+const TYPHOON_API = 'https://api.opentyphoon.ai/v1/chat/completions';
 
 interface ChatContext {
   instrumentName: string;
@@ -13,11 +13,33 @@ interface ChatContext {
   z?: number;
 }
 
+const SYSTEM_PROMPT = `คุณคือ "ครูฟิสิกส์ Typhoon" ผู้เชี่ยวชาญการสอนวิชาฟิสิกส์ระดับมัธยมปลายและมหาวิทยาลัย
+หน้าที่ของคุณคือการช่วยให้นักเรียนเข้าใจ "ที่มาและหลักการ" ของฟิสิกส์ ไม่ใช่แค่การบอกคำตอบเพียงอย่างเดียว
+
+**หลักการตอบคำถาม:**
+1. บุคลิก: ใจดี, กระตือรือร้นในการสอน, และใช้ภาษาที่เข้าใจง่ายแต่ถูกต้องตามหลักวิชาการ
+2. การสอน: ใช้ "Socratic Method" (การตั้งคำถามกลับ) เพื่อให้นักเรียนได้ลองคิดตามก่อนจะเฉลยทั้งหมด
+3. รูปแบบการเขียน:
+   - ใช้ Markdown ในการจัดหัวข้อให้ชัดเจน
+   - ใช้ LaTeX สำหรับสูตรทางฟิสิกส์เสมอ เช่น $F = ma$ หรือ $$E = mc^2$$
+   - หากต้องมีการคำนวณ ให้แสดงวิธีทำเป็นลำดับขั้นตอน (Step-by-step)
+4. ข้อจำกัด: หากนักเรียนถามเรื่องที่ไม่เกี่ยวข้องกับฟิสิกส์ ให้ตอบอย่างสุภาพว่า "ครูเชี่ยวชาญด้านฟิสิกส์ ลองกลับมาคุยเรื่องแรง พลังงาน หรือคลื่นกันดีกว่านะครับ"
+
+**โครงสร้างการตอบ:**
+- (ทักทายและทวนคำถาม)
+- (อธิบายคอนเซปต์สั้นๆ ที่เกี่ยวข้อง)
+- (แสดงวิธีคิดหรือคำนวณ)
+- (ทิ้งท้ายด้วยคำถามเพื่อเช็คความเข้าใจของนักเรียน)
+
+การทดลองที่ 8 "สนามแม่เหล็กในขดลวดเดี่ยวและกฎของไบโอต-ซาวัต" รายวิชา 04203102:
+- ตอนที่ 1 ขดลวดเดี่ยว: วัด B ที่จุดกึ่งกลาง สำหรับ n = 1, 2, 3 รอบ ที่ I = 5 A  สูตร $B_0 = \\mu_0 n I / (2R)$
+- ตอนที่ 2 โซลีนอยด์: วัด B ตามแนวแกน Z ทุก 1 cm (Z = −15 ถึง +15 cm) ที่ I = 1 A  L = 160 mm, R = 13 mm  สูตร $B_z = \\frac{\\mu_0 N I}{2L}\\left[\\frac{L/2+Z}{\\sqrt{R^2+(L/2+Z)^2}} + \\frac{L/2-Z}{\\sqrt{R^2+(L/2-Z)^2}}\\right]$`;
+
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.TYPHOON_API_KEY;
   if (!apiKey) {
     return new Response(
-      JSON.stringify({ error: 'ยังไม่ได้ตั้งค่า ANTHROPIC_API_KEY กรุณาเพิ่มใน .env.local' }),
+      JSON.stringify({ error: 'ยังไม่ได้ตั้งค่า TYPHOON_API_KEY กรุณาเพิ่มใน .env.local' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
@@ -30,13 +52,7 @@ export async function POST(req: NextRequest) {
     ? `\n- ตำแหน่งหัววัด Z = ${(context.z * 100).toFixed(0)} cm จากจุดกึ่งกลาง`
     : '';
 
-  const systemText = `คุณเป็นผู้ช่วยสอนฟิสิกส์สำหรับการทดลองที่ 8 เรื่อง "สนามแม่เหล็กในขดลวดเดี่ยวและกฎของไบโอต-ซาวัต" รายวิชา 04203102 หลักฟิสิกส์ภาคปฏิบัติการ ตอบเป็นภาษาไทยเสมอ ตอบกระชับ ใช้สมการในรูปแบบอ่านง่าย
-
-การทดลองแบ่งเป็น 2 ตอน:
-- ตอนที่ 1 ขดลวดเดี่ยว: วัด B ที่จุดกึ่งกลาง สำหรับ n = 1, 2, 3 รอบ ที่ I = 5 A  สูตร B₀ = μ₀nI / (2R)
-- ตอนที่ 2 โซลีนอยด์: วัด B ตามแนวแกน Z ทุก 1 cm (Z = −15 ถึง +15 cm) ที่ I = 1 A  L = 160 mm, R = 13 mm  สูตร B_z = (μ₀NI/2L)·[(L/2+Z)/√(R²+(L/2+Z)²) + (L/2−Z)/√(R²+(L/2−Z)²)]  ใช้โซลีนอยด์ 75 รอบ และ 150 รอบ เปรียบเทียบกัน
-
-**บริบทการทดลองปัจจุบัน:**
+  const contextBlock = `\n\n**บริบทการทดลองปัจจุบัน:**
 - อุปกรณ์: ${context.instrumentName} (${context.instSub})
 - กระแสออกแบบ I₀ = ${context.I0.toFixed(2)} A
 - กระแสที่วัดได้ I = ${context.I.toFixed(4)} A${zLine}
@@ -44,18 +60,21 @@ export async function POST(req: NextRequest) {
 - สนามแม่เหล็กวัดจริง B_measured = ${context.bMeasured.toFixed(3)} mT
 - ΔB = ${delta >= 0 ? '+' : ''}${delta.toFixed(3)} mT (${Math.abs(delta / context.bTheory * 100).toFixed(1)}% ต่างจากทฤษฎี)`;
 
-  const upstream = await fetch(ANTHROPIC_API, {
+  const upstream = await fetch(TYPHOON_API, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: systemText,
-      messages,
+      model: 'typhoon-v2.5-30b-a3b-instruct',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT + contextBlock },
+        ...messages,
+      ],
+      temperature: 0.6,
+      max_completion_tokens: 512,
+      top_p: 0.6,
       stream: true,
     }),
   });
@@ -63,7 +82,7 @@ export async function POST(req: NextRequest) {
   if (!upstream.ok) {
     const err = await upstream.text();
     return new Response(
-      JSON.stringify({ error: `Anthropic API error: ${err}` }),
+      JSON.stringify({ error: `Typhoon API error: ${err}` }),
       { status: upstream.status, headers: { 'Content-Type': 'application/json' } }
     );
   }
