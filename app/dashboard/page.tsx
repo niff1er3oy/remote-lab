@@ -12,7 +12,7 @@ import DashboardNav from '@/app/components/DashboardNav';
 type User    = { name: string; email: string; role: string };
 type Booking = { booking_id: string; equipment_name: string; start_time: string; end_time: string; status: string };
 type Stats   = { upcoming_bookings: Booking[]; session_count: number; available_equipment: number };
-type ActiveSession = { booking_id: string; experiment_code: string; experiment_name: string; start_time: string; end_time: string };
+type ActiveSession = { booking_id: string; experiment_code: string; experiment_name: string; start_time: string; end_time: string; room_code: string | null };
 type HistoryItem = {
   booking_id: string;
   lab_code: string;
@@ -78,6 +78,10 @@ export default function DashboardPage() {
   const [loading,       setLoading]       = useState(true);
   const [cancellingId,  setCancellingId]  = useState<string | null>(null);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const [joinCode,      setJoinCode]      = useState('');
+  const [joining,       setJoining]       = useState(false);
+  const [joinError,     setJoinError]     = useState('');
+  const [copied,        setCopied]        = useState(false);
   const offset = useRef(0);
 
   const headerRef       = useRef<HTMLDivElement>(null);
@@ -232,6 +236,31 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleJoin(e: React.FormEvent) {
+    e.preventDefault();
+    const code = joinCode.trim().toUpperCase();
+    if (!code) return;
+    setJoining(true);
+    setJoinError('');
+    try {
+      const res = await fetch(`/api/lab/join?room=${code}`);
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setJoinError(data.error ?? 'รหัสห้องไม่ถูกต้อง');
+      } else {
+        router.push(`/lab?room=${data.room_code}`);
+      }
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  function copyRoomCode(code: string) {
+    navigator.clipboard.writeText(code).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   async function cancelBooking(booking_id: string) {
     setCancellingId(booking_id);
     try {
@@ -308,6 +337,25 @@ export default function DashboardPage() {
                   <p className="text-xs text-gray-400 font-mono mt-0.5">
                     {fmtTime(activeSession.start_time)} – {fmtTime(activeSession.end_time)}
                   </p>
+                  {activeSession.room_code && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-[10px] text-gray-500">รหัสห้อง</span>
+                      <button
+                        onClick={() => copyRoomCode(activeSession.room_code!)}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#c8ff00]/30 bg-[#c8ff00]/5 px-2.5 py-0.5 hover:bg-[#c8ff00]/10 transition-colors"
+                      >
+                        <span className="font-mono text-sm font-bold tracking-widest text-[#c8ff00]">
+                          {activeSession.room_code}
+                        </span>
+                        {copied ? (
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c8ff00" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        ) : (
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c8ff00" strokeWidth="2" strokeLinecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                        )}
+                      </button>
+                      <span className="text-[10px] text-gray-600">แชร์ให้เพื่อนเข้าห้องได้</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <Link href="/lab"
@@ -343,6 +391,49 @@ export default function DashboardPage() {
             unit="ห้อง"
             accent
           />
+        </div>
+
+        {/* ── Join Room ── */}
+        <div className="rounded-2xl border border-white/10 bg-gray-900/40 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#c8ff00]/10 border border-[#c8ff00]/20">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8ff00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">เข้าร่วมห้องแลป</p>
+              <p className="text-xs text-gray-500">กรอกรหัสห้องที่ได้รับจากเจ้าของห้อง</p>
+            </div>
+          </div>
+          <form onSubmit={handleJoin} className="flex items-center gap-3">
+            <input
+              type="text"
+              value={joinCode}
+              onChange={e => { setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)); setJoinError(''); }}
+              placeholder="XXXXXX"
+              maxLength={6}
+              className="flex-1 rounded-xl border border-white/10 bg-gray-900 px-4 py-2.5 font-mono text-base tracking-widest text-[#c8ff00] placeholder-gray-700 focus:border-[#c8ff00]/40 focus:outline-none transition-colors"
+              style={{ letterSpacing: '0.25em' }}
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              disabled={joinCode.length !== 6 || joining}
+              className="shrink-0 rounded-xl bg-[#c8ff00] px-5 py-2.5 text-sm font-semibold text-gray-950 hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ boxShadow: joinCode.length === 6 ? '0 0 20px rgba(200,255,0,0.25)' : 'none' }}
+            >
+              {joining ? (
+                <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+              ) : 'เข้าร่วม →'}
+            </button>
+          </form>
+          {joinError && (
+            <p className="mt-2 text-xs text-red-400 flex items-center gap-1.5">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              {joinError}
+            </p>
+          )}
         </div>
 
         {/* ── Upcoming Bookings ── */}

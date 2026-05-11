@@ -3,6 +3,40 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
 
+const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+let roomCodeColumnReady = false;
+
+async function ensureRoomCodeColumn() {
+  if (roomCodeColumnReady) return;
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND COLUMN_NAME = 'room_code'`
+  );
+  if ((rows as RowDataPacket[])[0].cnt === 0) {
+    await pool.query(`
+      ALTER TABLE bookings
+        ADD COLUMN room_code CHAR(6) NULL AFTER status,
+        ADD UNIQUE KEY idx_bookings_room_code (room_code)
+    `);
+  }
+  roomCodeColumnReady = true;
+}
+
+async function generateRoomCode(): Promise<string> {
+  await ensureRoomCodeColumn();
+  for (let attempt = 0; attempt < 20; attempt++) {
+    let code = '';
+    for (let i = 0; i < 6; i++)
+      code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT 1 FROM bookings WHERE room_code = ?', [code]
+    );
+    if (!(rows as RowDataPacket[]).length) return code;
+  }
+  throw new Error('room code collision');
+}
+
 export async function POST(req: NextRequest) {
   const store = await cookies();
   const session = store.get('session');
@@ -28,10 +62,11 @@ export async function POST(req: NextRequest) {
 
     const lab = (labRows as RowDataPacket[])[0];
 
+    const roomCode = await generateRoomCode();
     await pool.query(
-      `INSERT INTO bookings (booking_id, user_id, lab_id, start_time, end_time, status)
-       VALUES (UUID(), ?, ?, ?, ?, 'confirmed')`,
-      [uid, room_id, start_time, end_time]
+      `INSERT INTO bookings (booking_id, user_id, lab_id, start_time, end_time, status, room_code)
+       VALUES (UUID(), ?, ?, ?, ?, 'confirmed', ?)`,
+      [uid, room_id, start_time, end_time, roomCode]
     );
 
     const dt = new Date(start_time.replace(' ', 'T') + 'Z');
@@ -44,7 +79,7 @@ export async function POST(req: NextRequest) {
       [uid, `จองสำเร็จ — ${lab.code}`, `${lab.name_th} วันที่ ${label}`]
     );
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, room_code: roomCode });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('ห้องนี้ถูกจอง') || msg.includes('45000'))

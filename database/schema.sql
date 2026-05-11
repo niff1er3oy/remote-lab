@@ -66,6 +66,7 @@ CREATE TABLE bookings (
     start_time    DATETIME     NOT NULL,
     end_time      DATETIME     NOT NULL,
     status        ENUM('pending','confirmed','in_progress','completed','cancelled') NOT NULL DEFAULT 'pending',
+    room_code     CHAR(6)      NULL,
     notes         TEXT,
     notified_soon TINYINT(1)   NOT NULL DEFAULT 0,
     created_at    DATETIME     NOT NULL DEFAULT NOW(),
@@ -75,6 +76,7 @@ CREATE TABLE bookings (
     KEY idx_bookings_user (user_id),
     KEY idx_bookings_lab  (lab_id),
     KEY idx_bookings_time (start_time, end_time),
+    UNIQUE KEY idx_bookings_room_code (room_code),
     CONSTRAINT fk_booking_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
     CONSTRAINT fk_booking_lab  FOREIGN KEY (lab_id)  REFERENCES labs  (lab_id)  ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

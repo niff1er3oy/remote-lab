@@ -1,3 +1,7 @@
+// Load .env.local / .env before anything reads process.env
+const { loadEnvConfig } = require('@next/env')
+loadEnvConfig(process.cwd())
+
 const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
@@ -11,7 +15,7 @@ const hostname = 'localhost'
 const app = next({ dev, hostname, port, turbopack: dev })
 const handle = app.getRequestHandler()
 
-// Shared DB pool for session validation
+// Shared DB pool for session validation — created after env vars are loaded
 const pool = mysql.createPool({
   host:     process.env.DB_HOST     ?? 'localhost',
   port:     Number(process.env.DB_PORT ?? 3306),
@@ -174,17 +178,26 @@ app.prepare().then(() => {
     // Let Next.js handle its own WebSocket paths (HMR, etc.)
     if (pathname !== '/ws') return
 
-    const auth = await validateSession(request)
-    if (!auth) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-      socket.destroy()
-      return
-    }
+    try {
+      const auth = await validateSession(request)
 
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      ws.__auth = auth
-      wss.emit('connection', ws, request)
-    })
+      // Socket may have closed while awaiting DB query (StrictMode rapid mount/unmount)
+      if (socket.destroyed) return
+
+      if (!auth) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+        socket.destroy()
+        return
+      }
+
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        ws.__auth = auth
+        wss.emit('connection', ws, request)
+      })
+    } catch (err) {
+      console.error('[ws upgrade]', err)
+      if (!socket.destroyed) socket.destroy()
+    }
   })
 
   wss.on('connection', (ws, request) => {

@@ -3,6 +3,23 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
 
+let columnReady = false;
+async function ensureRoomCodeColumn() {
+  if (columnReady) return;
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND COLUMN_NAME = 'room_code'`
+  );
+  if ((rows as RowDataPacket[])[0].cnt === 0) {
+    await pool.query(`
+      ALTER TABLE bookings
+        ADD COLUMN room_code CHAR(6) NULL AFTER status,
+        ADD UNIQUE KEY idx_bookings_room_code (room_code)
+    `);
+  }
+  columnReady = true;
+}
+
 export async function GET() {
   const store = await cookies();
   const session = store.get('session');
@@ -10,10 +27,11 @@ export async function GET() {
 
   try {
     const { uid } = JSON.parse(Buffer.from(session.value, 'base64').toString());
+    await ensureRoomCodeColumn();
     const now = new Date();
 
     const [activeRows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.booking_id, b.start_time, b.end_time, l.code, l.name_th
+      `SELECT b.booking_id, b.start_time, b.end_time, b.room_code, l.code, l.name_th
        FROM bookings b
        JOIN labs l ON l.lab_id = b.lab_id
        WHERE b.user_id = ?
@@ -35,6 +53,7 @@ export async function GET() {
           experiment_name: b.name_th,
           start_time:      b.start_time,
           end_time:        b.end_time,
+          room_code:       b.room_code ?? null,
         },
       });
     }

@@ -53,14 +53,30 @@ export async function POST(req: NextRequest) {
       'SELECT name FROM users WHERE user_id = ?', [uid]
     );
     const userName = (userRows as RowDataPacket[])[0]?.name ?? 'ผู้ใช้';
+    const chatKey = lab ?? 'LAB8';
+    const now = new Date();
 
     await ensureTable();
-    await pool.query(
+    const [result] = await pool.query(
       `INSERT INTO lab_chat (lab_code, user_id, user_name, content, created_at)
        VALUES (?, ?, ?, ?, UTC_TIMESTAMP())`,
-      [lab ?? 'LAB8', uid, userName, content.trim()]
+      [chatKey, uid, userName, content.trim()]
     );
-    return NextResponse.json({ ok: true });
+    const insertId = (result as { insertId: number }).insertId;
+
+    const message = {
+      id: insertId,
+      user_id: uid,
+      user_name: userName,
+      content: content.trim(),
+      created_at: now.toISOString(),
+    };
+
+    // Broadcast to WebSocket room so all clients receive instantly
+    const broadcast = (global as { __wssBroadcastToRoom?: (room: string, msg: unknown) => void }).__wssBroadcastToRoom;
+    if (broadcast) broadcast(`lab:${chatKey}`, { type: 'chat', payload: message });
+
+    return NextResponse.json({ ok: true, message });
   } catch (err) {
     console.error('[lab/chat POST]', err);
     return NextResponse.json({ ok: false }, { status: 500 });

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { animate, stagger, scrambleText } from 'animejs';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 
@@ -127,7 +127,7 @@ type AccessState =
   | { status: 'loading' }
   | { status: 'denied'; reason: 'auth' }
   | { status: 'denied'; reason: 'no_booking'; next: { start_time: string; experiment_name: string } | null }
-  | { status: 'allowed'; end_time: string; experiment_name: string };
+  | { status: 'allowed'; end_time: string; experiment_name: string; room_code: string | null };
 
 function useAccessGate() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
@@ -157,7 +157,7 @@ function useAccessGate() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'start' }),
           }).catch(() => {});
-          setAccess({ status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name });
+          setAccess({ status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name, room_code: d.booking.room_code ?? null });
         } else {
           setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
         }
@@ -387,9 +387,122 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
   );
 }
 
+// ── Guest Lab View ────────────────────────────────────────────────────────────
+
+type GuestState =
+  | { status: 'loading' }
+  | { status: 'ready'; labName: string; labCode: string; hostName: string; endTime: string }
+  | { status: 'error'; message: string };
+
+function GuestLabView({ roomCode }: { roomCode: string }) {
+  const [state, setState] = useState<GuestState>({ status: 'loading' });
+
+  useEffect(() => {
+    fetch(`/api/lab/join?room=${roomCode}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          setState({ status: 'ready', labName: d.lab_name, labCode: d.lab_code, hostName: d.host_name, endTime: d.end_time });
+        } else {
+          setState({ status: 'error', message: d.error ?? 'รหัสห้องไม่ถูกต้อง' });
+        }
+      })
+      .catch(() => setState({ status: 'error', message: 'ไม่สามารถเชื่อมต่อได้' }));
+  }, [roomCode]);
+
+  if (state.status === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+        <svg className="animate-spin text-[#c8ff00]" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+        </svg>
+      </div>
+    );
+  }
+
+  if (state.status === 'error') {
+    return (
+      <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center px-6 text-center">
+        <div className="fixed inset-0 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(200,255,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.03) 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+        }} />
+        <div className="relative z-10 max-w-sm w-full">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-white mb-2">ไม่สามารถเข้าห้องได้</h1>
+          <p className="text-sm text-gray-400 mb-6">{state.message}</p>
+          <a href="/dashboard"
+            className="inline-block rounded-full bg-[#c8ff00] px-6 py-2.5 text-sm font-semibold text-gray-950 hover:bg-white transition-colors"
+            style={{ boxShadow: '0 0 20px rgba(200,255,0,0.25)' }}>
+            กลับ Dashboard
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  const { labName, labCode, hostName, endTime } = state;
+  const remaining = Math.max(0, Math.floor((new Date(endTime).getTime() - Date.now()) / 1000));
+
+  return (
+    <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none" style={{
+        backgroundImage: 'linear-gradient(rgba(200,255,0,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.025) 1px, transparent 1px)',
+        backgroundSize: '64px 64px',
+      }} />
+
+      {/* Header */}
+      <div className="relative z-10 shrink-0 h-12 border-b border-white/10 bg-gray-950/80 backdrop-blur flex items-center justify-between px-4 gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="shrink-0 rounded-md border border-[#c8ff00]/30 bg-[#c8ff00]/10 px-2 py-0.5 font-mono text-xs font-bold tracking-widest text-[#c8ff00]">
+            {roomCode}
+          </span>
+          <span className="text-sm text-white truncate">{labName}</span>
+          <span className="hidden sm:block text-[10px] text-gray-500 shrink-0">เจ้าของห้อง: {hostName}</span>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs text-gray-500 font-mono">{hhmmss(remaining)}</span>
+          <span className="text-[10px] border border-[#c8ff00]/20 text-[#c8ff00]/60 rounded-full px-2 py-0.5">Guest</span>
+          <a href="/dashboard" className="text-[11px] text-gray-500 hover:text-white transition-colors">← Dashboard</a>
+        </div>
+      </div>
+
+      {/* Chat */}
+      <div className="relative z-10 flex-1 min-h-0 max-w-2xl w-full mx-auto p-4">
+        <div className="h-full rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden flex flex-col">
+          <div className="shrink-0 px-4 py-2.5 border-b border-white/[0.06] flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#c8ff00] opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#c8ff00]" />
+            </span>
+            <span className="text-xs font-semibold text-white">แชทห้องแลป</span>
+            <span className="ml-auto font-mono text-[10px] text-gray-600">{labCode}</span>
+          </div>
+          <div className="flex-1 min-h-0">
+            <LabChatPanel labCode={roomCode} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function RemoteLabPage() {
+  const searchParams = useSearchParams();
+  const guestRoom = searchParams.get('room');
+  if (guestRoom) return <GuestLabView roomCode={guestRoom.toUpperCase()} />;
+
+  return <HostLabPage />;
+}
+
+function HostLabPage() {
   const { access, onComplete } = useAccessGate();
   const [labStarted, setLabStarted] = useState(false);
   const [instrument, setInstrument] = useState(0);
@@ -451,7 +564,7 @@ export default function RemoteLabPage() {
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
-      <SessionBar endTime={access.end_time} onComplete={onComplete} />
+      <SessionBar endTime={access.end_time} onComplete={onComplete} roomCode={access.room_code} />
       <div className="flex-1 overflow-hidden p-3 flex gap-3">
 
         {/* Left ── Camera + FieldViz (top) · InstrSel + Sensor (bottom) */}
@@ -500,7 +613,7 @@ export default function RemoteLabPage() {
           <RightTabs
             chatProps={{ inst, I, I0, bTheory, bMeasured, z }}
             logProps={{ instrument, I, bMeasured, z, instType: inst.type }}
-            labCode="LAB8"
+            labCode={access.room_code ?? 'LAB8'}
           />
         </div>
 
@@ -518,34 +631,97 @@ function LabChatPanel({ labCode }: { labCode: string }) {
   const [input,    setInput]    = useState('');
   const [sending,  setSending]  = useState(false);
   const [myName,   setMyName]   = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const lastIdRef = useRef(0);
+  const bottomRef      = useRef<HTMLDivElement>(null);
+  const lastIdRef      = useRef(0);
+  const myNameRef      = useRef('');
+  const audioRef       = useRef<HTMLAudioElement | null>(null);
+  const readyForSound  = useRef(false); // true after initial fetch completes
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => { if (d.ok) setMyName(d.user.name); });
   }, []);
 
+  // Keep ref in sync so addMessages (stable callback) can access current name
+  useEffect(() => { myNameRef.current = myName; }, [myName]);
+
+  const addMessages = useCallback((incoming: ChatRoomMsg[]) => {
+    if (!incoming.length) return;
+    setMessages(prev => {
+      const seen = new Set(prev.map(m => m.id));
+      const fresh = incoming.filter(m => !seen.has(m.id));
+      if (!fresh.length) return prev;
+      lastIdRef.current = Math.max(lastIdRef.current, fresh[fresh.length - 1].id);
+
+      // Play sound only for others' messages after initial load
+      if (
+        readyForSound.current &&
+        myNameRef.current &&
+        fresh.some(m => m.user_name !== myNameRef.current)
+      ) {
+        if (!audioRef.current) audioRef.current = new Audio('/sound/ack.mp3');
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(() => {});
+      }
+
+      requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }));
+      return [...prev, ...fresh];
+    });
+  }, []);
+
+  // Initial load + poll fallback (catches missed WS messages)
   const fetchMessages = useCallback(async () => {
     const res = await fetch(`/api/lab/chat?lab=${labCode}&since=${lastIdRef.current}`);
     if (!res.ok) return;
     const data = await res.json();
-    if (data.messages?.length) {
-      lastIdRef.current = data.messages[data.messages.length - 1].id;
-      setMessages(prev => {
-        const seen = new Set(prev.map(m => m.id));
-        const fresh = (data.messages as ChatRoomMsg[]).filter(m => !seen.has(m.id));
-        if (!fresh.length) return prev;
-        requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }));
-        return [...prev, ...fresh];
-      });
-    }
-  }, [labCode]);
+    if (data.messages?.length) addMessages(data.messages);
+  }, [labCode, addMessages]);
 
   useEffect(() => {
-    fetchMessages();
-    const t = setInterval(fetchMessages, 5000);
+    fetchMessages().then(() => { readyForSound.current = true; });
+    const t = setInterval(fetchMessages, 10_000);
     return () => clearInterval(t);
   }, [fetchMessages]);
+
+  // WebSocket — real-time delivery for all clients
+  useEffect(() => {
+    let active = true;
+    let ws: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryDelay = 1000;
+
+    function connect() {
+      if (!active) return;
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws?room=${encodeURIComponent(`lab:${labCode}`)}`);
+
+      ws.onmessage = (e) => {
+        if (!active) return;
+        try {
+          const msg = JSON.parse(e.data as string);
+          if (msg.type === 'chat' && msg.payload?.id) addMessages([msg.payload]);
+        } catch {}
+      };
+
+      ws.onopen = () => { retryDelay = 1000; };
+
+      ws.onclose = () => {
+        if (!active) return;
+        // Reconnect with backoff (max 30s)
+        retryTimer = setTimeout(() => { retryDelay = Math.min(retryDelay * 2, 30_000); connect(); }, retryDelay);
+      };
+
+      // Suppress uncaught error — onclose will handle reconnect
+      ws.onerror = () => {};
+    }
+
+    connect();
+
+    return () => {
+      active = false;
+      if (retryTimer) clearTimeout(retryTimer);
+      ws?.close();
+    };
+  }, [labCode, addMessages]);
 
   async function handleSend() {
     if (!input.trim() || sending) return;
@@ -553,12 +729,16 @@ function LabChatPanel({ labCode }: { labCode: string }) {
     const text = input.trim();
     setInput('');
     try {
-      await fetch('/api/lab/chat', {
+      const res = await fetch('/api/lab/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lab: labCode, content: text }),
       });
-      await fetchMessages();
+      if (res.ok) {
+        const data = await res.json();
+        // Add own message from response — WS broadcast handles delivery to others
+        if (data.message) addMessages([data.message]);
+      }
     } finally {
       setSending(false);
     }
@@ -667,7 +847,7 @@ function fmtCountdown(secs: number) {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function SessionBar({ endTime, onComplete }: { endTime: string; onComplete: () => void }) {
+function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComplete: () => void; roomCode?: string | null }) {
   const router       = useRouter();
   const [secs,      setSecs]      = useState(0);
   const [remaining, setRemaining] = useState(() => getRemaining(endTime));
@@ -726,6 +906,18 @@ function SessionBar({ endTime, onComplete }: { endTime: string; onComplete: () =
           <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse inline-block" style={{ boxShadow: '0 0 4px #c8ff00' }} />
           <span className="text-[#c8ff00] font-semibold">LIVE</span>
         </span>
+        {roomCode && (
+          <>
+            <span className="text-gray-600">|</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-gray-500 text-[10px]">รหัสห้อง</span>
+              <span className="font-mono font-bold tracking-widest text-[#c8ff00] rounded-md border border-[#c8ff00]/30 bg-[#c8ff00]/5 px-1.5 py-0.5 text-[11px]"
+                style={{ boxShadow: '0 0 8px rgba(200,255,0,0.15)' }}>
+                {roomCode}
+              </span>
+            </span>
+          </>
+        )}
         <span className="text-gray-600">|</span>
         <span className="text-gray-400">LAB 8: <span ref={labelRef} className="text-white">สนามแม่เหล็กและกฎไบโอต-ซาวัต</span></span>
         <span className="text-gray-600">|</span>

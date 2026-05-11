@@ -50,13 +50,23 @@ export async function GET() {
       }
     }
 
-    // bookings.notified_soon
+    // bookings.notified_soon + room_code
     if (await tableExists('bookings')) {
       if (!(await columnExists('bookings', 'notified_soon'))) {
         await pool.query('ALTER TABLE bookings ADD COLUMN notified_soon TINYINT(1) NOT NULL DEFAULT 0 AFTER notes');
         results.push('✓ เพิ่ม bookings.notified_soon');
       } else {
         results.push('— bookings.notified_soon มีอยู่แล้ว');
+      }
+      if (!(await columnExists('bookings', 'room_code'))) {
+        await pool.query(`
+          ALTER TABLE bookings
+            ADD COLUMN room_code CHAR(6) NULL AFTER status,
+            ADD UNIQUE KEY idx_bookings_room_code (room_code)
+        `);
+        results.push('✓ เพิ่ม bookings.room_code');
+      } else {
+        results.push('— bookings.room_code มีอยู่แล้ว');
       }
     }
 
