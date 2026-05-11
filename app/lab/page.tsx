@@ -447,7 +447,11 @@ function GuestLabView({ roomCode }: { roomCode: string }) {
   }
 
   const { labName, labCode, hostName, endTime } = state;
-  const remaining = Math.max(0, Math.floor((new Date(endTime).getTime() - Date.now()) / 1000));
+  const [remaining, setRemaining] = useState(() => getRemaining(endTime));
+  useEffect(() => {
+    const t = setInterval(() => setRemaining(getRemaining(endTime)), 1000);
+    return () => clearInterval(t);
+  }, [endTime]);
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
