@@ -39,7 +39,7 @@ export default function SignupPage() {
       animate(badgeRef.current, { opacity: [0, 1], scale: [0.9, 1], duration: 450, delay: 80, ease: 'outBack' });
     if (titleRef.current) {
       animate(titleRef.current, { opacity: [0, 1], translateY: [16, 0], duration: 550, delay: 150, ease: 'outCubic' });
-      animate(titleRef.current, { innerHTML: scrambleText({ chars: 'thai', from: 'left', override: '' }), delay: 150 });
+      animate(titleRef.current, { innerHTML: scrambleText({ chars: 'braille', from: 'left', override: '' }), delay: 150 });
     }
     if (subRef.current)
       animate(subRef.current,  { opacity: [0, 1], translateY: [10, 0], duration: 450, delay: 240, ease: 'outCubic' });

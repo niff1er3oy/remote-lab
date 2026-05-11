@@ -27,7 +27,15 @@
       "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\server.ts\" -Confirm:$false)",
       "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\components\\\\useLabChat.ts\" -Confirm:$false)",
       "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\api\\\\lab\\\\room\\\\route.ts\" -Confirm:$false)",
-      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\room\" -Recurse -Confirm:$false)"
+      "PowerShell(Remove-Item \"d:\\\\GitHub\\\\remote-lab\\\\app\\\\room\" -Recurse -Confirm:$false)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\GitHub\\\\remote-lab\\\\app\" -Recurse -Force | Select-Object FullName, @{Name='Type';Expression={if\\($_.PSIsContainer\\){'DIR'}else{'FILE'}}} | Sort-Object FullName | Format-Table -AutoSize)",
+      "Bash(xargs grep -l \"useEffect.*fetch\")",
+      "Bash(node -e \"require\\('ws'\\)\")",
+      "Bash(node -e \"console.log\\(require\\('ws/package.json'\\).version\\)\")",
+      "Bash(node -e \"const a = require\\('animejs'\\); console.log\\(Object.keys\\(a\\).slice\\(0,20\\)\\)\")",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/animejs/package.json'\\).version, require\\('./node_modules/animejs/package.json'\\).main, require\\('./node_modules/animejs/package.json'\\).exports ? 'has exports' : 'no exports'\\)\")",
+      "Bash(node -e \"const a = require\\('animejs'\\); console.log\\('scrambleText:', typeof a.scrambleText, 'morphTo:', typeof a.morphTo, 'stagger:', typeof a.stagger, 'animate:', typeof a.animate, 'onScroll:', typeof a.onScroll\\)\")",
+      "Bash(node -e ' *)"
     ]
   }
 }

@@ -243,8 +243,8 @@ function Hero() {
           chars: 'braille',
           from: 'left',
           override: '',
-          delay: stagger(220, { start: 250 }),
         }),
+        delay: stagger(220, { start: 250 }),
       });
     }
 

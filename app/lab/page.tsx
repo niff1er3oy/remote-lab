@@ -281,7 +281,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
         animate(cardRef.current, { opacity: [0, 1], translateY: [24, 0], scale: [0.97, 1], duration: 600, ease: 'outCubic' });
       await delay(150);
       if (titleRef.current)
-        animate(titleRef.current, { innerHTML: scrambleText({ chars: 'upperCase', seed: 2 }), duration: 1000 });
+        animate(titleRef.current, { innerHTML: scrambleText({ chars: 'uppercase', seed: 2 }), duration: 1000 });
       await delay(300);
       if (docsRef.current)
         animate(docsRef.current.querySelectorAll('.doc-btn'), {

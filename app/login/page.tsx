@@ -24,7 +24,7 @@ export default function LoginPage() {
       animate(subRef.current,  { opacity: [0, 1], translateY: [12, 0],  duration: 500, delay: 120, ease: 'outCubic' });
     if (titleRef.current) {
       animate(titleRef.current, { opacity: [0, 1], translateY: [16, 0], duration: 550, ease: 'outCubic' });
-      animate(titleRef.current, { innerHTML: scrambleText({ chars: 'thai', from: 'left', override: '' }) });
+      animate(titleRef.current, { innerHTML: scrambleText({ chars: 'braille', from: 'left', override: '' }) });
     }
     if (cardRef.current) {
       animate(cardRef.current, { opacity: [0, 1], translateY: [24, 0], scale: [0.97, 1], duration: 600, delay: 180, ease: 'outCubic' });
