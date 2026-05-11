@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { animate, stagger, scrambleText } from 'animejs';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -498,12 +498,25 @@ function GuestLabView({ roomCode }: { roomCode: string }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function RemoteLabPage() {
+function LabPageInner() {
   const searchParams = useSearchParams();
   const guestRoom = searchParams.get('room');
   if (guestRoom) return <GuestLabView roomCode={guestRoom.toUpperCase()} />;
-
   return <HostLabPage />;
+}
+
+export default function RemoteLabPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+        <svg className="animate-spin text-[#c8ff00]" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+        </svg>
+      </div>
+    }>
+      <LabPageInner />
+    </Suspense>
+  );
 }
 
 function HostLabPage() {
