@@ -527,6 +527,7 @@ function HostLabPage() {
   const [I, setI] = useState(5.0);
   const [z, setZ] = useState(0); // Z position in metres (solenoid only, ±0.15 m)
   const [measData, setMeasData] = useState<Map<number, { bMeasured: number; bTheory: number }>>(new Map());
+  const [realSensorValue, setRealSensorValue] = useState<number | null>(null);
   const topRowRef = useRef<HTMLDivElement>(null);
   const btmRowRef = useRef<HTMLDivElement>(null);
   const rightRef  = useRef<HTMLDivElement>(null);
@@ -549,6 +550,38 @@ function HostLabPage() {
     }, 1000);
     return () => clearInterval(t);
   }, [instrument]);
+
+  // Read real sensor data via WebSocket
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connect = () => {
+      ws = new WebSocket('ws://localhost:8000/ws/sensor');
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data && typeof data.value === 'number') {
+            setRealSensorValue(data.value);
+          }
+        } catch (err) {}
+      };
+      ws.onclose = () => {
+        reconnectTimeout = setTimeout(connect, 2000);
+      };
+      ws.onerror = () => ws?.close();
+    };
+
+    connect();
+
+    return () => {
+      clearTimeout(reconnectTimeout);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+    };
+  }, []);
 
   // Entry animations — run only after both access granted AND intro dismissed
   useEffect(() => {
@@ -576,9 +609,11 @@ function HostLabPage() {
   const bTheory   = inst.type === 'coil'
     ? calcBCoil(inst.turns, I0, inst.R)
     : calcBSolenoid(inst.N, I0, inst.L, inst.R, z);
-  const bMeasured = inst.type === 'coil'
-    ? calcBCoil(inst.turns, I, inst.R)
-    : calcBSolenoid(inst.N, I, inst.L, inst.R, z);
+  const bMeasured = realSensorValue !== null
+    ? realSensorValue
+    : (inst.type === 'coil'
+      ? calcBCoil(inst.turns, I, inst.R)
+      : calcBSolenoid(inst.N, I, inst.L, inst.R, z));
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
