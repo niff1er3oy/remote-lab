@@ -1053,7 +1053,8 @@ function CameraSection() {
         await pc.setLocalDescription(offer);
 
         // Send offer to MediaMTX WHEP endpoint
-        const response = await fetch('http://127.0.0.1:8889/dji/whep', {
+        const whepUrl = `http://${window.location.hostname}:8889/dji/whep`;
+        const response = await fetch(whepUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/sdp' },
           body: offer.sdp,
