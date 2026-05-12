@@ -1015,6 +1015,8 @@ function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComp
 function CameraSection() {
   const crossRef = useRef<HTMLDivElement>(null);
   const cornersRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   useEffect(() => {
     const ring = crossRef.current?.querySelector('.cross-ring') as HTMLElement | null;
@@ -1026,9 +1028,89 @@ function CameraSection() {
     }
   }, []);
 
+  // WebRTC WHEP connection
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    let pc: RTCPeerConnection;
+    let retryTimeout: ReturnType<typeof setTimeout>;
+    let isActive = true;
+
+    const connectWHEP = async () => {
+      try {
+        setStreamError(null);
+        pc = new RTCPeerConnection();
+        pc.addTransceiver('video', { direction: 'recvonly' });
+
+        pc.ontrack = (event) => {
+          if (video.srcObject !== event.streams[0]) {
+            video.srcObject = event.streams[0];
+          }
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        // Send offer to MediaMTX WHEP endpoint
+        const response = await fetch('http://127.0.0.1:8889/dji/whep', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/sdp' },
+          body: offer.sdp,
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to connect to stream server');
+        }
+
+        const answerSdp = await response.text();
+        await pc.setRemoteDescription(
+          new RTCSessionDescription({ type: 'answer', sdp: answerSdp })
+        );
+
+      } catch (err) {
+        console.error('WHEP connection error:', err);
+        if (isActive) {
+          setStreamError('กำลังเชื่อมต่อสัญญาณกล้อง...');
+          retryTimeout = setTimeout(connectWHEP, 3000);
+        }
+      }
+    };
+
+    connectWHEP();
+
+    return () => {
+      isActive = false;
+      clearTimeout(retryTimeout);
+      if (pc) pc.close();
+      if (video) video.srcObject = null;
+    };
+  }, []);
+
   return (
     <div className="rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden h-full">
-      <div className="relative h-full bg-[#050810] overflow-hidden">
+      <div className="relative h-full bg-[#050810] overflow-hidden flex items-center justify-center">
+        {/* Video stream */}
+        <video
+          ref={videoRef}
+          className="absolute inset-0 w-full h-full object-cover z-0"
+          autoPlay
+          playsInline
+          muted
+        />
+
+        {/* Reconnect UI */}
+        {streamError && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#050810]/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3">
+              <svg className="animate-spin text-[#c8ff00]" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 11-6.219-8.56"/>
+              </svg>
+              <span className="text-[10px] text-[#c8ff00] font-mono tracking-widest uppercase">{streamError}</span>
+            </div>
+          </div>
+        )}
+
         <div className="absolute inset-0 pointer-events-none z-10" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' }} />
         <div className="absolute inset-0 pointer-events-none opacity-10" style={{
           backgroundImage: 'linear-gradient(rgba(200,255,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.5) 1px, transparent 1px)',
