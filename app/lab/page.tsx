@@ -1013,13 +1013,11 @@ function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComp
 // ── Camera ────────────────────────────────────────────────────────────────────
 
 function CameraSection() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [connected, setConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const crossRef = useRef<HTMLDivElement>(null);
   const cornersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+<<<<<<< HEAD
     const initWebRTC = async () => {
       try {
         const pc = new RTCPeerConnection({
@@ -1078,6 +1076,10 @@ function CameraSection() {
   }, []);
 
   useEffect(() => {
+=======
+    const ring = crossRef.current?.querySelector('.cross-ring') as HTMLElement | null;
+    if (ring) animate(ring, { rotate: [0, 360], duration: 12000, ease: 'linear', loop: true });
+>>>>>>> parent of 70b1cab (Update page.tsx)
     if (cornersRef.current) {
       animate(cornersRef.current.querySelectorAll('.corner'), {
         opacity: [0, 1], scale: [0.4, 1], duration: 500, delay: stagger(80, { start: 300 }), ease: 'outBack',
@@ -1089,54 +1091,35 @@ function CameraSection() {
     <div className="rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden h-full">
       <div className="relative h-full bg-[#050810] overflow-hidden">
         <div className="absolute inset-0 pointer-events-none z-10" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' }} />
-
-        {/* Video stream or placeholder */}
-        {connected ? (
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            autoPlay
-            playsInline
-          />
-        ) : (
-          <div className="absolute inset-0 pointer-events-none opacity-10" style={{
-            backgroundImage: 'linear-gradient(rgba(200,255,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.5) 1px, transparent 1px)',
-            backgroundSize: '48px 48px',
-          }} />
-        )}
-
-        {!connected && !error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 select-none pointer-events-none">
-            <svg className="animate-spin" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(200,255,0,0.4)" strokeWidth="1.5">
-              <path d="M21 12a9 9 0 11-6.219-8.56"/>
-            </svg>
-            <span className="text-[9px] text-[#c8ff00]/40 font-mono uppercase tracking-widest">เชื่อมต่อ…</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 select-none pointer-events-none bg-black/60">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(244,63,94,0.6)" strokeWidth="1.5" strokeLinecap="round">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            <span className="text-[9px] text-red-400/70 font-mono text-center">{error}</span>
-          </div>
-        )}
-
+        <div className="absolute inset-0 pointer-events-none opacity-10" style={{
+          backgroundImage: 'linear-gradient(rgba(200,255,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.5) 1px, transparent 1px)',
+          backgroundSize: '48px 48px',
+        }} />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 select-none pointer-events-none">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(200,255,0,0.12)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />
+          </svg>
+          <span className="text-[9px] text-[#c8ff00]/20 font-mono uppercase tracking-widest">กล้องหลัก — ด้านหน้า</span>
+        </div>
         <div ref={cornersRef}>
           <div className="corner absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
           <div className="corner absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
           <div className="corner absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
           <div className="corner absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
         </div>
-
         <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-black/70 border border-white/10 px-2.5 py-0.5 text-[10px] z-20">
-          <span className={`h-1.5 w-1.5 rounded-full inline-block ${connected ? 'bg-green-500 animate-pulse' : error ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`} />
-          <span className="text-white font-semibold">{connected ? 'LIVE' : error ? 'ERROR' : 'CONNECTING'}</span>
+          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
+          <span className="text-white font-semibold">REC</span>
           <span className="text-gray-500">·</span>
           <span className="text-gray-400">กล้องหลัก</span>
         </div>
-
+        <div ref={crossRef} className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <div className="relative w-8 h-8">
+            <div className="absolute top-1/2 left-0 right-0 h-px bg-[#c8ff00]/25" />
+            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-[#c8ff00]/25" />
+            <div className="cross-ring absolute inset-1.5 rounded-full border border-dashed border-[#c8ff00]/20" />
+          </div>
+        </div>
         <CamTimestamp />
       </div>
     </div>
