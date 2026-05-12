@@ -539,6 +539,49 @@ function HostLabPage() {
     setMeasData(new Map());
   }, [instrument]);
 
+  const prevInstType = useRef<'coil' | 'solenoid'>('coil');
+  const isFirstLoad = useRef(true);
+
+  // Hardware script execution
+  useEffect(() => {
+    const runScript = async (script: string) => {
+      try {
+        await fetch('/api/hardware', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ script })
+        });
+      } catch (err) {
+        console.error('Failed to execute hardware script', err);
+      }
+    };
+
+    const inst = instruments[instrument];
+    const targetScript = ['coil_1.py', 'coil_1.py', 'coil_1.py', 'sole_75.py', 'sole_150.py'][instrument] || 'coil_1.py';
+
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      runScript(targetScript);
+      prevInstType.current = inst.type;
+      return;
+    }
+
+    const executeSwitch = async () => {
+      // 1. Run break script for the PREVIOUS instrument type
+      const breakScript = prevInstType.current === 'coil' ? 'coil_b.py' : 'sole_b.py';
+      await runScript(breakScript);
+      
+      // Hardware safety delay
+      await new Promise(r => setTimeout(r, 500));
+      
+      // 2. Run new target script
+      await runScript(targetScript);
+      prevInstType.current = inst.type;
+    };
+
+    executeSwitch();
+  }, [instrument]);
+
   // Current fluctuation ±1.5 % of I₀
   useEffect(() => {
     const { I0 } = instruments[instrument];
