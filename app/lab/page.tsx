@@ -1051,7 +1051,7 @@ function CameraSection() {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        const res = await fetch('http://localhost:8889/dji/offer', {
+        const res = await fetch('http://localhost:8889/dji', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sdp: pc.localDescription?.sdp, type: pc.localDescription?.type }),
