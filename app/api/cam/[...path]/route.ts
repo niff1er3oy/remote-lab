@@ -8,7 +8,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
   const targetUrl = `http://127.0.0.1:8888/dji/${targetPath}`;
 
   try {
-    const response = await fetch(targetUrl);
+    const response = await fetch(targetUrl, {
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from('admin:niffler123').toString('base64'),
+      },
+    });
     
     if (!response.ok) {
       return new Response(`Failed to fetch from camera: ${response.status}`, { status: response.status });
