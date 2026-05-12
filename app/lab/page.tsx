@@ -556,7 +556,11 @@ function HostLabPage() {
     let reconnectTimeout: NodeJS.Timeout;
 
     const connect = () => {
-      ws = new WebSocket('ws://localhost:8000/ws/sensor');
+      // Connect to the same domain (e.g. Cloudflare tunnel domain) to let Next.js proxy it to 8000
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/sensor`;
+      
+      ws = new WebSocket(wsUrl);
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
