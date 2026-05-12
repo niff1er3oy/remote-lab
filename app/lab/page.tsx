@@ -1,5 +1,4 @@
 'use client';
-
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { animate, stagger, scrambleText } from 'animejs';
@@ -28,7 +27,7 @@ function calcBSolenoid(N: number, I: number, L: number, R: number, Z: number): n
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CoilInst = { id: number; type: 'coil'; name: string; sub: string; I0: number; turns: number; R: number; icon: ReactNode };
-type SolInst  = { id: number; type: 'solenoid'; name: string; sub: string; I0: number; N: number; L: number; R: number; icon: ReactNode };
+type SolInst = { id: number; type: 'solenoid'; name: string; sub: string; I0: number; N: number; L: number; R: number; icon: ReactNode };
 type Inst = CoilInst | SolInst;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -53,7 +52,7 @@ function useFlPathAnimation(
       p.style.strokeDashoffset = '0';
       animate(p, { strokeDashoffset: [0, -(dash + gap)], duration: getDuration(i), ease: 'linear', loop: true });
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dep]);
 }
 
@@ -76,7 +75,7 @@ const instruments: Inst[] = [
     I0: 5, turns: 1, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>
+        <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" />
       </svg>
     ),
   },
@@ -85,7 +84,7 @@ const instruments: Inst[] = [
     I0: 5, turns: 2, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="2"/>
+        <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5.5" /><circle cx="12" cy="12" r="2" />
       </svg>
     ),
   },
@@ -94,8 +93,8 @@ const instruments: Inst[] = [
     I0: 5, turns: 3, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="6.5"/>
-        <circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.5"/>
+        <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="6.5" />
+        <circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r="1.5" />
       </svg>
     ),
   },
@@ -105,8 +104,8 @@ const instruments: Inst[] = [
     I0: 1, N: 75, L: 0.16, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-        <rect x="2" y="9" width="20" height="6" rx="1"/>
-        <path d="M2 12h20" strokeDasharray="3 2"/>
+        <rect x="2" y="9" width="20" height="6" rx="1" />
+        <path d="M2 12h20" strokeDasharray="3 2" />
       </svg>
     ),
   },
@@ -115,8 +114,8 @@ const instruments: Inst[] = [
     I0: 1, N: 150, L: 0.16, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-        <rect x="2" y="8" width="20" height="8" rx="1"/>
-        <path d="M2 10.5h20M2 12h20M2 13.5h20" strokeDasharray="3 2"/>
+        <rect x="2" y="8" width="20" height="8" rx="1" />
+        <path d="M2 10.5h20M2 12h20M2 13.5h20" strokeDasharray="3 2" />
       </svg>
     ),
   },
@@ -141,7 +140,7 @@ function useAccessGate() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'complete' }),
       keepalive: true,
-    }).catch(() => {});
+    }).catch(() => { });
   }
 
   useEffect(() => {
@@ -157,7 +156,7 @@ function useAccessGate() {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'start' }),
-          }).catch(() => {});
+          }).catch(() => { });
           setAccess({ status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name, room_code: d.booking.room_code ?? null });
         } else {
           setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
@@ -181,7 +180,7 @@ function useAccessGate() {
             setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }, 60_000);
     return () => clearInterval(intervalId);
   }, [access.status]);
@@ -210,8 +209,8 @@ function AccessDeniedScreen({ access }: { access: Extract<AccessState, { status:
       <div className="relative z-10 max-w-sm w-full">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
         </div>
 
@@ -258,16 +257,16 @@ function AccessDeniedScreen({ access }: { access: Extract<AccessState, { status:
 // ── Lab Intro Screen ──────────────────────────────────────────────────────────
 
 const LAB8_DOCS = [
-  { label: 'คู่มือการทดลองที่ 08',            file: 'การทดลองที่ 08.pdf' },
-  { label: 'การทดลองที่ 08 สนามแม่เหล็ก',    file: 'การทดลองที่ 08 สนามแม่เหล็ก.pdf' },
+  { label: 'คู่มือการทดลองที่ 08', file: 'การทดลองที่ 08.pdf' },
+  { label: 'การทดลองที่ 08 สนามแม่เหล็ก', file: 'การทดลองที่ 08 สนามแม่เหล็ก.pdf' },
   { label: 'ข้อมูลการทดลอง 8 สนามแม่เหล็ก', file: 'data 8 สนามแม่เหล็ก.pdf' },
 ];
 
 function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => void }) {
-  const cardRef    = useRef<HTMLDivElement>(null);
-  const titleRef   = useRef<HTMLHeadingElement>(null);
-  const docsRef    = useRef<HTMLDivElement>(null);
-  const btnRef     = useRef<HTMLButtonElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const docsRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const [remaining, setRemaining] = useState(() => getRemaining(endTime));
 
   useEffect(() => {
@@ -326,7 +325,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/[0.06]">
             <span className="text-xs text-gray-500 flex items-center gap-1.5">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
               </svg>
               เวลาที่เหลือสำหรับเซสชันนี้
             </span>
@@ -362,10 +361,10 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
                 style={{ opacity: 0 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-600 group-hover:text-[#c8ff00] transition-colors">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="12" y1="18" x2="12" y2="12"/>
-                  <polyline points="9 15 12 18 15 15"/>
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="12" y1="18" x2="12" y2="12" />
+                  <polyline points="9 15 12 18 15 15" />
                 </svg>
                 <span className="flex-1 truncate">{label}</span>
                 <span className="text-[10px] text-gray-600 font-mono shrink-0">PDF</span>
@@ -415,7 +414,7 @@ function GuestLabView({ roomCode }: { roomCode: string }) {
     return (
       <div className="min-h-screen bg-[#030712] flex items-center justify-center">
         <svg className="animate-spin text-[#c8ff00]" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+          <path d="M21 12a9 9 0 11-6.219-8.56" />
         </svg>
       </div>
     );
@@ -431,8 +430,8 @@ function GuestLabView({ roomCode }: { roomCode: string }) {
         <div className="relative z-10 max-w-sm w-full">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
           <h1 className="text-xl font-bold text-white mb-2">ไม่สามารถเข้าห้องได้</h1>
@@ -511,7 +510,7 @@ export default function RemoteLabPage() {
     <Suspense fallback={
       <div className="min-h-screen bg-[#030712] flex items-center justify-center">
         <svg className="animate-spin text-[#c8ff00]" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+          <path d="M21 12a9 9 0 11-6.219-8.56" />
         </svg>
       </div>
     }>
@@ -530,7 +529,7 @@ function HostLabPage() {
   const [realSensorValue, setRealSensorValue] = useState<number | null>(null);
   const topRowRef = useRef<HTMLDivElement>(null);
   const btmRowRef = useRef<HTMLDivElement>(null);
-  const rightRef  = useRef<HTMLDivElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
 
   // Reset I, Z, and measurement data when instrument changes
   useEffect(() => {
@@ -564,7 +563,7 @@ function HostLabPage() {
           if (data && typeof data.value === 'number') {
             setRealSensorValue(data.value);
           }
-        } catch (err) {}
+        } catch (err) { }
       };
       ws.onclose = () => {
         reconnectTimeout = setTimeout(connect, 2000);
@@ -588,7 +587,7 @@ function HostLabPage() {
     if (access.status !== 'allowed' || !labStarted) return;
     if (topRowRef.current) animate(topRowRef.current, { opacity: [0, 1], translateY: [-16, 0], duration: 650, ease: 'outCubic' });
     if (btmRowRef.current) animate(btmRowRef.current, { opacity: [0, 1], translateY: [16, 0], duration: 650, delay: 120, ease: 'outCubic' });
-    if (rightRef.current)  animate(rightRef.current,  { opacity: [0, 1], translateX: [24, 0], duration: 650, delay: 80,  ease: 'outCubic' });
+    if (rightRef.current) animate(rightRef.current, { opacity: [0, 1], translateX: [24, 0], duration: 650, delay: 80, ease: 'outCubic' });
   }, [access.status, labStarted]);
 
   // ── Access gate ───────────────────────────────────────────────────────────
@@ -596,7 +595,7 @@ function HostLabPage() {
     return (
       <div className="min-h-screen bg-[#030712] flex items-center justify-center">
         <svg className="animate-spin text-[#c8ff00]" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+          <path d="M21 12a9 9 0 11-6.219-8.56" />
         </svg>
       </div>
     );
@@ -606,7 +605,7 @@ function HostLabPage() {
 
   const inst = instruments[instrument];
   const I0 = inst.I0;
-  const bTheory   = inst.type === 'coil'
+  const bTheory = inst.type === 'coil'
     ? calcBCoil(inst.turns, I0, inst.R)
     : calcBSolenoid(inst.N, I0, inst.L, inst.R, z);
   const bMeasured = realSensorValue !== null
@@ -681,14 +680,14 @@ type ChatRoomMsg = { id: number; user_id: string; user_name: string; content: st
 
 function LabChatPanel({ labCode }: { labCode: string }) {
   const [messages, setMessages] = useState<ChatRoomMsg[]>([]);
-  const [input,    setInput]    = useState('');
-  const [sending,  setSending]  = useState(false);
-  const [myName,   setMyName]   = useState('');
-  const bottomRef      = useRef<HTMLDivElement>(null);
-  const lastIdRef      = useRef(0);
-  const myNameRef      = useRef('');
-  const audioRef       = useRef<HTMLAudioElement | null>(null);
-  const readyForSound  = useRef(false); // true after initial fetch completes
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [myName, setMyName] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const lastIdRef = useRef(0);
+  const myNameRef = useRef('');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const readyForSound = useRef(false); // true after initial fetch completes
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => { if (d.ok) setMyName(d.user.name); });
@@ -713,7 +712,7 @@ function LabChatPanel({ labCode }: { labCode: string }) {
       ) {
         if (!audioRef.current) audioRef.current = new Audio('/sound/ack.mp3');
         audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => {});
+        audioRef.current.play().catch(() => { });
       }
 
       requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }));
@@ -752,7 +751,7 @@ function LabChatPanel({ labCode }: { labCode: string }) {
         try {
           const msg = JSON.parse(e.data as string);
           if (msg.type === 'chat' && msg.payload?.id) addMessages([msg.payload]);
-        } catch {}
+        } catch { }
       };
 
       ws.onopen = () => { retryDelay = 1000; };
@@ -764,7 +763,7 @@ function LabChatPanel({ labCode }: { labCode: string }) {
       };
 
       // Suppress uncaught error — onclose will handle reconnect
-      ws.onerror = () => {};
+      ws.onerror = () => { };
     }
 
     connect();
@@ -807,11 +806,10 @@ function LabChatPanel({ labCode }: { labCode: string }) {
           const isMe = m.user_name === myName;
           return (
             <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[88%] text-[11px] rounded-xl px-2.5 py-1.5 leading-relaxed ${
-                isMe
-                  ? 'bg-[#c8ff00]/10 border border-[#c8ff00]/20 text-[#c8ff00]/90'
-                  : 'bg-gray-800/60 border border-white/[0.07] text-gray-300'
-              }`}>
+              <div className={`max-w-[88%] text-[11px] rounded-xl px-2.5 py-1.5 leading-relaxed ${isMe
+                ? 'bg-[#c8ff00]/10 border border-[#c8ff00]/20 text-[#c8ff00]/90'
+                : 'bg-gray-800/60 border border-white/[0.07] text-gray-300'
+                }`}>
                 {!isMe && <p className="text-[9px] text-gray-500 mb-0.5 font-semibold">{m.user_name}</p>}
                 {m.content}
               </div>
@@ -831,7 +829,7 @@ function LabChatPanel({ labCode }: { labCode: string }) {
         <button onClick={handleSend} disabled={sending || !input.trim()}
           className="shrink-0 h-8 w-8 rounded-lg bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] flex items-center justify-center hover:bg-[#c8ff00]/20 disabled:opacity-30 transition-colors">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
         </button>
       </div>
@@ -843,14 +841,14 @@ type RightTabId = 'ai' | 'log' | 'chat';
 
 function RightTabs({ chatProps, logProps, labCode }: {
   chatProps: { inst: Inst; I: number; I0: number; bTheory: number; bMeasured: number; z: number };
-  logProps:  { instrument: number; I: number; bMeasured: number; z: number; instType: 'coil' | 'solenoid' };
+  logProps: { instrument: number; I: number; bMeasured: number; z: number; instType: 'coil' | 'solenoid' };
   labCode: string;
 }) {
   const [tab, setTab] = useState<RightTabId>('ai');
 
   const TABS: { id: RightTabId; label: string }[] = [
-    { id: 'ai',   label: 'AI ผู้ช่วย' },
-    { id: 'log',  label: 'บันทึก' },
+    { id: 'ai', label: 'AI ผู้ช่วย' },
+    { id: 'log', label: 'บันทึก' },
     { id: 'chat', label: 'แชทห้อง' },
   ];
 
@@ -862,11 +860,10 @@ function RightTabs({ chatProps, logProps, labCode }: {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-1.5 text-[10px] font-semibold transition-colors ${
-              tab === t.id
-                ? 'bg-[#c8ff00]/10 text-[#c8ff00] border-b border-[#c8ff00]/50'
-                : 'text-gray-500 hover:text-gray-300'
-            }`}
+            className={`flex-1 py-1.5 text-[10px] font-semibold transition-colors ${tab === t.id
+              ? 'bg-[#c8ff00]/10 text-[#c8ff00] border-b border-[#c8ff00]/50'
+              : 'text-gray-500 hover:text-gray-300'
+              }`}
           >
             {t.label}
           </button>
@@ -874,10 +871,10 @@ function RightTabs({ chatProps, logProps, labCode }: {
       </div>
 
       {/* Panels — all mounted, hidden by CSS to preserve state */}
-      <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'ai'   ? 'hidden' : ''}`}>
+      <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'ai' ? 'hidden' : ''}`}>
         <ChatPanel {...chatProps} />
       </div>
-      <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'log'  ? 'hidden' : ''}`}>
+      <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'log' ? 'hidden' : ''}`}>
         <LogPanel {...logProps} />
       </div>
       <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'chat' ? 'hidden' : ''}`}>
@@ -901,15 +898,15 @@ function fmtCountdown(secs: number) {
 }
 
 function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComplete: () => void; roomCode?: string | null }) {
-  const router       = useRouter();
-  const [secs,      setSecs]      = useState(0);
+  const router = useRouter();
+  const [secs, setSecs] = useState(0);
   const [remaining, setRemaining] = useState(() => getRemaining(endTime));
   const [panelOpen, setPanelOpen] = useState(false);
-  const barRef       = useRef<HTMLElement>(null);
-  const labelRef     = useRef<HTMLSpanElement>(null);
+  const barRef = useRef<HTMLElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
   const countdownRef = useRef<HTMLSpanElement>(null);
-  const prevZone        = useRef<'normal' | 'warn' | 'critical'>('normal');
-  const autoCompleted   = useRef(false);
+  const prevZone = useRef<'normal' | 'warn' | 'critical'>('normal');
+  const autoCompleted = useRef(false);
   const { notifications, unread, markAllRead } = useNotifications();
 
   // เวลาหมด → mark complete อัตโนมัติ (ทันทีที่ countdown ถึง 0)
@@ -926,7 +923,7 @@ function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComp
   }
 
   useEffect(() => {
-    if (barRef.current)   animate(barRef.current,   { opacity: [0, 1], translateY: [-20, 0], duration: 600, ease: 'outCubic' });
+    if (barRef.current) animate(barRef.current, { opacity: [0, 1], translateY: [-20, 0], duration: 600, ease: 'outCubic' });
     if (labelRef.current) animate(labelRef.current, { innerHTML: scrambleText({ chars: 'braille', from: 'left', override: '' }) });
     const t = setInterval(() => {
       setSecs(s => s + 1);
@@ -978,14 +975,13 @@ function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComp
         <span className="text-gray-600">|</span>
         <span className="text-gray-400 flex items-center gap-1.5">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
           </svg>
           สิ้นสุดใน:
           <span
             ref={countdownRef}
-            className={`font-mono font-semibold tabular-nums ${
-              remaining < 300 ? 'text-red-400' : remaining < 600 ? 'text-yellow-400' : 'text-white'
-            } ${remaining < 300 ? 'animate-pulse' : ''}`}
+            className={`font-mono font-semibold tabular-nums ${remaining < 300 ? 'text-red-400' : remaining < 600 ? 'text-yellow-400' : 'text-white'
+              } ${remaining < 300 ? 'animate-pulse' : ''}`}
           >
             {fmtCountdown(remaining)}
           </span>
@@ -996,11 +992,10 @@ function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComp
         <div className="relative">
           <button
             onClick={() => setPanelOpen(v => !v)}
-            className={`relative flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
-              panelOpen
-                ? 'border-[#c8ff00]/40 bg-[#c8ff00]/10 text-[#c8ff00]'
-                : 'border-white/10 text-gray-400 hover:border-[#c8ff00]/30 hover:text-white'
-            }`}
+            className={`relative flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${panelOpen
+              ? 'border-[#c8ff00]/40 bg-[#c8ff00]/10 text-[#c8ff00]'
+              : 'border-white/10 text-gray-400 hover:border-[#c8ff00]/30 hover:text-white'
+              }`}
             aria-label="การแจ้งเตือน"
           >
             <BellIcon size={15} />
@@ -1027,7 +1022,7 @@ function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComp
           className="text-xs px-3 py-1.5 rounded-md border border-white/10 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 5l-7 7 7 7"/>
+            <path d="M19 12H5M12 5l-7 7 7 7" />
           </svg>
           กลับ
         </button>
@@ -1037,7 +1032,7 @@ function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComp
           style={{ boxShadow: '0 0 12px rgba(200,255,0,0.15)' }}
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 6L9 17l-5-5"/>
+            <path d="M20 6L9 17l-5-5" />
           </svg>
           เสร็จสิ้น
         </button>
@@ -1151,7 +1146,7 @@ function CameraSection() {
           <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#050810]/80 backdrop-blur-sm">
             <div className="flex flex-col items-center gap-3">
               <svg className="animate-spin text-[#c8ff00]" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                <path d="M21 12a9 9 0 11-6.219-8.56" />
               </svg>
               <span className="text-[10px] text-[#c8ff00] font-mono tracking-widest uppercase">{streamError}</span>
             </div>
@@ -1378,12 +1373,12 @@ function SolenoidSVG({ mode }: { mode: 'theory' | 'measured' }) {
       <rect x="60" y="64" width="200" height="52" fill={`${color}04`} stroke={`${color}25`} strokeWidth="1" />
       {/* Coil winding bumps — top edge (arcs bulging upward) */}
       {Array.from({ length: 11 }, (_, i) => (
-        <path key={i} d={`M ${62+i*18},64 A 9,7 0 0 0 ${80+i*18},64`}
+        <path key={i} d={`M ${62 + i * 18},64 A 9,7 0 0 0 ${80 + i * 18},64`}
           fill="none" stroke={`${color}60`} strokeWidth="1.8" />
       ))}
       {/* Coil winding bumps — bottom edge (arcs bulging downward) */}
       {Array.from({ length: 11 }, (_, i) => (
-        <path key={i} d={`M ${62+i*18},116 A 9,7 0 0 1 ${80+i*18},116`}
+        <path key={i} d={`M ${62 + i * 18},116 A 9,7 0 0 1 ${80 + i * 18},116`}
           fill="none" stroke={`${color}60`} strokeWidth="1.8" />
       ))}
       {/* N/S labels */}
@@ -1398,17 +1393,17 @@ function SolenoidSVG({ mode }: { mode: 'theory' | 'measured' }) {
           strokeWidth={i < 2 ? 1.1 : 0.7} opacity={i < 2 ? 0.55 : 0.3} />
       ))}
       {/* Outer arc direction arrows (static) at midpoints */}
-      <polygon points="165,28 157,32 165,36"   fill={color} opacity="0.55" />  {/* top small arc mid */}
+      <polygon points="165,28 157,32 165,36" fill={color} opacity="0.55" />  {/* top small arc mid */}
       <polygon points="165,144 157,148 165,152" fill={color} opacity="0.55" />  {/* btm small arc mid */}
-      <polygon points="165,1 157,5 165,9"       fill={color} opacity="0.3"  />  {/* top large arc mid */}
-      <polygon points="165,171 157,175 165,179" fill={color} opacity="0.3"  />  {/* btm large arc mid */}
+      <polygon points="165,1 157,5 165,9" fill={color} opacity="0.3" />  {/* top large arc mid */}
+      <polygon points="165,171 157,175 165,179" fill={color} opacity="0.3" />  {/* btm large arc mid */}
       {/* Inside field lines (animated) */}
       {SOLENOID_INSIDE.map((d, i) => (
         <path key={i} className="fl" d={d} fill="none" stroke={color} strokeWidth="1.5" opacity="0.9" />
       ))}
       {/* Inside direction arrows (static) */}
       {[74, 90, 106].map(y => (
-        <polygon key={y} points={`154,${y-4} 162,${y} 154,${y+4}`} fill={color} opacity="0.8" />
+        <polygon key={y} points={`154,${y - 4} 162,${y} 154,${y + 4}`} fill={color} opacity="0.8" />
       ))}
       <text x="160" y="171" fontSize="9" fill={`${color}35`} fontFamily="monospace" textAnchor="middle">
         {mode === 'theory' ? 'THEORETICAL · Bz=μ₀NI(a+b)/2L' : 'MEASURED · sensor data'}
@@ -1466,19 +1461,19 @@ function CoilSVG({ mode }: { mode: 'theory' | 'measured' }) {
       ))}
       {/* Direction arrows on loops (static, at arc midpoints) */}
       {/* Upper arcs: mid at top, field going LEFT */}
-      <polygon points="165,42 157,46 165,50"  fill={color} opacity="0.75" />
-      <polygon points="165,16 157,20 165,24"  fill={color} opacity="0.55" />
-      <polygon points="165,-1 157,3 165,7"    fill={color} opacity="0.3"  />
+      <polygon points="165,42 157,46 165,50" fill={color} opacity="0.75" />
+      <polygon points="165,16 157,20 165,24" fill={color} opacity="0.55" />
+      <polygon points="165,-1 157,3 165,7" fill={color} opacity="0.3" />
       {/* Lower arcs: mid at bottom, field going LEFT */}
       <polygon points="165,130 157,134 165,138" fill={color} opacity="0.75" />
       <polygon points="165,156 157,160 165,164" fill={color} opacity="0.55" />
-      <polygon points="165,172 157,176 165,180" fill={color} opacity="0.3"  />
+      <polygon points="165,172 157,176 165,180" fill={color} opacity="0.3" />
       {/* Axis lines (animated) */}
       {COIL_AXIAL.map((d, i) => (
         <path key={i} className="fl" d={d} fill="none" stroke={color} strokeWidth="1.2" opacity="0.65" />
       ))}
       {/* Axis arrows: left axis points LEFT, right axis points RIGHT */}
-      <polygon points="78,86 70,90 78,94"   fill={color} opacity="0.65" />
+      <polygon points="78,86 70,90 78,94" fill={color} opacity="0.65" />
       <polygon points="242,86 250,90 242,94" fill={color} opacity="0.65" />
       {/* N/S labels */}
       <text x="276" y="86" fontSize="11" fill={`${color}90`} fontFamily="monospace" fontWeight="bold">N</text>
@@ -1514,21 +1509,21 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
 
   const rows = inst.type === 'coil'
     ? [
-        { label: `จำนวนรอบ (n)`, value: String(inst.turns), unit: 'รอบ', color: '#a3e635' },
-        { label: 'กระแสออกแบบ (I₀)', value: I0.toFixed(2), unit: 'A', color: '#c8ff00' },
-        { label: 'กระแสที่วัดได้ (I)', value: I.toFixed(4), unit: 'A', color: '#22d3ee' },
-        { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
-        { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
-        { label: 'ΔB (วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
-      ]
+      { label: `จำนวนรอบ (n)`, value: String(inst.turns), unit: 'รอบ', color: '#a3e635' },
+      { label: 'กระแสออกแบบ (I₀)', value: I0.toFixed(2), unit: 'A', color: '#c8ff00' },
+      { label: 'กระแสที่วัดได้ (I)', value: I.toFixed(4), unit: 'A', color: '#22d3ee' },
+      { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
+      { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
+      { label: 'ΔB (วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
+    ]
     : [
-        { label: 'ตำแหน่ง Z', value: (z * 100).toFixed(0), unit: 'cm', color: '#a78bfa' },
-        { label: 'กระแสออกแบบ (I₀)', value: I0.toFixed(2), unit: 'A', color: '#c8ff00' },
-        { label: 'กระแสที่วัดได้ (I)', value: I.toFixed(4), unit: 'A', color: '#22d3ee' },
-        { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
-        { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
-        { label: 'ΔB (วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
-      ];
+      { label: 'ตำแหน่ง Z', value: (z * 100).toFixed(0), unit: 'cm', color: '#a78bfa' },
+      { label: 'กระแสออกแบบ (I₀)', value: I0.toFixed(2), unit: 'A', color: '#c8ff00' },
+      { label: 'กระแสที่วัดได้ (I)', value: I.toFixed(4), unit: 'A', color: '#22d3ee' },
+      { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
+      { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
+      { label: 'ΔB (วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
+    ];
 
   return (
     <div ref={panelRef} className="shrink-0 w-[220px] rounded-xl border border-white/10 bg-gray-900/50 p-3">
@@ -1572,15 +1567,15 @@ function parseInline(text: string, key?: string | number): React.ReactNode {
     <span key={key}>
       {parts.map((p, i) => {
         if (p.startsWith('**') && p.endsWith('**'))
-          return <strong key={i} className="font-semibold text-white">{p.slice(2,-2)}</strong>;
+          return <strong key={i} className="font-semibold text-white">{p.slice(2, -2)}</strong>;
         if (p.startsWith('*') && p.endsWith('*'))
-          return <em key={i} className="italic text-gray-200">{p.slice(1,-1)}</em>;
+          return <em key={i} className="italic text-gray-200">{p.slice(1, -1)}</em>;
         if (p.startsWith('`') && p.endsWith('`'))
-          return <code key={i} className="font-mono text-[10px] bg-gray-950/90 text-[#c8ff00]/80 px-1 py-0.5 rounded">{p.slice(1,-1)}</code>;
+          return <code key={i} className="font-mono text-[10px] bg-gray-950/90 text-[#c8ff00]/80 px-1 py-0.5 rounded">{p.slice(1, -1)}</code>;
         if (p.startsWith('$$') && p.endsWith('$$'))
-          return <span key={i} className="block overflow-x-auto font-mono text-[10px] text-violet-300 bg-violet-950/30 border border-violet-500/20 px-2 py-1 rounded my-1 text-center">{p.slice(2,-2).trim()}</span>;
+          return <span key={i} className="block overflow-x-auto font-mono text-[10px] text-violet-300 bg-violet-950/30 border border-violet-500/20 px-2 py-1 rounded my-1 text-center">{p.slice(2, -2).trim()}</span>;
         if (p.startsWith('$') && p.endsWith('$'))
-          return <span key={i} className="font-mono text-[10px] text-violet-300 bg-violet-950/20 px-0.5 rounded">{p.slice(1,-1)}</span>;
+          return <span key={i} className="font-mono text-[10px] text-violet-300 bg-violet-950/20 px-0.5 rounded">{p.slice(1, -1)}</span>;
         return p;
       })}
     </span>
@@ -1590,7 +1585,7 @@ function parseInline(text: string, key?: string | number): React.ReactNode {
 function MarkdownMessage({ content, streaming = false }: { content: string; streaming?: boolean }) {
   if (!content && !streaming) return null;
 
-  const lines   = content.split('\n');
+  const lines = content.split('\n');
   const nodes: React.ReactNode[] = [];
   let i = 0;
 
@@ -1878,10 +1873,10 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
           {/* Parameters */}
           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[8.5px]">
             {([
-              { k: 'n',  v: `${n} รอบ`,                    c: '#a3e635' },
-              { k: 'R',  v: `${(R*1000).toFixed(0)} มม.` },
+              { k: 'n', v: `${n} รอบ`, c: '#a3e635' },
+              { k: 'R', v: `${(R * 1000).toFixed(0)} มม.` },
               { k: 'μ₀', v: '4π×10⁻⁷ H/m' },
-              { k: 'I',  v: `${I.toFixed(3)} A`,            c: '#22d3ee' },
+              { k: 'I', v: `${I.toFixed(3)} A`, c: '#22d3ee' },
             ] as { k: string; v: string; c?: string }[]).map(p => (
               <div key={p.k} className="flex gap-1">
                 <span className="text-gray-600">{p.k} =</span>
@@ -1931,10 +1926,10 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
         {/* a and b */}
         <div className="text-[8.5px] space-y-0.5">
           <div className="text-gray-600">
-            a = {halfLcm} + {zCm} = <span style={{ color: '#a78bfa' }}>{(a*100).toFixed(0)} cm</span>
+            a = {halfLcm} + {zCm} = <span style={{ color: '#a78bfa' }}>{(a * 100).toFixed(0)} cm</span>
           </div>
           <div className="text-gray-600">
-            b = {halfLcm} − {zCm} = <span style={{ color: '#a78bfa' }}>{(b*100).toFixed(0)} cm</span>
+            b = {halfLcm} − {zCm} = <span style={{ color: '#a78bfa' }}>{(b * 100).toFixed(0)} cm</span>
           </div>
         </div>
 
@@ -1948,8 +1943,8 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
         {/* Parameters */}
         <div className="grid grid-cols-3 gap-x-2 gap-y-0.5 text-[9px]">
           <span className="text-gray-600">N=<span style={{ color: '#a3e635' }}>{N}</span></span>
-          <span className="text-gray-600">L=<span className="text-gray-400">{(L*1000).toFixed(0)}mm</span></span>
-          <span className="text-gray-600">R=<span className="text-gray-400">{(R*1000).toFixed(0)}mm</span></span>
+          <span className="text-gray-600">L=<span className="text-gray-400">{(L * 1000).toFixed(0)}mm</span></span>
+          <span className="text-gray-600">R=<span className="text-gray-400">{(R * 1000).toFixed(0)}mm</span></span>
           <span className="col-span-3 text-gray-600">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(3)} A</span></span>
         </div>
       </div>
@@ -1989,13 +1984,13 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   setMeasData: React.Dispatch<React.SetStateAction<Map<number, MeasRecord>>>;
   N: number;
 }) {
-  const panelRef  = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const zCm     = Math.round(z * 100);
+  const zCm = Math.round(z * 100);
   const recorded = measData.size;
-  const allZ     = Array.from({ length: 31 }, (_, i) => i - 15); // −15…+15
-  const COL_W    = 48; // px per Z column
-  const LABEL_W  = 72; // px for row-label column
+  const allZ = Array.from({ length: 31 }, (_, i) => i - 15); // −15…+15
+  const COL_W = 48; // px per Z column
+  const LABEL_W = 72; // px for row-label column
 
   useEffect(() => {
     if (panelRef.current) animate(panelRef.current, { opacity: [0, 1], translateY: [12, 0], duration: 400, ease: 'outCubic' });
@@ -2037,7 +2032,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
       const curCm = Math.round(scanRef.current.z * 100);
       setMeasData(prev => new Map(prev).set(curCm, {
         bMeasured: scanRef.current.bMeasured,
-        bTheory:   scanRef.current.bTheory,
+        bTheory: scanRef.current.bTheory,
       }));
       const nextCm = curCm + scanRef.current.dir;
       if (nextCm < -15 || nextCm > 15) {
@@ -2051,8 +2046,8 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
     step();
   }
 
-  function record()  { setMeasData(prev => new Map(prev).set(zCm, { bMeasured, bTheory })); }
-  function clearAll(){ scanRef.current.active = false; setScanning(false); setMeasData(new Map()); }
+  function record() { setMeasData(prev => new Map(prev).set(zCm, { bMeasured, bTheory })); }
+  function clearAll() { scanRef.current.active = false; setScanning(false); setMeasData(new Map()); }
 
   function downloadCSV() {
     const allZ = Array.from({ length: 31 }, (_, i) => i - 15);
@@ -2122,11 +2117,10 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
             onClick={() => startScan(-1)}
             disabled={!scanning && zCm <= -15}
             title={scanning && scanRef.current.dir === -1 ? 'หยุด' : 'สแกนถอยหลัง'}
-            className={`h-6 w-6 flex items-center justify-center rounded-md border text-[11px] font-bold transition-colors ${
-              scanning && scanRef.current.dir === -1
-                ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed'
-            }`}
+            className={`h-6 w-6 flex items-center justify-center rounded-md border text-[11px] font-bold transition-colors ${scanning && scanRef.current.dir === -1
+              ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20'
+              : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed'
+              }`}
           >{scanning && scanRef.current.dir === -1 ? '■' : '‹'}</button>
 
           {/* Record */}
@@ -2141,11 +2135,10 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
             onClick={() => startScan(1)}
             disabled={!scanning && zCm >= 15}
             title={scanning && scanRef.current.dir === 1 ? 'หยุด' : 'สแกนไปหน้า'}
-            className={`h-6 w-6 flex items-center justify-center rounded-md border text-[11px] font-bold transition-colors ${
-              scanning && scanRef.current.dir === 1
-                ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed'
-            }`}
+            className={`h-6 w-6 flex items-center justify-center rounded-md border text-[11px] font-bold transition-colors ${scanning && scanRef.current.dir === 1
+              ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20'
+              : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed'
+              }`}
           >{scanning && scanRef.current.dir === 1 ? '■' : '›'}</button>
 
           {recorded > 0 && !scanning && (
@@ -2156,7 +2149,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
                 className="h-6 w-6 flex items-center justify-center rounded-md border border-white/10 text-gray-400 hover:border-[#c8ff00]/40 hover:text-[#c8ff00] transition-colors"
               >
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3v13M5 14l7 7 7-7"/><path d="M3 21h18"/>
+                  <path d="M12 3v13M5 14l7 7 7-7" /><path d="M3 21h18" />
                 </svg>
               </button>
               <button onClick={clearAll}
@@ -2189,7 +2182,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
           <div className="flex h-full" style={{ width: allZ.length * COL_W }}>
             {allZ.map(zVal => {
               const isCurrent = zVal === zCm;
-              const point     = measData.get(zVal);
+              const point = measData.get(zVal);
               return (
                 <div
                   key={zVal}
@@ -2246,7 +2239,7 @@ function LogPanel({ instrument, I, bMeasured, z, instType }: {
       mkLog('cmd', `เริ่ม: ${instruments[instrument].name}`),
       mkLog('data', `I₀ = ${instruments[instrument].I0.toFixed(2)} A`),
     ]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
