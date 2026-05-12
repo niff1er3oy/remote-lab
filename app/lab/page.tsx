@@ -1017,64 +1017,8 @@ function CameraSection() {
   const cornersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const initWebRTC = async () => {
-      try {
-        const pc = new RTCPeerConnection({
-          iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }],
-        });
-
-        pc.ontrack = (event) => {
-          if (videoRef.current) {
-            videoRef.current.srcObject = event.streams[0];
-          }
-          setConnected(true);
-          setError(null);
-        };
-
-        pc.onicecandidateerror = () => {
-          setError('ICE connection failed');
-        };
-
-        pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'failed') {
-            setError('Connection failed');
-            setConnected(false);
-          } else if (pc.connectionState === 'connected') {
-            setConnected(true);
-            setError(null);
-          }
-        };
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        const res = await fetch('http://localhost:8889/dji', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sdp: pc.localDescription?.sdp, type: pc.localDescription?.type }),
-        });
-
-        if (!res.ok) {
-          setError('Failed to connect to WebRTC server');
-          return;
-        }
-
-        const { sdp } = await res.json();
-        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
-        pcRef.current = pc;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'WebRTC connection failed');
-      }
-    };
-
-    initWebRTC();
-
-    return () => {
-      pcRef.current?.close();
-    };
-  }, []);
-
-  useEffect(() => {
+    const ring = crossRef.current?.querySelector('.cross-ring') as HTMLElement | null;
+    if (ring) animate(ring, { rotate: [0, 360], duration: 12000, ease: 'linear', loop: true });
     if (cornersRef.current) {
       animate(cornersRef.current.querySelectorAll('.corner'), {
         opacity: [0, 1], scale: [0.4, 1], duration: 500, delay: stagger(80, { start: 300 }), ease: 'outBack',
