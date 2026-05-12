@@ -1035,7 +1035,7 @@ function CameraSection() {
     if (!video) return;
 
     let hls: Hls | null = null;
-    const streamUrl = '/api/cam/stream.m3u8';
+    const streamUrl = '/api/cam/index.m3u8';
 
     setStreamError('กำลังโหลดสัญญาณวิดีโอ (HLS)...');
 
