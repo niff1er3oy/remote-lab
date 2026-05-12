@@ -557,7 +557,7 @@ function HostLabPage() {
     };
 
     const inst = instruments[instrument];
-    const targetScript = ['coil_1.py', 'coil_1.py', 'coil_1.py', 'sole_75.py', 'sole_150.py'][instrument] || 'coil_1.py';
+    const targetScript = ['coil_1.py', 'coil_2.py', 'coil_3.py', 'sole_75.py', 'sole_150.py'][instrument] || 'coil_1.py';
 
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
