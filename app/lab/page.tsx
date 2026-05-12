@@ -1017,7 +1017,6 @@ function CameraSection() {
   const cornersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-<<<<<<< HEAD
     const initWebRTC = async () => {
       try {
         const pc = new RTCPeerConnection({
@@ -1076,10 +1075,6 @@ function CameraSection() {
   }, []);
 
   useEffect(() => {
-=======
-    const ring = crossRef.current?.querySelector('.cross-ring') as HTMLElement | null;
-    if (ring) animate(ring, { rotate: [0, 360], duration: 12000, ease: 'linear', loop: true });
->>>>>>> parent of 70b1cab (Update page.tsx)
     if (cornersRef.current) {
       animate(cornersRef.current.querySelectorAll('.corner'), {
         opacity: [0, 1], scale: [0.4, 1], duration: 500, delay: stagger(80, { start: 300 }), ease: 'outBack',
