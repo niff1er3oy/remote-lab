@@ -6,6 +6,7 @@ import { animate, stagger, scrambleText } from 'animejs';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
+import Hls from 'hls.js';
 
 // ── Physics (Lab 8: Biot–Savart) ─────────────────────────────────────────────
 
@@ -1028,63 +1029,73 @@ function CameraSection() {
     }
   }, []);
 
-  // WebRTC WHEP connection
+  // HLS stream connection
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    let pc: RTCPeerConnection;
-    let retryTimeout: ReturnType<typeof setTimeout>;
-    let isActive = true;
+    let hls: Hls | null = null;
+    const streamUrl = '/api/cam/stream.m3u8';
 
-    const connectWHEP = async () => {
-      try {
+    setStreamError('กำลังโหลดสัญญาณวิดีโอ (HLS)...');
+
+    if (Hls.isSupported()) {
+      hls = new Hls({
+        // Optimize for lower latency
+        lowLatencyMode: true,
+        backBufferLength: 30,
+        maxBufferLength: 10,
+        liveSyncDurationCount: 3,
+      });
+
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setStreamError(null);
-        pc = new RTCPeerConnection();
-        pc.addTransceiver('video', { direction: 'recvonly' });
+        video.play().catch(console.error);
+      });
 
-        pc.ontrack = (event) => {
-          if (video.srcObject !== event.streams[0]) {
-            video.srcObject = event.streams[0];
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              setStreamError('ข้อผิดพลาดเครือข่าย กำลังลองใหม่...');
+              hls?.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              setStreamError('ข้อผิดพลาดวิดีโอ กำลังกู้คืน...');
+              hls?.recoverMediaError();
+              break;
+            default:
+              setStreamError('ไม่สามารถโหลดวิดีโอได้');
+              hls?.destroy();
+              break;
           }
-        };
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        // Send offer to MediaMTX WHEP endpoint
-        const whepUrl = `http://${window.location.hostname}:8889/dji/whep`;
-        const response = await fetch(whepUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/sdp' },
-          body: offer.sdp,
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to connect to stream server');
         }
-
-        const answerSdp = await response.text();
-        await pc.setRemoteDescription(
-          new RTCSessionDescription({ type: 'answer', sdp: answerSdp })
-        );
-
-      } catch (err) {
-        console.error('WHEP connection error:', err);
-        if (isActive) {
-          setStreamError('กำลังเชื่อมต่อสัญญาณกล้อง...');
-          retryTimeout = setTimeout(connectWHEP, 3000);
-        }
-      }
-    };
-
-    connectWHEP();
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native Safari support
+      video.src = streamUrl;
+      video.addEventListener('loadedmetadata', () => {
+        setStreamError(null);
+        video.play().catch(console.error);
+      });
+      video.addEventListener('error', () => {
+        setStreamError('ไม่สามารถโหลดวิดีโอได้ (Safari)');
+      });
+    } else {
+      setStreamError('เบราว์เซอร์ของคุณไม่รองรับ HLS');
+    }
 
     return () => {
-      isActive = false;
-      clearTimeout(retryTimeout);
-      if (pc) pc.close();
-      if (video) video.srcObject = null;
+      if (hls) {
+        hls.destroy();
+      }
+      if (video) {
+        video.removeAttribute('src');
+        video.load();
+      }
     };
   }, []);
 
