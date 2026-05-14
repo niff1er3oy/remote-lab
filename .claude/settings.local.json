@@ -35,7 +35,8 @@
       "Bash(node -e \"const a = require\\('animejs'\\); console.log\\(Object.keys\\(a\\).slice\\(0,20\\)\\)\")",
       "Bash(node -e \"console.log\\(require\\('./node_modules/animejs/package.json'\\).version, require\\('./node_modules/animejs/package.json'\\).main, require\\('./node_modules/animejs/package.json'\\).exports ? 'has exports' : 'no exports'\\)\")",
       "Bash(node -e \"const a = require\\('animejs'\\); console.log\\('scrambleText:', typeof a.scrambleText, 'morphTo:', typeof a.morphTo, 'stagger:', typeof a.stagger, 'animate:', typeof a.animate, 'onScroll:', typeof a.onScroll\\)\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "WebFetch(domain:animejs.com)"
     ]
   }
 }

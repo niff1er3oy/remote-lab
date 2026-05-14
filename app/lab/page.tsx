@@ -1,7 +1,7 @@
 'use client';
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { animate, stagger, scrambleText } from 'animejs';
+import { animate, stagger, scrambleText, createLayout } from 'animejs';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
@@ -532,6 +532,27 @@ function HostLabPage() {
   const topRowRef = useRef<HTMLDivElement>(null);
   const btmRowRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const layoutCtrlRef = useRef<ReturnType<typeof createLayout> | null>(null);
+  const prevInstrumentRef = useRef(instrument);
+
+  // Create layout controller after mount
+  useEffect(() => {
+    if (!leftColRef.current) return;
+    layoutCtrlRef.current = createLayout(leftColRef.current);
+  }, []);
+
+  // Record layout BEFORE instrument changes, animate AFTER DOM update
+  const handleInstrumentSelect = useCallback((i: number) => {
+    layoutCtrlRef.current?.record();
+    setInstrument(i);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (prevInstrumentRef.current === instrument) return;
+    prevInstrumentRef.current = instrument;
+    layoutCtrlRef.current?.animate({ duration: 600, ease: 'outCubic', delay: stagger(30) });
+  }, [instrument]);
 
   // Reset I, Z, and measurement data when instrument changes
   useEffect(() => {
@@ -675,29 +696,24 @@ function HostLabPage() {
       <div className="flex-1 overflow-hidden p-3 flex gap-3">
 
         {/* Left ── Camera + FieldViz (top) · InstrSel + Sensor (bottom) */}
-        <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+        <div ref={leftColRef} className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
           <div
             ref={topRowRef}
-            className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_1fr_2fr] gap-3"
+            className={`flex-1 min-h-0 grid gap-3 grid-cols-1 ${inst.type === 'solenoid' ? 'xl:grid-cols-[1fr_1fr_2fr]' : 'xl:grid-cols-[1fr_1fr]'}`}
             style={{ opacity: 0 }}
           >
             <CameraSection stream="dji" label="กล้องหลัก — ด้านหน้า" />
             <CameraSection stream="webc1" label="กล้องเสริม — ด้านข้าง" />
-            {inst.type === 'solenoid'
-              ? <SolenoidDataPanel
-                  z={z} setZ={setZ}
-                  bMeasured={bMeasured} bTheory={bTheory}
-                  measData={measData} setMeasData={setMeasData}
-                  N={inst.N}
-                  isMoving={isMoving} setIsMoving={setIsMoving}
-                  disabled={isBusy}
-                />
-              : <SplitFieldPanel
-                  instType={inst.type}
-                  bTheory={bTheory} bMeasured={bMeasured}
-                  I={I} I0={I0} z={z}
-                />
-            }
+            {inst.type === 'solenoid' && (
+              <SolenoidDataPanel
+                z={z} setZ={setZ}
+                bMeasured={bMeasured} bTheory={bTheory}
+                measData={measData} setMeasData={setMeasData}
+                N={inst.N}
+                isMoving={isMoving} setIsMoving={setIsMoving}
+                disabled={isBusy}
+              />
+            )}
           </div>
           <div
             ref={btmRowRef}
@@ -706,7 +722,7 @@ function HostLabPage() {
           >
             {/* Left column — selector stacked above sensor values */}
             <div className="shrink-0 flex flex-col gap-3 w-[230px]">
-              <InstrumentSelector active={instrument} onSelect={setInstrument} disabled={isBusy} />
+              <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} />
               <SensorPanel
                 inst={inst} I={I} I0={I0}
                 bTheory={bTheory} bMeasured={bMeasured}
@@ -714,13 +730,13 @@ function HostLabPage() {
               />
             </div>
             <FormulaPanel inst={inst} I={I} z={z} />
-            {inst.type === 'solenoid' && (
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col">
               <SplitFieldPanel
                 instType={inst.type}
                 bTheory={bTheory} bMeasured={bMeasured}
                 I={I} I0={I0} z={z}
               />
-            )}
+            </div>
           </div>
         </div>
 
@@ -1403,7 +1419,7 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z }: {
   const Viz = instType === 'solenoid' ? SolenoidSVG : CoilSVG;
 
   return (
-    <div className="flex flex-col rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden min-h-0">
+    <div className="flex-1 flex flex-col rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden min-h-0">
       <div className="shrink-0 px-4 py-2 border-b border-white/5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wider">
           <span style={{ color: '#c8ff00' }}>ทฤษฎี · {bTheory.toFixed(3)} mT</span>
