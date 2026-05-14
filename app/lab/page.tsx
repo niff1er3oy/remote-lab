@@ -690,7 +690,7 @@ function HostLabPage() {
           </div>
           <div
             ref={btmRowRef}
-            className="shrink-0 flex gap-3"
+            className="shrink-0 flex items-stretch gap-3"
             style={{ opacity: 0 }}
           >
             <InstrumentSelector active={instrument} onSelect={setInstrument} disabled={isBusy} />
@@ -1269,68 +1269,99 @@ function CamTimestamp() {
 // ── Instrument Selector ───────────────────────────────────────────────────────
 
 function InstrumentSelector({ active, onSelect, disabled }: { active: number; onSelect: (i: number) => void; disabled?: boolean }) {
-  const rowRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const activeInst = instruments[active];
 
   useEffect(() => {
-    if (!rowRef.current) return;
-    animate(rowRef.current.querySelectorAll('.inst-card'), {
-      opacity: [0, 1], translateY: [18, 0], scale: [0.94, 1],
-      duration: 500, delay: stagger(80, { start: 200 }), ease: 'outCubic',
-    });
-  }, []);
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
 
   function handleSelect(i: number) {
     if (i === active || disabled) return;
-    const card = rowRef.current?.querySelectorAll('.inst-card')[i] as HTMLElement | null;
-    if (card) animate(card, { scale: [0.94, 1.04, 1], duration: 360, ease: 'outBack' });
     onSelect(i);
+    setOpen(false);
   }
 
+  const GROUPS = [
+    { label: 'ตอนที่ 1 — ขดลวดเดี่ยว', type: 'coil' as const },
+    { label: 'ตอนที่ 2 — โซลีนอยด์',   type: 'solenoid' as const },
+  ];
+
   return (
-    <div className="shrink-0 w-[220px] rounded-xl border border-white/10 bg-gray-900/50 p-3 overflow-y-auto">
-      <h2 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">เลือกอุปกรณ์วัด</h2>
-      <div ref={rowRef} className="flex flex-col gap-1.5">
-        <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest pt-0.5">ตอนที่ 1 — ขดลวดเดี่ยว</p>
-        {instruments.map((inst, i) => {
-          if (inst.type !== 'coil') return null;
-          return (
-            <button key={inst.id} onClick={() => handleSelect(i)} disabled={disabled && i !== active}
-              className={`inst-card opacity-0 relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${disabled && i !== active ? 'opacity-40 cursor-not-allowed' : ''} ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
-              style={{ boxShadow: i === active ? '0 0 20px rgba(200,255,0,0.06) inset' : undefined }}
-            >
-              {i === active && <div className="absolute top-0 left-3 right-3 h-px bg-linear-to-r from-transparent via-[#c8ff00]/50 to-transparent" />}
-              <div className="flex items-center gap-2">
-                <div className={i === active ? 'text-[#c8ff00]' : 'text-gray-600'}>{inst.icon}</div>
-                <div>
-                  <p className="text-[11px] font-semibold leading-none">{inst.name}</p>
-                  <p className={`text-[9px] mt-0.5 ${i === active ? 'text-[#c8ff00]/60' : 'text-gray-600'}`}>{inst.sub}</p>
-                </div>
-                {i === active && <div className="ml-auto flex items-center gap-1 text-[9px] font-semibold text-[#c8ff00]"><span className="h-1 w-1 rounded-full bg-[#c8ff00] animate-pulse inline-block" />ON</div>}
-              </div>
-            </button>
-          );
-        })}
-        <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest pt-1.5">ตอนที่ 2 — โซลีนอยด์</p>
-        {instruments.map((inst, i) => {
-          if (inst.type !== 'solenoid') return null;
-          return (
-            <button key={inst.id} onClick={() => handleSelect(i)} disabled={disabled && i !== active}
-              className={`inst-card opacity-0 relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${disabled && i !== active ? 'opacity-40 cursor-not-allowed' : ''} ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
-              style={{ boxShadow: i === active ? '0 0 20px rgba(200,255,0,0.06) inset' : undefined }}
-            >
-              {i === active && <div className="absolute top-0 left-3 right-3 h-px bg-linear-to-r from-transparent via-[#c8ff00]/50 to-transparent" />}
-              <div className="flex items-center gap-2">
-                <div className={i === active ? 'text-[#c8ff00]' : 'text-gray-600'}>{inst.icon}</div>
-                <div>
-                  <p className="text-[11px] font-semibold leading-none">{inst.name}</p>
-                  <p className={`text-[9px] mt-0.5 ${i === active ? 'text-[#c8ff00]/60' : 'text-gray-600'}`}>{inst.sub}</p>
-                </div>
-                {i === active && <div className="ml-auto flex items-center gap-1 text-[9px] font-semibold text-[#c8ff00]"><span className="h-1 w-1 rounded-full bg-[#c8ff00] animate-pulse inline-block" />ON</div>}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+    <div ref={wrapRef} className="relative shrink-0 self-stretch">
+      {/* Trigger — compact single-row button */}
+      <button
+        onClick={() => { if (!disabled) setOpen(v => !v); }}
+        disabled={disabled}
+        className={`h-full flex items-center gap-2.5 px-3 rounded-xl border bg-gray-900/50 text-left transition-colors
+          ${disabled ? 'opacity-60 cursor-not-allowed border-white/10' : 'cursor-pointer hover:border-white/20'}
+          ${open ? 'border-[#c8ff00]/40' : 'border-white/10'}
+        `}
+      >
+        <div className={disabled ? 'text-gray-600' : 'text-[#c8ff00]'}>{activeInst.icon}</div>
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider leading-none mb-0.5">อุปกรณ์วัด</p>
+          <p className="text-[12px] font-semibold text-white leading-none truncate">{activeInst.name}</p>
+          <p className="text-[9px] text-gray-500 mt-0.5 truncate">{activeInst.sub}</p>
+        </div>
+        <div className="flex items-center gap-1 text-[9px] font-semibold text-[#c8ff00] shrink-0 ml-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse" />
+          <span>ON</span>
+        </div>
+        <svg
+          width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180 text-[#c8ff00]' : 'text-gray-500'}`}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+
+      {/* Dropdown — opens upward */}
+      {open && (
+        <div className="absolute bottom-full mb-1.5 left-0 z-50 w-[220px] rounded-xl border border-white/10 bg-gray-950 shadow-2xl p-2 flex flex-col gap-0.5">
+          {GROUPS.map(g => (
+            <div key={g.type}>
+              <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest px-2 py-1">{g.label}</p>
+              {instruments.map((inst, i) => {
+                if (inst.type !== g.type) return null;
+                const isCur = i === active;
+                return (
+                  <button
+                    key={inst.id}
+                    onClick={() => handleSelect(i)}
+                    className={`relative w-full rounded-lg border p-2.5 text-left transition-colors overflow-hidden
+                      ${isCur
+                        ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]'
+                        : 'bg-transparent border-transparent text-gray-400 hover:bg-white/5 hover:text-gray-200'}
+                    `}
+                    style={{ boxShadow: isCur ? '0 0 16px rgba(200,255,0,0.06) inset' : undefined }}
+                  >
+                    {isCur && <div className="absolute top-0 left-3 right-3 h-px bg-linear-to-r from-transparent via-[#c8ff00]/50 to-transparent" />}
+                    <div className="flex items-center gap-2">
+                      <div className={isCur ? 'text-[#c8ff00]' : 'text-gray-600'}>{inst.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold leading-none truncate">{inst.name}</p>
+                        <p className={`text-[9px] mt-0.5 truncate ${isCur ? 'text-[#c8ff00]/60' : 'text-gray-600'}`}>{inst.sub}</p>
+                      </div>
+                      {isCur && (
+                        <div className="ml-auto flex items-center gap-1 text-[9px] font-semibold text-[#c8ff00] shrink-0">
+                          <span className="h-1 w-1 rounded-full bg-[#c8ff00] animate-pulse inline-block" />ON
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1593,7 +1624,7 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
     ];
 
   return (
-    <div ref={panelRef} className="shrink-0 w-[220px] rounded-xl border border-white/10 bg-gray-900/50 p-3">
+    <div ref={panelRef} className="shrink-0 min-w-[190px] flex-1 max-w-[260px] rounded-xl border border-white/10 bg-gray-900/50 p-3">
       <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">ค่าที่วัดได้</h2>
       <div className="space-y-1.5">
         {rows.map(r => (
@@ -2033,7 +2064,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 
 function FormulaPanel({ inst, I, z }: { inst: Inst; I: number; z: number }) {
   return (
-    <div className="shrink-0 w-[220px] rounded-xl border border-white/10 bg-gray-900/50 p-3 flex flex-col">
+    <div className="shrink-0 w-[200px] rounded-xl border border-white/10 bg-gray-900/50 p-3 flex flex-col">
       <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 shrink-0">สูตรการคำนวณ</h2>
       <FormulaCard inst={inst} I={I} z={z} />
     </div>
