@@ -678,15 +678,26 @@ function HostLabPage() {
         <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
           <div
             ref={topRowRef}
-            className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_2fr] gap-3"
+            className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_1fr_2fr] gap-3"
             style={{ opacity: 0 }}
           >
-            <CameraSection />
-            <SplitFieldPanel
-              instType={inst.type}
-              bTheory={bTheory} bMeasured={bMeasured}
-              I={I} I0={I0} z={z}
-            />
+            <CameraSection stream="dji" label="กล้องหลัก — ด้านหน้า" />
+            <CameraSection stream="webc1" label="กล้องเสริม — ด้านข้าง" />
+            {inst.type === 'solenoid'
+              ? <SolenoidDataPanel
+                  z={z} setZ={setZ}
+                  bMeasured={bMeasured} bTheory={bTheory}
+                  measData={measData} setMeasData={setMeasData}
+                  N={inst.N}
+                  isMoving={isMoving} setIsMoving={setIsMoving}
+                  disabled={isBusy}
+                />
+              : <SplitFieldPanel
+                  instType={inst.type}
+                  bTheory={bTheory} bMeasured={bMeasured}
+                  I={I} I0={I0} z={z}
+                />
+            }
           </div>
           <div
             ref={btmRowRef}
@@ -704,13 +715,10 @@ function HostLabPage() {
             </div>
             <FormulaPanel inst={inst} I={I} z={z} />
             {inst.type === 'solenoid' && (
-              <SolenoidDataPanel
-                z={z} setZ={setZ}
-                bMeasured={bMeasured} bTheory={bTheory}
-                measData={measData} setMeasData={setMeasData}
-                N={inst.N}
-                isMoving={isMoving} setIsMoving={setIsMoving}
-                disabled={isBusy}
+              <SplitFieldPanel
+                instType={inst.type}
+                bTheory={bTheory} bMeasured={bMeasured}
+                I={I} I0={I0} z={z}
               />
             )}
           </div>
@@ -1103,7 +1111,7 @@ function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComp
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 
-function CameraSection() {
+function CameraSection({ stream = 'dji', label = 'กล้องหลัก — ด้านหน้า' }: { stream?: string; label?: string }) {
   const crossRef = useRef<HTMLDivElement>(null);
   const cornersRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1170,7 +1178,7 @@ function CameraSection() {
       ]);
 
       const mediamtxUrl = process.env.NEXT_PUBLIC_MEDIAMTX_URL ?? 'http://127.0.0.1:8889';
-      const resp = await fetch(`${mediamtxUrl}/dji/whep`, {
+      const resp = await fetch(`${mediamtxUrl}/${stream}/whep`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/sdp' },
         body: pc.localDescription!.sdp,
@@ -1232,7 +1240,7 @@ function CameraSection() {
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(200,255,0,0.12)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />
           </svg>
-          <span className="text-[9px] text-[#c8ff00]/20 font-mono uppercase tracking-widest">กล้องหลัก — ด้านหน้า</span>
+          <span className="text-[9px] text-[#c8ff00]/20 font-mono uppercase tracking-widest">{label}</span>
         </div>
         <div ref={cornersRef}>
           <div className="corner absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
@@ -1297,7 +1305,7 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
   ];
 
   return (
-    <div ref={wrapRef} className="relative shrink-0">
+    <div ref={wrapRef} className="relative w-full">
       {/* Trigger — compact single-row button */}
       <button
         onClick={() => { if (!disabled) setOpen(v => !v); }}
@@ -1327,7 +1335,7 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
 
       {/* Dropdown — opens upward */}
       {open && (
-        <div className="absolute bottom-full mb-1.5 left-0 z-50 w-[220px] rounded-xl border border-white/10 bg-gray-950 shadow-2xl p-2 flex flex-col gap-0.5">
+        <div className="absolute top-full mt-1.5 left-0 z-50 w-full rounded-xl border border-white/10 bg-gray-950 shadow-2xl p-2 flex flex-col gap-0.5">
           {GROUPS.map(g => (
             <div key={g.type}>
               <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest px-2 py-1">{g.label}</p>
