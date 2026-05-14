@@ -693,12 +693,15 @@ function HostLabPage() {
             className="shrink-0 flex items-stretch gap-3"
             style={{ opacity: 0 }}
           >
-            <InstrumentSelector active={instrument} onSelect={setInstrument} disabled={isBusy} />
-            <SensorPanel
-              inst={inst} I={I} I0={I0}
-              bTheory={bTheory} bMeasured={bMeasured}
-              z={z}
-            />
+            {/* Left column — selector stacked above sensor values */}
+            <div className="shrink-0 flex flex-col gap-3 w-[230px]">
+              <InstrumentSelector active={instrument} onSelect={setInstrument} disabled={isBusy} />
+              <SensorPanel
+                inst={inst} I={I} I0={I0}
+                bTheory={bTheory} bMeasured={bMeasured}
+                z={z}
+              />
+            </div>
             <FormulaPanel inst={inst} I={I} z={z} />
             {inst.type === 'solenoid' && (
               <SolenoidDataPanel
@@ -1294,12 +1297,12 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
   ];
 
   return (
-    <div ref={wrapRef} className="relative shrink-0 self-stretch">
+    <div ref={wrapRef} className="relative shrink-0">
       {/* Trigger — compact single-row button */}
       <button
         onClick={() => { if (!disabled) setOpen(v => !v); }}
         disabled={disabled}
-        className={`h-full flex items-center gap-2.5 px-3 rounded-xl border bg-gray-900/50 text-left transition-colors
+        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border bg-gray-900/50 text-left transition-colors
           ${disabled ? 'opacity-60 cursor-not-allowed border-white/10' : 'cursor-pointer hover:border-white/20'}
           ${open ? 'border-[#c8ff00]/40' : 'border-white/10'}
         `}
@@ -1624,7 +1627,7 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
     ];
 
   return (
-    <div ref={panelRef} className="shrink-0 min-w-[190px] flex-1 max-w-[260px] rounded-xl border border-white/10 bg-gray-900/50 p-3">
+    <div ref={panelRef} className="flex-1 rounded-xl border border-white/10 bg-gray-900/50 p-3">
       <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">ค่าที่วัดได้</h2>
       <div className="space-y-1.5">
         {rows.map(r => (
