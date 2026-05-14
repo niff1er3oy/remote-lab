@@ -565,19 +565,25 @@ function HostLabPage() {
   const prevInstType = useRef<'coil' | 'solenoid'>('coil');
   const isFirstLoad = useRef(true);
 
+  const runScript = useCallback(async (script: string) => {
+    try {
+      await fetch('/api/hardware', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script })
+      });
+    } catch (err) {
+      console.error('Failed to execute hardware script', err);
+    }
+  }, []);
+
+  const handleLabExit = useCallback(async () => {
+    const breakScript = prevInstType.current === 'coil' ? 'coil_b.py' : 'sole_b.py';
+    await runScript(breakScript);
+  }, [runScript]);
+
   // Hardware script execution
   useEffect(() => {
-    const runScript = async (script: string) => {
-      try {
-        await fetch('/api/hardware', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ script })
-        });
-      } catch (err) {
-        console.error('Failed to execute hardware script', err);
-      }
-    };
 
     const inst = instruments[instrument];
     const targetScript = ['coil_1.py', 'coil_2.py', 'coil_3.py', 'sole_75.py', 'sole_150.py'][instrument] || 'coil_1.py';
@@ -609,7 +615,7 @@ function HostLabPage() {
     };
 
     executeSwitch();
-  }, [instrument]);
+  }, [instrument, runScript]);
 
   // Current fluctuation ±1.5 % of I₀
   useEffect(() => {
@@ -692,7 +698,7 @@ function HostLabPage() {
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
-      <SessionBar endTime={access.end_time} onComplete={onComplete} roomCode={access.room_code} />
+      <SessionBar endTime={access.end_time} onComplete={onComplete} onExit={handleLabExit} roomCode={access.room_code} />
       <div className="flex-1 overflow-hidden p-3 flex gap-3">
 
         {/* Left ── Camera + FieldViz (top) · InstrSel + Sensor (bottom) */}
@@ -981,7 +987,7 @@ function fmtCountdown(secs: number) {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComplete: () => void; roomCode?: string | null }) {
+function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string; onComplete: () => void; onExit?: () => Promise<void>; roomCode?: string | null }) {
   const router = useRouter();
   const [secs, setSecs] = useState(0);
   const [remaining, setRemaining] = useState(() => getRemaining(endTime));
@@ -1001,7 +1007,8 @@ function SessionBar({ endTime, onComplete, roomCode }: { endTime: string; onComp
     }
   }, [remaining, onComplete]);
 
-  function handleLeave() {
+  async function handleLeave() {
+    await onExit?.();
     onComplete();
     router.push('/dashboard');
   }
