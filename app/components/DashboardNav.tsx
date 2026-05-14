@@ -20,7 +20,7 @@ export default function DashboardNav({ user }: { user: User }) {
   }
 
   return (
-    <nav className="relative z-10 h-16 px-6 flex items-center justify-between border-b border-white/10 bg-gray-950/80 backdrop-blur-md sticky top-0">
+    <nav className="relative z-50 h-16 px-6 flex items-center justify-between border-b border-white/10 bg-gray-950/80 backdrop-blur-md sticky top-0">
       <Link href="/" className="flex items-center gap-2">
         <div className="h-8 w-8 rounded-lg bg-[#c8ff00] flex items-center justify-center"
           style={{ boxShadow: '0 0 16px rgba(200,255,0,0.5)' }}>
