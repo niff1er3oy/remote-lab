@@ -526,6 +526,7 @@ function HostLabPage() {
   const [z, setZ] = useState(0); // Z position in metres (solenoid only, ±0.15 m)
   const [measData, setMeasData] = useState<Map<number, { bMeasured: number; bTheory: number }>>(new Map());
   const [realSensorValue, setRealSensorValue] = useState<number | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
   const topRowRef = useRef<HTMLDivElement>(null);
   const btmRowRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -560,22 +561,28 @@ function HostLabPage() {
 
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
-      runScript(targetScript);
+      setIsRunning(true);
+      runScript(targetScript).finally(() => setIsRunning(false));
       prevInstType.current = inst.type;
       return;
     }
 
     const executeSwitch = async () => {
-      // 1. Run break script for the PREVIOUS instrument type
-      const breakScript = prevInstType.current === 'coil' ? 'coil_b.py' : 'sole_b.py';
-      await runScript(breakScript);
-      
-      // Hardware safety delay
-      await new Promise(r => setTimeout(r, 500));
-      
-      // 2. Run new target script
-      await runScript(targetScript);
-      prevInstType.current = inst.type;
+      setIsRunning(true);
+      try {
+        // 1. Run break script for the PREVIOUS instrument type
+        const breakScript = prevInstType.current === 'coil' ? 'coil_b.py' : 'sole_b.py';
+        await runScript(breakScript);
+
+        // Hardware safety delay
+        await new Promise(r => setTimeout(r, 500));
+
+        // 2. Run new target script
+        await runScript(targetScript);
+        prevInstType.current = inst.type;
+      } finally {
+        setIsRunning(false);
+      }
     };
 
     executeSwitch();
@@ -684,7 +691,7 @@ function HostLabPage() {
             className="shrink-0 flex gap-3"
             style={{ opacity: 0 }}
           >
-            <InstrumentSelector active={instrument} onSelect={setInstrument} />
+            <InstrumentSelector active={instrument} onSelect={setInstrument} disabled={isRunning} />
             <SensorPanel
               inst={inst} I={I} I0={I0}
               bTheory={bTheory} bMeasured={bMeasured}
@@ -1257,7 +1264,7 @@ function CamTimestamp() {
 
 // ── Instrument Selector ───────────────────────────────────────────────────────
 
-function InstrumentSelector({ active, onSelect }: { active: number; onSelect: (i: number) => void }) {
+function InstrumentSelector({ active, onSelect, disabled }: { active: number; onSelect: (i: number) => void; disabled?: boolean }) {
   const rowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1269,7 +1276,7 @@ function InstrumentSelector({ active, onSelect }: { active: number; onSelect: (i
   }, []);
 
   function handleSelect(i: number) {
-    if (i === active) return;
+    if (i === active || disabled) return;
     const card = rowRef.current?.querySelectorAll('.inst-card')[i] as HTMLElement | null;
     if (card) animate(card, { scale: [0.94, 1.04, 1], duration: 360, ease: 'outBack' });
     onSelect(i);
@@ -1283,8 +1290,8 @@ function InstrumentSelector({ active, onSelect }: { active: number; onSelect: (i
         {instruments.map((inst, i) => {
           if (inst.type !== 'coil') return null;
           return (
-            <button key={inst.id} onClick={() => handleSelect(i)}
-              className={`inst-card opacity-0 relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
+            <button key={inst.id} onClick={() => handleSelect(i)} disabled={disabled && i !== active}
+              className={`inst-card opacity-0 relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${disabled && i !== active ? 'opacity-40 cursor-not-allowed' : ''} ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
               style={{ boxShadow: i === active ? '0 0 20px rgba(200,255,0,0.06) inset' : undefined }}
             >
               {i === active && <div className="absolute top-0 left-3 right-3 h-px bg-linear-to-r from-transparent via-[#c8ff00]/50 to-transparent" />}
@@ -1303,8 +1310,8 @@ function InstrumentSelector({ active, onSelect }: { active: number; onSelect: (i
         {instruments.map((inst, i) => {
           if (inst.type !== 'solenoid') return null;
           return (
-            <button key={inst.id} onClick={() => handleSelect(i)}
-              className={`inst-card opacity-0 relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
+            <button key={inst.id} onClick={() => handleSelect(i)} disabled={disabled && i !== active}
+              className={`inst-card opacity-0 relative rounded-lg border p-2.5 text-left transition-colors overflow-hidden ${disabled && i !== active ? 'opacity-40 cursor-not-allowed' : ''} ${i === active ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]' : 'bg-gray-950/60 border-white/[0.08] text-gray-400 hover:border-white/20 hover:text-gray-300'}`}
               style={{ boxShadow: i === active ? '0 0 20px rgba(200,255,0,0.06) inset' : undefined }}
             >
               {i === active && <div className="absolute top-0 left-3 right-3 h-px bg-linear-to-r from-transparent via-[#c8ff00]/50 to-transparent" />}
