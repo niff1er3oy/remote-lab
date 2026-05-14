@@ -2055,6 +2055,10 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   const COL_W = 48; // px per Z column
   const LABEL_W = 72; // px for row-label column
 
+  const [isMoving, setIsMoving] = useState(false);
+  const liveRef = useRef({ bMeasured, bTheory });
+  useEffect(() => { liveRef.current = { bMeasured, bTheory }; }, [bMeasured, bTheory]);
+
   useEffect(() => {
     if (panelRef.current) animate(panelRef.current, { opacity: [0, 1], translateY: [12, 0], duration: 400, ease: 'outCubic' });
   }, []);
@@ -2068,49 +2072,26 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
     c.scrollTo({ left: idx * COL_W - c.clientWidth / 2 + COL_W / 2, behavior: 'smooth' });
   }, [zCm]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Auto-scan state ──
-  const [scanning, setScanning] = useState(false);
-  const scanRef = useRef({ active: false, dir: 1 as 1 | -1, z, bMeasured, bTheory });
-
-  useEffect(() => {
-    scanRef.current.z = z;
-    scanRef.current.bMeasured = bMeasured;
-    scanRef.current.bTheory = bTheory;
-  }, [z, bMeasured, bTheory]);
-
-  useEffect(() => () => { scanRef.current.active = false; }, []);
-
-  function startScan(dir: 1 | -1) {
-    if (scanRef.current.active) {
-      scanRef.current.active = false;
-      setScanning(false);
-      return;
+  async function moveToPosition(zVal: number) {
+    if (isMoving || zVal === zCm) return;
+    setIsMoving(true);
+    setZ(zVal / 100);
+    try {
+      await fetch('/api/hardware', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script: 'sole_c.py', args: `--name ${N} --position ${zVal}` }),
+      });
+      const { bMeasured: bM, bTheory: bT } = liveRef.current;
+      setMeasData(prev => new Map(prev).set(zVal, { bMeasured: bM, bTheory: bT }));
+    } catch (err) {
+      console.error('Failed to move arm', err);
+    } finally {
+      setIsMoving(false);
     }
-    scanRef.current.active = true;
-    scanRef.current.dir = dir;
-    setScanning(true);
-
-    function step() {
-      if (!scanRef.current.active) return;
-      const curCm = Math.round(scanRef.current.z * 100);
-      setMeasData(prev => new Map(prev).set(curCm, {
-        bMeasured: scanRef.current.bMeasured,
-        bTheory: scanRef.current.bTheory,
-      }));
-      const nextCm = curCm + scanRef.current.dir;
-      if (nextCm < -15 || nextCm > 15) {
-        scanRef.current.active = false;
-        setScanning(false);
-        return;
-      }
-      setZ(nextCm / 100);
-      setTimeout(step, 900);
-    }
-    step();
   }
 
-  function record() { setMeasData(prev => new Map(prev).set(zCm, { bMeasured, bTheory })); }
-  function clearAll() { scanRef.current.active = false; setScanning(false); setMeasData(new Map()); }
+  function clearAll() { setMeasData(new Map()); }
 
   function downloadCSV() {
     const allZ = Array.from({ length: 31 }, (_, i) => i - 15);
@@ -2155,56 +2136,21 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
     <div ref={panelRef} className="flex-1 min-w-0 rounded-xl border border-white/10 bg-gray-900/50 flex flex-col overflow-hidden" style={{ opacity: 0 }}>
       {/* Header bar */}
       <div className="shrink-0 px-3 py-1.5 border-b border-white/5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="flex items-center gap-2 shrink-0">
-            <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ข้อมูลแนวแกน Z</h2>
-            <span className="text-[9px] font-mono text-gray-600">N={N}</span>
-            <span className="text-[9px] font-semibold" style={{ color: recorded === 31 ? '#c8ff00' : '#22d3ee' }}>{recorded}/31</span>
-          </div>
-          {/* Z slider */}
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className="text-[9px] font-mono font-bold tabular-nums shrink-0" style={{ color: '#a78bfa' }}>
-              {zCm > 0 ? `+${zCm}` : zCm} cm
-            </span>
-            <input
-              type="range" min="-15" max="15" step="1"
-              value={zCm}
-              onChange={e => setZ(Number(e.target.value) / 100)}
-              className="flex-1 h-1 cursor-pointer accent-violet-400 min-w-0"
-            />
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ข้อมูลแนวแกน Z</h2>
+          <span className="text-[9px] font-mono text-gray-600">N={N}</span>
+          <span className="text-[9px] font-semibold" style={{ color: recorded === 31 ? '#c8ff00' : '#22d3ee' }}>{recorded}/31</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Scan ‹ */}
-          <button
-            onClick={() => startScan(-1)}
-            disabled={!scanning && zCm <= -15}
-            title={scanning && scanRef.current.dir === -1 ? 'หยุด' : 'สแกนถอยหลัง'}
-            className={`h-6 w-6 flex items-center justify-center rounded-md border text-[11px] font-bold transition-colors ${scanning && scanRef.current.dir === -1
-              ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20'
-              : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed'
-              }`}
-          >{scanning && scanRef.current.dir === -1 ? '■' : '‹'}</button>
-
-          {/* Record */}
-          <button
-            onClick={record}
-            disabled={scanning}
-            className="text-[9px] px-2 py-1 rounded-md bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] hover:bg-[#c8ff00]/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-semibold leading-none"
-          >บันทึก {zCm > 0 ? `+${zCm}` : zCm} cm</button>
-
-          {/* Scan › */}
-          <button
-            onClick={() => startScan(1)}
-            disabled={!scanning && zCm >= 15}
-            title={scanning && scanRef.current.dir === 1 ? 'หยุด' : 'สแกนไปหน้า'}
-            className={`h-6 w-6 flex items-center justify-center rounded-md border text-[11px] font-bold transition-colors ${scanning && scanRef.current.dir === 1
-              ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20'
-              : 'border-white/10 text-gray-400 hover:border-white/20 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed'
-              }`}
-          >{scanning && scanRef.current.dir === 1 ? '■' : '›'}</button>
-
-          {recorded > 0 && !scanning && (
+          {isMoving && (
+            <div className="flex items-center gap-1.5 text-[9px] text-violet-400">
+              <svg className="animate-spin" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 12a9 9 0 11-6.219-8.56" />
+              </svg>
+              <span className="font-mono tabular-nums">{zCm > 0 ? `+${zCm}` : zCm} cm</span>
+            </div>
+          )}
+          {recorded > 0 && !isMoving && (
             <>
               <button
                 onClick={downloadCSV}
@@ -2253,10 +2199,19 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
                   className={`shrink-0 flex flex-col border-r border-white/[0.04] last:border-0 transition-colors ${isCurrent ? 'bg-[#c8ff00]/8' : ''}`}
                   style={{ width: COL_W }}
                 >
-                  {/* Z value header */}
-                  <div className={`shrink-0 h-[26px] flex items-center justify-center text-[9px] font-mono font-semibold border-b border-white/5 select-none ${isCurrent ? 'text-[#c8ff00]' : 'text-gray-600'}`}>
+                  {/* Z value header — click to move arm */}
+                  <button
+                    onClick={() => moveToPosition(zVal)}
+                    disabled={isMoving || isCurrent}
+                    className={`shrink-0 h-[26px] w-full flex items-center justify-center text-[9px] font-mono font-semibold border-b border-white/5 transition-colors
+                      ${isCurrent && isMoving ? 'text-violet-400 animate-pulse' : ''}
+                      ${isCurrent && !isMoving ? 'text-[#c8ff00]' : ''}
+                      ${!isCurrent && !isMoving ? 'text-gray-600 hover:text-gray-300 hover:bg-white/5 cursor-pointer' : ''}
+                      ${!isCurrent && isMoving ? 'text-gray-700 cursor-not-allowed' : ''}
+                    `}
+                  >
                     {zVal > 0 ? `+${zVal}` : zVal}
-                  </div>
+                  </button>
                   {/* Data cells */}
                   {dataRows.map(r => {
                     const cell = point ? r.getValue(point) : null;

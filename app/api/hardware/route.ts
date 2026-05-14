@@ -8,6 +8,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const scriptName = body.script;
+    const args: string = body.args ?? '';
 
     if (!scriptName || typeof scriptName !== 'string') {
       return NextResponse.json({ error: 'Missing or invalid script name' }, { status: 400 });
@@ -18,7 +19,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid script name format' }, { status: 400 });
     }
 
-    const command = `cd /home/admin/Documents && ./venv/bin/python ${scriptName}`;
+    // Args: allow alphanumeric, spaces, dashes, underscores (e.g. "--name 150 --position -15")
+    if (args && !/^[\w\s\-]+$/.test(args)) {
+      return NextResponse.json({ error: 'Invalid args format' }, { status: 400 });
+    }
+
+    const command = `cd /home/admin/Documents && ./venv/bin/python ${scriptName}${args ? ' ' + args : ''}`;
     
     console.log(`[Hardware API] Executing: ${command}`);
 
