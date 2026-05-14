@@ -5,7 +5,6 @@ import { animate, stagger, scrambleText } from 'animejs';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
-import Hls from 'hls.js';
 
 // ── Physics (Lab 8: Biot–Savart) ─────────────────────────────────────────────
 
@@ -1106,73 +1105,83 @@ function CameraSection() {
     }
   }, []);
 
-  // HLS stream connection
+  // WebRTC (WHEP) stream connection
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    let hls: Hls | null = null;
-    const streamUrl = '/api/cam/index.m3u8';
+    let pc: RTCPeerConnection | null = null;
+    let stopped = false;
 
-    setStreamError('กำลังโหลดสัญญาณวิดีโอ (HLS)...');
+    async function connect() {
+      if (stopped || !video) return;
+      setStreamError('กำลังเชื่อมต่อ WebRTC...');
 
-    if (Hls.isSupported()) {
-      hls = new Hls({
-        // Optimize for lower latency
-        lowLatencyMode: true,
-        backBufferLength: 30,
-        maxBufferLength: 10,
-        liveSyncDurationCount: 3,
-      });
+      pc = new RTCPeerConnection();
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      pc.addTransceiver('audio', { direction: 'recvonly' });
 
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setStreamError(null);
+      pc.ontrack = (event) => {
+        if (!video) return;
+        video.srcObject = event.streams[0] ?? null;
         video.play().catch(console.error);
-      });
+        setStreamError(null);
+      };
 
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              setStreamError('ข้อผิดพลาดเครือข่าย กำลังลองใหม่...');
-              hls?.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              setStreamError('ข้อผิดพลาดวิดีโอ กำลังกู้คืน...');
-              hls?.recoverMediaError();
-              break;
-            default:
-              setStreamError('ไม่สามารถโหลดวิดีโอได้');
-              hls?.destroy();
-              break;
-          }
+      pc.oniceconnectionstatechange = () => {
+        if (!pc) return;
+        if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+          setStreamError('การเชื่อมต่อขาดหาย กำลังลองใหม่...');
+          pc.close();
+          if (!stopped) setTimeout(connect, 3000);
         }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      // Wait for ICE gathering (with 2s timeout)
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          if (pc!.iceGatheringState === 'complete') { resolve(); return; }
+          const onStateChange = () => {
+            if (pc!.iceGatheringState === 'complete') {
+              pc!.removeEventListener('icegatheringstatechange', onStateChange);
+              resolve();
+            }
+          };
+          pc!.addEventListener('icegatheringstatechange', onStateChange);
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+      ]);
+
+      const mediamtxUrl = process.env.NEXT_PUBLIC_MEDIAMTX_URL ?? 'http://127.0.0.1:8889';
+      const resp = await fetch(`${mediamtxUrl}/dji/whep`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/sdp' },
+        body: pc.localDescription!.sdp,
       });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native Safari support
-      video.src = streamUrl;
-      video.addEventListener('loadedmetadata', () => {
-        setStreamError(null);
-        video.play().catch(console.error);
-      });
-      video.addEventListener('error', () => {
-        setStreamError('ไม่สามารถโหลดวิดีโอได้ (Safari)');
-      });
-    } else {
-      setStreamError('เบราว์เซอร์ของคุณไม่รองรับ HLS');
+
+      if (!resp.ok) {
+        setStreamError('ไม่สามารถเชื่อมต่อกล้องได้');
+        pc.close();
+        if (!stopped) setTimeout(connect, 3000);
+        return;
+      }
+
+      const sdpAnswer = await resp.text();
+      await pc.setRemoteDescription({ type: 'answer', sdp: sdpAnswer });
     }
 
+    connect().catch(() => {
+      setStreamError('ไม่สามารถเชื่อมต่อกล้องได้');
+      if (!stopped) setTimeout(connect, 3000);
+    });
+
     return () => {
-      if (hls) {
-        hls.destroy();
-      }
-      if (video) {
-        video.removeAttribute('src');
-        video.load();
-      }
+      stopped = true;
+      pc?.close();
+      if (video) video.srcObject = null;
     };
   }, []);
 
