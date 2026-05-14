@@ -527,6 +527,8 @@ function HostLabPage() {
   const [measData, setMeasData] = useState<Map<number, { bMeasured: number; bTheory: number }>>(new Map());
   const [realSensorValue, setRealSensorValue] = useState<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
+  const isBusy = isRunning || isMoving;
   const topRowRef = useRef<HTMLDivElement>(null);
   const btmRowRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -691,7 +693,7 @@ function HostLabPage() {
             className="shrink-0 flex gap-3"
             style={{ opacity: 0 }}
           >
-            <InstrumentSelector active={instrument} onSelect={setInstrument} disabled={isRunning} />
+            <InstrumentSelector active={instrument} onSelect={setInstrument} disabled={isBusy} />
             <SensorPanel
               inst={inst} I={I} I0={I0}
               bTheory={bTheory} bMeasured={bMeasured}
@@ -704,6 +706,8 @@ function HostLabPage() {
                 bMeasured={bMeasured} bTheory={bTheory}
                 measData={measData} setMeasData={setMeasData}
                 N={inst.N}
+                isMoving={isMoving} setIsMoving={setIsMoving}
+                disabled={isBusy}
               />
             )}
           </div>
@@ -2040,12 +2044,14 @@ function FormulaPanel({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 
 type MeasRecord = { bMeasured: number; bTheory: number };
 
-function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData, N }: {
+function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData, N, isMoving, setIsMoving, disabled }: {
   z: number; setZ: (v: number) => void;
   bMeasured: number; bTheory: number;
   measData: Map<number, MeasRecord>;
   setMeasData: React.Dispatch<React.SetStateAction<Map<number, MeasRecord>>>;
   N: number;
+  isMoving: boolean; setIsMoving: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -2055,7 +2061,6 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   const COL_W = 48; // px per Z column
   const LABEL_W = 72; // px for row-label column
 
-  const [isMoving, setIsMoving] = useState(false);
   const liveRef = useRef({ bMeasured, bTheory });
   useEffect(() => { liveRef.current = { bMeasured, bTheory }; }, [bMeasured, bTheory]);
 
@@ -2073,7 +2078,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   }, [zCm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function moveToPosition(zVal: number) {
-    if (isMoving || zVal === zCm) return;
+    if (disabled || zVal === zCm) return;
     setIsMoving(true);
     setZ(zVal / 100);
     try {
@@ -2202,7 +2207,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
                   {/* Z value header — click to move arm */}
                   <button
                     onClick={() => moveToPosition(zVal)}
-                    disabled={isMoving || isCurrent}
+                    disabled={disabled || isCurrent}
                     className={`shrink-0 h-[26px] w-full flex items-center justify-center text-[9px] font-mono font-semibold border-b border-white/5 transition-colors
                       ${isCurrent && isMoving ? 'text-violet-400 animate-pulse' : ''}
                       ${isCurrent && !isMoving ? 'text-[#c8ff00]' : ''}
