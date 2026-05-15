@@ -253,6 +253,50 @@ function AccessDeniedScreen({ access }: { access: Extract<AccessState, { status:
   );
 }
 
+// ── Lab Docs Panel ────────────────────────────────────────────────────────────
+
+function LabDocsPanel({ onClose }: { onClose: () => void }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!panelRef.current) return;
+    animate(panelRef.current, { opacity: [0, 1], translateY: [12, 0], scale: [0.96, 1], duration: 280, ease: 'outBack' });
+    const items = panelRef.current.querySelectorAll('.doc-item');
+    if (items.length)
+      animate(items, { opacity: [0, 1], translateX: [-8, 0], duration: 240, delay: stagger(35, { start: 120 }), ease: 'outCubic' });
+  }, []);
+
+  return (
+    <div ref={panelRef}
+      className="fixed top-12 right-[88px] z-[100] w-64 rounded-2xl border border-white/10 bg-gray-950 overflow-hidden"
+      style={{ opacity: 0, boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)' }}>
+      <div className="px-4 py-3 border-b border-white/[0.06]">
+        <span className="text-sm font-semibold text-white">เอกสารประกอบแลป</span>
+      </div>
+      <ul className="divide-y divide-white/[0.04]">
+        {LAB8_DOCS.map(({ label, file }) => (
+          <li key={file} className="doc-item" style={{ opacity: 0 }}>
+            <a
+              href={`/doc/lab8/${encodeURIComponent(file)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-4 py-3 text-xs text-gray-300 hover:text-[#c8ff00] hover:bg-white/[0.03] transition-colors group"
+              onClick={onClose}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-600 group-hover:text-[#c8ff00] transition-colors">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              <span className="flex-1 truncate">{label}</span>
+              <span className="text-[9px] text-gray-600 font-mono shrink-0">PDF</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ── Lab Intro Screen ──────────────────────────────────────────────────────────
 
 const LAB8_DOCS = [
@@ -355,7 +399,8 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
               <a
                 key={file}
                 href={`/doc/lab8/${encodeURIComponent(file)}`}
-                download={file}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="doc-btn flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gray-950/60 px-4 py-2.5 text-xs text-gray-300 hover:border-[#c8ff00]/30 hover:text-[#c8ff00] transition-colors group"
                 style={{ opacity: 0 }}
               >
@@ -550,8 +595,20 @@ function HostLabPage() {
 
   useLayoutEffect(() => {
     if (prevInstrumentRef.current === instrument) return;
+    const inst = instruments[instrument];
+    const typeChanged = inst.type !== prevInstType.current;
     prevInstrumentRef.current = instrument;
     layoutCtrlRef.current?.animate({ duration: 600, ease: 'outCubic', delay: stagger(30) });
+    if (typeChanged && rightColRef.current) {
+      prevInstType.current = inst.type;
+      animate(rightColRef.current, {
+        opacity: [0, 1],
+        scale: [0.94, 1],
+        translateX: [24, 0],
+        duration: 480,
+        ease: 'outBack(1.2)',
+      });
+    }
   }, [instrument]);
 
   // Reset I, Z, and measurement data when instrument changes
@@ -563,6 +620,7 @@ function HostLabPage() {
   }, [instrument]);
 
   const prevInstType = useRef<'coil' | 'solenoid'>('coil');
+  const rightColRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
 
   const runScript = useCallback(async (script: string) => {
@@ -705,21 +763,31 @@ function HostLabPage() {
         <div ref={leftColRef} className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
           <div
             ref={topRowRef}
-            className={`flex-1 min-h-0 grid gap-3 grid-cols-1 ${inst.type === 'solenoid' ? 'xl:grid-cols-[1fr_1fr_2fr]' : 'xl:grid-cols-[1fr_1fr]'}`}
+            className={`flex-1 min-h-0 grid gap-3 grid-cols-1 xl:grid-cols-2`}
             style={{ opacity: 0 }}
           >
             <CameraSection stream="dji" label="กล้องหลัก — ด้านหน้า" />
-            <CameraSection stream="webc1" label="กล้องเสริม — ด้านข้าง" />
-            {inst.type === 'solenoid' && (
-              <SolenoidDataPanel
-                z={z} setZ={setZ}
-                bMeasured={bMeasured} bTheory={bTheory}
-                measData={measData} setMeasData={setMeasData}
-                N={inst.N}
-                isMoving={isMoving} setIsMoving={setIsMoving}
-                disabled={isBusy}
-              />
-            )}
+            <div ref={rightColRef} className="flex flex-col gap-3 h-full min-h-0">
+              {inst.type === 'solenoid' ? (
+                <>
+                  <div className="h-[70%] min-h-0 flex flex-col">
+                    <CameraSection stream="webc1" label="กล้องเสริม — ด้านข้าง" />
+                  </div>
+                  <div className="h-[30%] min-h-0 flex flex-col">
+                    <SolenoidDataPanel
+                      z={z} setZ={setZ}
+                      bMeasured={bMeasured} bTheory={bTheory}
+                      measData={measData} setMeasData={setMeasData}
+                      N={inst.N}
+                      isMoving={isMoving} setIsMoving={setIsMoving}
+                      disabled={isBusy}
+                    />
+                  </div>
+                </>
+              ) : (
+                <CameraSection stream="webc1" label="กล้องเสริม — ด้านข้าง" />
+              )}
+            </div>
           </div>
           <div
             ref={btmRowRef}
@@ -987,11 +1055,56 @@ function fmtCountdown(secs: number) {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+function RoomCodeBadge({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  const badgeRef = useRef<HTMLButtonElement>(null);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    if (badgeRef.current) {
+      animate(badgeRef.current, {
+        scale: [1, 1.18, 1],
+        duration: 400,
+        ease: 'outBack(2)',
+      });
+    }
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-gray-500 text-[10px]">รหัสห้อง</span>
+      <button
+        ref={badgeRef}
+        onClick={handleCopy}
+        title="คัดลอกรหัสห้อง"
+        className={`flex items-center gap-1 font-mono font-bold tracking-widest rounded-md border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer
+          ${copied
+            ? 'border-[#c8ff00]/60 bg-[#c8ff00]/15 text-[#c8ff00]'
+            : 'border-[#c8ff00]/30 bg-[#c8ff00]/5 text-[#c8ff00] hover:bg-[#c8ff00]/15 hover:border-[#c8ff00]/50'
+          }`}
+        style={{ boxShadow: copied ? '0 0 14px rgba(200,255,0,0.35)' : '0 0 8px rgba(200,255,0,0.15)' }}
+      >
+        {copied ? (
+          <>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            คัดลอกแล้ว
+          </>
+        ) : code}
+      </button>
+    </span>
+  );
+}
+
 function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string; onComplete: () => void; onExit?: () => Promise<void>; roomCode?: string | null }) {
   const router = useRouter();
   const [secs, setSecs] = useState(0);
   const [remaining, setRemaining] = useState(() => getRemaining(endTime));
   const [panelOpen, setPanelOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   const barRef = useRef<HTMLElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
   const countdownRef = useRef<HTMLSpanElement>(null);
@@ -1050,13 +1163,7 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
         {roomCode && (
           <>
             <span className="text-gray-600">|</span>
-            <span className="flex items-center gap-1.5">
-              <span className="text-gray-500 text-[10px]">รหัสห้อง</span>
-              <span className="font-mono font-bold tracking-widest text-[#c8ff00] rounded-md border border-[#c8ff00]/30 bg-[#c8ff00]/5 px-1.5 py-0.5 text-[11px]"
-                style={{ boxShadow: '0 0 8px rgba(200,255,0,0.15)' }}>
-                {roomCode}
-              </span>
-            </span>
+            <RoomCodeBadge code={roomCode} />
           </>
         )}
         <span className="text-gray-600">|</span>
@@ -1079,10 +1186,35 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
         </span>
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        {/* Documents panel */}
+        <div className="relative">
+          <button
+            onClick={() => { setDocsOpen(v => !v); setPanelOpen(false); }}
+            className={`relative flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${docsOpen
+              ? 'border-[#c8ff00]/40 bg-[#c8ff00]/10 text-[#c8ff00]'
+              : 'border-white/10 text-gray-400 hover:border-[#c8ff00]/30 hover:text-white'
+              }`}
+            aria-label="เอกสารประกอบแลป"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="9" y1="13" x2="15" y2="13" />
+              <line x1="9" y1="17" x2="15" y2="17" />
+            </svg>
+          </button>
+          {docsOpen && createPortal(
+            <>
+              <div className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-[2px]" onClick={() => setDocsOpen(false)} />
+              <LabDocsPanel onClose={() => setDocsOpen(false)} />
+            </>,
+            document.body
+          )}
+        </div>
         {/* Notification bell */}
         <div className="relative">
           <button
-            onClick={() => setPanelOpen(v => !v)}
+            onClick={() => { setPanelOpen(v => !v); setDocsOpen(false); }}
             className={`relative flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${panelOpen
               ? 'border-[#c8ff00]/40 bg-[#c8ff00]/10 text-[#c8ff00]'
               : 'border-white/10 text-gray-400 hover:border-[#c8ff00]/30 hover:text-white'
@@ -1304,16 +1436,22 @@ function CamTimestamp() {
 
 function InstrumentSelector({ active, onSelect, disabled }: { active: number; onSelect: (i: number) => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
   const activeInst = instruments[active];
 
   useEffect(() => {
     if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    if (wrapRef.current) {
+      const r = wrapRef.current.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 6, left: r.left, width: r.width });
     }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    if (!dropRef.current) return;
+    animate(dropRef.current, { opacity: [0, 1], translateY: [-8, 0], scale: [0.96, 1], duration: 260, ease: 'outBack' });
+    const items = dropRef.current.querySelectorAll('.inst-item');
+    if (items.length)
+      animate(items, { opacity: [0, 1], translateX: [-6, 0], duration: 200, delay: stagger(30, { start: 80 }), ease: 'outCubic' });
   }, [open]);
 
   function handleSelect(i: number) {
@@ -1328,7 +1466,7 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
   ];
 
   return (
-    <div ref={wrapRef} className="relative w-full">
+    <div ref={wrapRef} className="relative w-full z-[100]">
       {/* Trigger — compact single-row button */}
       <button
         onClick={() => { if (!disabled) setOpen(v => !v); }}
@@ -1356,45 +1494,51 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
         </svg>
       </button>
 
-      {/* Dropdown — opens upward */}
-      {open && (
-        <div className="absolute top-full mt-1.5 left-0 z-50 w-full rounded-xl border border-white/10 bg-gray-950 shadow-2xl p-2 flex flex-col gap-0.5">
-          {GROUPS.map(g => (
-            <div key={g.type}>
-              <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest px-2 py-1">{g.label}</p>
-              {instruments.map((inst, i) => {
-                if (inst.type !== g.type) return null;
-                const isCur = i === active;
-                return (
-                  <button
-                    key={inst.id}
-                    onClick={() => handleSelect(i)}
-                    className={`relative w-full rounded-lg border p-2.5 text-left transition-colors overflow-hidden
-                      ${isCur
-                        ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]'
-                        : 'bg-transparent border-transparent text-gray-400 hover:bg-white/5 hover:text-gray-200'}
-                    `}
-                    style={{ boxShadow: isCur ? '0 0 16px rgba(200,255,0,0.06) inset' : undefined }}
-                  >
-                    {isCur && <div className="absolute top-0 left-3 right-3 h-px bg-linear-to-r from-transparent via-[#c8ff00]/50 to-transparent" />}
-                    <div className="flex items-center gap-2">
-                      <div className={isCur ? 'text-[#c8ff00]' : 'text-gray-600'}>{inst.icon}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-semibold leading-none truncate">{inst.name}</p>
-                        <p className={`text-[9px] mt-0.5 truncate ${isCur ? 'text-[#c8ff00]/60' : 'text-gray-600'}`}>{inst.sub}</p>
-                      </div>
-                      {isCur && (
-                        <div className="ml-auto flex items-center gap-1 text-[9px] font-semibold text-[#c8ff00] shrink-0">
-                          <span className="h-1 w-1 rounded-full bg-[#c8ff00] animate-pulse inline-block" />ON
+      {open && createPortal(
+        <>
+          <div className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
+          <div ref={dropRef}
+            className="fixed z-[100] rounded-xl border border-white/10 bg-gray-950 p-2 flex flex-col gap-0.5"
+            style={{ opacity: 0, top: dropPos.top, left: dropPos.left, width: dropPos.width, boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)' }}
+          >
+            {GROUPS.map(g => (
+              <div key={g.type}>
+                <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest px-2 py-1">{g.label}</p>
+                {instruments.map((inst, i) => {
+                  if (inst.type !== g.type) return null;
+                  const isCur = i === active;
+                  return (
+                    <button
+                      key={inst.id}
+                      onClick={() => handleSelect(i)}
+                      className={`inst-item relative w-full rounded-lg border p-2.5 text-left transition-colors overflow-hidden
+                        ${isCur
+                          ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]'
+                          : 'bg-transparent border-transparent text-gray-400 hover:bg-white/5 hover:text-gray-200'}
+                      `}
+                      style={{ opacity: 0, boxShadow: isCur ? '0 0 16px rgba(200,255,0,0.06) inset' : undefined }}
+                    >
+                      {isCur && <div className="absolute top-0 left-3 right-3 h-px bg-linear-to-r from-transparent via-[#c8ff00]/50 to-transparent" />}
+                      <div className="flex items-center gap-2">
+                        <div className={isCur ? 'text-[#c8ff00]' : 'text-gray-600'}>{inst.icon}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-semibold leading-none truncate">{inst.name}</p>
+                          <p className={`text-[9px] mt-0.5 truncate ${isCur ? 'text-[#c8ff00]/60' : 'text-gray-600'}`}>{inst.sub}</p>
                         </div>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+                        {isCur && (
+                          <div className="ml-auto flex items-center gap-1 text-[9px] font-semibold text-[#c8ff00] shrink-0">
+                            <span className="h-1 w-1 rounded-full bg-[#c8ff00] animate-pulse inline-block" />ON
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </>,
+        document.body
       )}
     </div>
   );

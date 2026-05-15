@@ -75,8 +75,9 @@ export default function GlobalNotifications() {
     prevUnread.current = unread;
   }, [unread]);
 
-  if (pathname.startsWith('/lab')) return null;
   if (!loggedIn) return null;
+  if (!pathname.startsWith('/dashboard') && !pathname.startsWith('/booking') && !pathname.startsWith('/lab-session')) return null;
+  if (pathname.startsWith('/lab')) return null;
 
   return (
     <>
