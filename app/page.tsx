@@ -53,14 +53,9 @@ function Navbar() {
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#c8ff00]"
-              style={{ boxShadow: '0 0 16px rgba(200,255,0,0.5)' }}
-            >
-              <FlaskIcon />
-            </div>
+            <Image src="/logo.svg" width={32} height={32} alt="PaNa LabS" className="rounded-lg" />
             <span className="text-lg font-semibold tracking-tight">
-              Remote<span className="text-[#c8ff00]">Lab</span>
+              PaNa<span className="text-[#c8ff00]">LabS</span>
             </span>
           </div>
 
@@ -677,15 +672,13 @@ function Footer() {
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#c8ff00]">
-              <FlaskIcon />
-            </div>
+            <Image src="/logo.svg" width={28} height={28} alt="PaNa LabS" className="rounded-lg" />
             <span className="text-sm font-semibold">
-              Remote<span className="text-[#c8ff00]">Lab</span>
+              PaNa<span className="text-[#c8ff00]">LabS</span>
             </span>
           </div>
           <p className="text-sm text-gray-600">
-            © {new Date().getFullYear()} RemoteLab. สงวนลิขสิทธิ์ทุกประการ
+            © {new Date().getFullYear()} PaNa LabS. สงวนลิขสิทธิ์ทุกประการ
           </p>
           <div className="flex gap-6 text-sm text-gray-600">
             <Link href="/privacy" className="hover:text-gray-400 transition-colors">
@@ -701,14 +694,6 @@ function Footer() {
   );
 }
 
-function FlaskIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-950">
-      <path d="M9 3h6M9 3v7l-5 9h16l-5-9V3" />
-      <path d="M7.5 18h9" />
-    </svg>
-  );
-}
 
 function MonitorIcon() {
   return (

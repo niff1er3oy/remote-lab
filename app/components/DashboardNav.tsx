@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import Link from 'next/link';
 
 type User = { name: string; email: string; role: string };
@@ -22,11 +23,8 @@ export default function DashboardNav({ user }: { user: User }) {
   return (
     <nav className="relative z-50 h-16 px-6 flex items-center justify-between border-b border-white/10 bg-gray-950/80 backdrop-blur-md sticky top-0">
       <Link href="/" className="flex items-center gap-2">
-        <div className="h-8 w-8 rounded-lg bg-[#c8ff00] flex items-center justify-center"
-          style={{ boxShadow: '0 0 16px rgba(200,255,0,0.5)' }}>
-          <FlaskIcon />
-        </div>
-        <span className="text-lg font-semibold tracking-tight">Remote<span className="text-[#c8ff00]">Lab</span></span>
+        <Image src="/logo.svg" width={32} height={32} alt="PaNa LabS" className="rounded-lg" />
+        <span className="text-lg font-semibold tracking-tight">PaNa<span className="text-[#c8ff00]">LabS</span></span>
       </Link>
 
       <div className="flex items-center gap-3">
@@ -72,13 +70,6 @@ export default function DashboardNav({ user }: { user: User }) {
   );
 }
 
-function FlaskIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#030712" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 3h6M9 3v7l-5 9h16l-5-9V3" />
-    </svg>
-  );
-}
 function GridIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

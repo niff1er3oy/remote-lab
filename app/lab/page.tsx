@@ -490,12 +490,17 @@ function GuestLabView({ roomCode }: { roomCode: string }) {
     );
   }
 
+  const router = useRouter();
   const { labName, labCode, hostName, endTime } = state;
   const [remaining, setRemaining] = useState(() => getRemaining(endTime));
   useEffect(() => {
-    const t = setInterval(() => setRemaining(getRemaining(endTime)), 1000);
+    const t = setInterval(() => {
+      const secs = getRemaining(endTime);
+      setRemaining(secs);
+      if (secs === 0) router.replace('/dashboard');
+    }, 1000);
     return () => clearInterval(t);
-  }, [endTime]);
+  }, [endTime, router]);
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
@@ -819,7 +824,7 @@ function HostLabPage() {
           <RightTabs
             chatProps={{ inst, I, I0, bTheory, bMeasured, z }}
             logProps={{ instrument, I, bMeasured, z, instType: inst.type }}
-            labCode={access.room_code ?? 'LAB8'}
+            labCode={access.room_code}
           />
         </div>
 
@@ -832,7 +837,7 @@ function HostLabPage() {
 
 type ChatRoomMsg = { id: number; user_id: string; user_name: string; content: string; created_at: string };
 
-function LabChatPanel({ labCode }: { labCode: string }) {
+function LabChatPanel({ labCode }: { labCode: string | null }) {
   const [messages, setMessages] = useState<ChatRoomMsg[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -876,6 +881,7 @@ function LabChatPanel({ labCode }: { labCode: string }) {
 
   // Initial load + poll fallback (catches missed WS messages)
   const fetchMessages = useCallback(async () => {
+    if (!labCode) return;
     const res = await fetch(`/api/lab/chat?lab=${labCode}&since=${lastIdRef.current}`);
     if (!res.ok) return;
     const data = await res.json();
@@ -883,13 +889,15 @@ function LabChatPanel({ labCode }: { labCode: string }) {
   }, [labCode, addMessages]);
 
   useEffect(() => {
+    if (!labCode) return;
     fetchMessages().then(() => { readyForSound.current = true; });
     const t = setInterval(fetchMessages, 10_000);
     return () => clearInterval(t);
-  }, [fetchMessages]);
+  }, [fetchMessages, labCode]);
 
   // WebSocket — real-time delivery for all clients
   useEffect(() => {
+    if (!labCode) return;
     let active = true;
     let ws: WebSocket | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -930,7 +938,7 @@ function LabChatPanel({ labCode }: { labCode: string }) {
   }, [labCode, addMessages]);
 
   async function handleSend() {
-    if (!input.trim() || sending) return;
+    if (!input.trim() || sending || !labCode) return;
     setSending(true);
     const text = input.trim();
     setInput('');
@@ -948,6 +956,14 @@ function LabChatPanel({ labCode }: { labCode: string }) {
     } finally {
       setSending(false);
     }
+  }
+
+  if (!labCode) {
+    return (
+      <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex items-center justify-center">
+        <p className="text-[11px] text-gray-600">แชทไม่พร้อมใช้งาน</p>
+      </div>
+    );
   }
 
   return (
@@ -996,7 +1012,7 @@ type RightTabId = 'ai' | 'log' | 'chat';
 function RightTabs({ chatProps, logProps, labCode }: {
   chatProps: { inst: Inst; I: number; I0: number; bTheory: number; bMeasured: number; z: number };
   logProps: { instrument: number; I: number; bMeasured: number; z: number; instType: 'coil' | 'solenoid' };
-  labCode: string;
+  labCode: string | null;
 }) {
   const [tab, setTab] = useState<RightTabId>('ai');
 

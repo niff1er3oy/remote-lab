@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { animate, stagger, scrambleText } from 'animejs';
+import Image from 'next/image';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -68,11 +69,8 @@ export default function LoginPage() {
       {/* Navbar */}
       <nav ref={navRef} className="relative z-10 h-14 px-6 flex items-center justify-between border-b border-white/[0.06]" style={{ opacity: 0 }}>
         <Link href="/" className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-lg bg-[#c8ff00] flex items-center justify-center"
-            style={{ boxShadow: '0 0 14px rgba(200,255,0,0.45)' }}>
-            <FlaskIcon />
-          </div>
-          <span className="text-sm font-semibold">Remote<span className="text-[#c8ff00]">Lab</span></span>
+          <Image src="/logo.svg" width={28} height={28} alt="PaNa LabS" className="rounded-lg" />
+          <span className="text-sm font-semibold">PaNa<span className="text-[#c8ff00]">LabS</span></span>
         </Link>
         <Link href="/signup" className="text-sm text-gray-400 hover:text-white transition-colors">
           ยังไม่มีบัญชี? <span className="text-[#c8ff00]">สมัครเลย</span>
@@ -208,13 +206,6 @@ function SocialButton({ icon, label }: { icon: React.ReactNode; label: string })
   );
 }
 
-function FlaskIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#030712" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 3h6M9 3v7l-5 9h16l-5-9V3" />
-    </svg>
-  );
-}
 function EyeIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

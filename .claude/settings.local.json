@@ -36,7 +36,11 @@
       "Bash(node -e \"console.log\\(require\\('./node_modules/animejs/package.json'\\).version, require\\('./node_modules/animejs/package.json'\\).main, require\\('./node_modules/animejs/package.json'\\).exports ? 'has exports' : 'no exports'\\)\")",
       "Bash(node -e \"const a = require\\('animejs'\\); console.log\\('scrambleText:', typeof a.scrambleText, 'morphTo:', typeof a.morphTo, 'stagger:', typeof a.stagger, 'animate:', typeof a.animate, 'onScroll:', typeof a.onScroll\\)\")",
       "Bash(node -e ' *)",
-      "WebFetch(domain:animejs.com)"
+      "WebFetch(domain:animejs.com)",
+      "PowerShell(Get-ChildItem -Path 'd:\\\\remote-lab\\\\app' -Exclude 'node_modules' -Recurse -File | Where-Object { $_.FullName -notmatch 'node_modules|\\\\.next' } | Select-Object -ExpandProperty FullName)",
+      "PowerShell(Get-ChildItem -Path 'd:\\\\remote-lab' -Exclude 'node_modules' -Recurse -File | Where-Object { $_.Directory.Name -eq 'lib' -or $_.Name -match '\\(db|schema|model\\)' } | Select-Object -ExpandProperty FullName)",
+      "PowerShell(Get-ChildItem -Path 'd:\\\\remote-lab' -Exclude 'node_modules' -Recurse -File | Where-Object { $_.Extension -eq '.sql' -or $_.Extension -eq '.json' } | Select-Object -ExpandProperty FullName | Select-Object -First 20)",
+      "PowerShell(grep -c \"CREATE TABLE\" 'd:\\\\remote-lab\\\\database\\\\data.sql')"
     ]
   }
 }

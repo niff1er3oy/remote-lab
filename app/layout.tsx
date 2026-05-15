@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Remote Lab — ห้องปฏิบัติการระยะไกล",
+  title: "PaNa LabS — ห้องปฏิบัติการระยะไกล",
   description:
     "เข้าถึงห้องปฏิบัติการวิทยาศาสตร์จากทุกที่ในโลก ทดลองจริง ควบคุมได้ ผลลัพธ์แม่นยำ",
 };
