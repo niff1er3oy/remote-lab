@@ -768,25 +768,7 @@ function HostLabPage() {
           >
             <CameraSection stream="dji" label="กล้องหลัก — ด้านหน้า" />
             <div ref={rightColRef} className="flex flex-col gap-3 h-full min-h-0">
-              {inst.type === 'solenoid' ? (
-                <>
-                  <div className="h-[70%] min-h-0 flex flex-col">
-                    <CameraSection stream="webc1" label="กล้องเสริม — ด้านข้าง" />
-                  </div>
-                  <div className="h-[30%] min-h-0 flex flex-col">
-                    <SolenoidDataPanel
-                      z={z} setZ={setZ}
-                      bMeasured={bMeasured} bTheory={bTheory}
-                      measData={measData} setMeasData={setMeasData}
-                      N={inst.N}
-                      isMoving={isMoving} setIsMoving={setIsMoving}
-                      disabled={isBusy}
-                    />
-                  </div>
-                </>
-              ) : (
-                <CameraSection stream="webc1" label="กล้องเสริม — ด้านข้าง" />
-              )}
+              <CameraSection stream="webc1" label="กล้องเสริม — ด้านข้าง" />
             </div>
           </div>
           <div
@@ -804,12 +786,26 @@ function HostLabPage() {
               />
             </div>
             <FormulaPanel inst={inst} I={I} z={z} />
-            <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-              <SplitFieldPanel
-                instType={inst.type}
-                bTheory={bTheory} bMeasured={bMeasured}
-                I={I} I0={I0} z={z}
-              />
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3">
+              <div className="flex-1 min-h-0">
+                <SplitFieldPanel
+                  instType={inst.type}
+                  bTheory={bTheory} bMeasured={bMeasured}
+                  I={I} I0={I0} z={z}
+                />
+              </div>
+              {inst.type === 'solenoid' && (
+                <div className="flex-1 min-h-0">
+                  <SolenoidDataPanel
+                    z={z} setZ={setZ}
+                    bMeasured={bMeasured} bTheory={bTheory}
+                    measData={measData} setMeasData={setMeasData}
+                    N={inst.N}
+                    isMoving={isMoving} setIsMoving={setIsMoving}
+                    disabled={isBusy}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
