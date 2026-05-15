@@ -632,7 +632,7 @@ function CTA() {
               พร้อมเริ่มต้นแล้วหรือยัง?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-gray-400">
-              ทดลองใช้งาน Remote Lab ฟรี 30 วัน ไม่ต้องใส่ข้อมูลบัตรเครดิต ยกเลิกได้ทุกเมื่อ
+              ทดลองใช้งาน PaNa LabS ฟรี 30 วัน ไม่ต้องใส่ข้อมูลบัตรเครดิต ยกเลิกได้ทุกเมื่อ
             </p>
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link

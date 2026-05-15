@@ -2,6 +2,7 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { animate, stagger, scrambleText, createLayout } from 'animejs';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
@@ -1160,12 +1161,8 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
   return (
     <header ref={barRef} className="shrink-0 border-b border-white/10 bg-[#030712]/95 h-12 px-4 flex items-center justify-between gap-4" style={{ opacity: 0 }}>
       <div className="flex items-center gap-2">
-        <div className="h-6 w-6 rounded-md bg-[#c8ff00] flex items-center justify-center shrink-0" style={{ boxShadow: '0 0 10px rgba(200,255,0,0.5)' }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#030712" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 3h6M9 3v7l-5 9h16l-5-9V3" />
-          </svg>
-        </div>
-        <span className="text-sm font-semibold">Remote<span className="text-[#c8ff00]">Lab</span></span>
+        <Image src="/logo.svg" width={24} height={24} alt="PaNa LabS" className="rounded-md shrink-0" />
+        <span className="text-sm font-semibold">PaNa<span className="text-[#c8ff00]">LabS</span></span>
       </div>
       <div className="hidden md:flex items-center gap-4 text-xs">
         <span className="flex items-center gap-1.5">
