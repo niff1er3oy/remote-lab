@@ -2,7 +2,9 @@ import { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const AUTH = 'Basic ' + Buffer.from('admin:niffler123').toString('base64');
+const AUTH = 'Basic ' + Buffer.from(
+  `${process.env.CAM_USER ?? 'admin'}:${process.env.CAM_PASSWORD ?? ''}`
+).toString('base64');
 
 // POST — WHEP signaling (SDP offer → answer)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {

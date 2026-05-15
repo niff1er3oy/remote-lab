@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { signSession } from '@/lib/session';
 import bcrypt from 'bcryptjs';
 import { RowDataPacket } from 'mysql2';
 
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (!valid)
       return NextResponse.json({ ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' }, { status: 401 });
 
-    const session = Buffer.from(JSON.stringify({ uid: user.user_id, role: user.role })).toString('base64');
+    const session = signSession({ uid: user.user_id, role: user.role });
 
     const res = NextResponse.json({ ok: true, user: { name: user.name, role: user.role } });
     res.cookies.set('session', session, {

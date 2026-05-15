@@ -40,7 +40,12 @@
       "PowerShell(Get-ChildItem -Path 'd:\\\\remote-lab\\\\app' -Exclude 'node_modules' -Recurse -File | Where-Object { $_.FullName -notmatch 'node_modules|\\\\.next' } | Select-Object -ExpandProperty FullName)",
       "PowerShell(Get-ChildItem -Path 'd:\\\\remote-lab' -Exclude 'node_modules' -Recurse -File | Where-Object { $_.Directory.Name -eq 'lib' -or $_.Name -match '\\(db|schema|model\\)' } | Select-Object -ExpandProperty FullName)",
       "PowerShell(Get-ChildItem -Path 'd:\\\\remote-lab' -Exclude 'node_modules' -Recurse -File | Where-Object { $_.Extension -eq '.sql' -or $_.Extension -eq '.json' } | Select-Object -ExpandProperty FullName | Select-Object -First 20)",
-      "PowerShell(grep -c \"CREATE TABLE\" 'd:\\\\remote-lab\\\\database\\\\data.sql')"
+      "PowerShell(grep -c \"CREATE TABLE\" 'd:\\\\remote-lab\\\\database\\\\data.sql')",
+      "PowerShell(Get-ChildItem -Recurse \"d:\\\\remote-lab\" -Exclude \"node_modules\",\".next\",\".git\" | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\remote-lab\" | Where-Object { $_.Name -notmatch 'node_modules|\\\\.next|\\\\.git' } | Select-Object Name, PSIsContainer)",
+      "PowerShell(ls \"d:\\\\remote-lab\" | Where-Object { $_.Name -ne \"node_modules\" -and $_.Name -ne \".next\" -and $_.Name -ne \".git\" })",
+      "PowerShell(ls \"d:\\\\remote-lab\\\\app\" -Recurse | Where-Object { -not $_.PSIsContainer })",
+      "PowerShell(-join \\(\\(1..64\\) | ForEach-Object { '{0:x}' -f \\(Get-Random -Maximum 16\\) }\\))"
     ]
   }
 }

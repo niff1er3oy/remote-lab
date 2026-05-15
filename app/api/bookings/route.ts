@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { ensureRoomCodeColumn } from '@/lib/ensure-room-code';
+import { verifySession } from '@/lib/session';
 import { RowDataPacket } from 'mysql2';
 
 const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -26,7 +27,9 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ ok: false, error: 'กรุณาเข้าสู่ระบบก่อน' }, { status: 401 });
 
   try {
-    const { uid } = JSON.parse(Buffer.from(session.value, 'base64').toString());
+    const payload = verifySession(session.value);
+    if (!payload) return NextResponse.json({ ok: false, error: 'กรุณาเข้าสู่ระบบก่อน' }, { status: 401 });
+    const { uid } = payload;
     const { room_id, start_time, end_time } = await req.json();
 
     if (!room_id || !start_time || !end_time)

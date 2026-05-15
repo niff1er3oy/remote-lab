@@ -7,6 +7,7 @@ const { parse } = require('url')
 const next = require('next')
 const { WebSocketServer } = require('ws')
 const mysql = require('mysql2/promise')
+const crypto = require('crypto')
 
 const port = parseInt(process.env.PORT || '3000', 10)
 const dev = process.env.NODE_ENV !== 'production'
@@ -28,6 +29,23 @@ const pool = mysql.createPool({
   timezone: 'Z',
 })
 
+const SESSION_SECRET = process.env.SESSION_SECRET ?? 'dev-secret-change-me'
+
+function verifySessionToken(token) {
+  try {
+    const dot = token.lastIndexOf('.')
+    if (dot === -1) return null
+    const data     = token.slice(0, dot)
+    const sig      = token.slice(dot + 1)
+    const expected = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('hex')
+    if (sig.length !== expected.length) return null
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null
+    return JSON.parse(Buffer.from(data, 'base64').toString())
+  } catch {
+    return null
+  }
+}
+
 // Parse the 'session' cookie and return { userId, role } or null
 async function validateSession(request) {
   try {
@@ -41,7 +59,9 @@ async function validateSession(request) {
     const session = cookies['session']
     if (!session) return null
 
-    const { uid } = JSON.parse(Buffer.from(session, 'base64').toString())
+    const payload = verifySessionToken(session)
+    if (!payload) return null
+    const { uid } = payload
     if (!uid) return null
 
     const [rows] = await pool.query(

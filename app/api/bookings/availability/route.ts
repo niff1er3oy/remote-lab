@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { verifySession } from '@/lib/session';
 import { RowDataPacket } from 'mysql2';
 
 const TIME_SLOTS = [
@@ -16,7 +17,7 @@ export async function GET() {
     try {
       const store = await cookies();
       const session = store.get('session');
-      if (session) uid = JSON.parse(Buffer.from(session.value, 'base64').toString()).uid;
+      if (session) uid = (verifySession(session.value)?.uid as string) ?? null;
     } catch {}
 
     // Thai midnight as UTC timestamp — works regardless of server timezone

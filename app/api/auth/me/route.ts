@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { verifySession } from '@/lib/session';
 import { RowDataPacket } from 'mysql2';
 
 export async function GET() {
@@ -9,7 +10,9 @@ export async function GET() {
   if (!session) return NextResponse.json({ ok: false }, { status: 401 });
 
   try {
-    const { uid } = JSON.parse(Buffer.from(session.value, 'base64').toString());
+    const payload = verifySession(session.value);
+    if (!payload) return NextResponse.json({ ok: false }, { status: 401 });
+    const { uid } = payload;
     const [rows] = await pool.query<RowDataPacket[]>(
       'SELECT user_id, name, email, role FROM users WHERE user_id = ?', [uid]
     );

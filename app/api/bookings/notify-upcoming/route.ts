@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { verifySession } from '@/lib/session';
 import { RowDataPacket } from 'mysql2';
 
 async function getUid(): Promise<string | null> {
@@ -8,7 +9,7 @@ async function getUid(): Promise<string | null> {
     const store = await cookies();
     const s = store.get('session');
     if (!s) return null;
-    return JSON.parse(Buffer.from(s.value, 'base64').toString()).uid ?? null;
+    return (verifySession(s.value)?.uid as string) ?? null;
   } catch { return null; }
 }
 
