@@ -62,7 +62,6 @@ function Navbar() {
           <nav className="hidden md:flex items-center gap-8 text-sm text-gray-400">
             <Link href="#features" className="hover:text-white transition-colors">ฟีเจอร์</Link>
             <Link href="#how-it-works" className="hover:text-white transition-colors">วิธีใช้งาน</Link>
-            <Link href="#pricing" className="hover:text-white transition-colors">ราคา</Link>
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
@@ -144,7 +143,6 @@ function Navbar() {
             {[
               { href: '#features', label: 'ฟีเจอร์' },
               { href: '#how-it-works', label: 'วิธีใช้งาน' },
-              { href: '#pricing', label: 'ราคา' },
             ].map(({ href, label }) => (
               <Link
                 key={href}
@@ -319,20 +317,6 @@ function Hero() {
         </div>
       </div>
 
-      <div
-        className="absolute z-0 right-170 bottom-0 w-[55%] lg:w-[24%] pointer-events-none hidden sm:block"
-        aria-hidden
-      >
-        <Image
-          src="/index.png"
-          alt="นักวิทยาศาสตร์และแขนหุ่นยนต์"
-          width={4600}
-          height={4912}
-          className="w-full h-auto"
-          sizes="(max-width: 1024px) 55vw, 24vw"
-          priority
-        />
-      </div>
     </section>
   );
 }
@@ -643,10 +627,10 @@ function CTA() {
                 สมัครฟรีตอนนี้
               </Link>
               <Link
-                href="/demo"
+                href="/login"
                 className="w-full sm:w-auto rounded-full border border-white/20 px-8 py-3.5 text-base text-white hover:bg-white/5 hover:border-white/30 transition-colors"
               >
-                ชมตัวอย่าง Demo
+                เข้าสู่ระบบ
               </Link>
             </div>
 
