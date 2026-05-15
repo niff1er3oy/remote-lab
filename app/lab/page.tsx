@@ -787,7 +787,7 @@ function HostLabPage() {
             </div>
             <FormulaPanel inst={inst} I={I} z={z} />
             <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3">
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 min-h-0 flex flex-col">
                 <SplitFieldPanel
                   instType={inst.type}
                   bTheory={bTheory} bMeasured={bMeasured}
@@ -795,7 +795,7 @@ function HostLabPage() {
                 />
               </div>
               {inst.type === 'solenoid' && (
-                <div className="flex-1 min-h-0">
+                <div className="flex-1 min-h-0 flex flex-col">
                   <SolenoidDataPanel
                     z={z} setZ={setZ}
                     bMeasured={bMeasured} bTheory={bTheory}
