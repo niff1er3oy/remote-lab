@@ -6,11 +6,20 @@ import util from 'util';
 
 const execAsync = util.promisify(exec);
 
+let armBusy = false;
+
+export async function GET() {
+  return NextResponse.json({ busy: armBusy });
+}
+
 export async function POST(request: Request) {
   const store = await cookies();
   const session = store.get('session');
   if (!session || !verifySession(session.value))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  if (armBusy)
+    return NextResponse.json({ error: 'Arm is currently busy' }, { status: 409 });
 
   try {
     const body = await request.json();
@@ -32,21 +41,24 @@ export async function POST(request: Request) {
     }
 
     const command = `cd /home/admin/Documents && ./venv/bin/python ${scriptName}${args ? ' ' + args : ''}`;
-    
+
     console.log(`[Hardware API] Executing: ${command}`);
 
-    // Execute the python script
+    armBusy = true;
     try {
       const { stdout, stderr } = await execAsync(command);
       console.log(`[Hardware API] Success: ${stdout}`);
       if (stderr) console.error(`[Hardware API] Stderr: ${stderr}`);
-      return NextResponse.json({ success: true, output: stdout });
+      const finished = stdout.includes('Path finished.');
+      return NextResponse.json({ success: finished, output: stdout });
     } catch (execError: any) {
       console.error(`[Hardware API] Execution failed:`, execError);
       return NextResponse.json(
         { error: 'Failed to execute hardware script', details: execError.message },
         { status: 500 }
       );
+    } finally {
+      armBusy = false;
     }
   } catch (error) {
     console.error(`[Hardware API] Invalid request:`, error);

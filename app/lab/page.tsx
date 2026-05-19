@@ -441,6 +441,8 @@ type GuestState =
 
 function GuestLabView({ roomCode }: { roomCode: string }) {
   const [state, setState] = useState<GuestState>({ status: 'loading' });
+  const router = useRouter();
+  const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
     fetch(`/api/lab/join?room=${roomCode}`)
@@ -448,12 +450,24 @@ function GuestLabView({ roomCode }: { roomCode: string }) {
       .then(d => {
         if (d.ok) {
           setState({ status: 'ready', labName: d.lab_name, labCode: d.lab_code, hostName: d.host_name, endTime: d.end_time });
+          setRemaining(getRemaining(d.end_time));
         } else {
           setState({ status: 'error', message: d.error ?? 'รหัสห้องไม่ถูกต้อง' });
         }
       })
       .catch(() => setState({ status: 'error', message: 'ไม่สามารถเชื่อมต่อได้' }));
   }, [roomCode]);
+
+  useEffect(() => {
+    if (state.status !== 'ready') return;
+    const { endTime } = state;
+    const t = setInterval(() => {
+      const secs = getRemaining(endTime);
+      setRemaining(secs);
+      if (secs === 0) router.replace('/dashboard');
+    }, 1000);
+    return () => clearInterval(t);
+  }, [state, router]);
 
   if (state.status === 'loading') {
     return (
@@ -491,17 +505,7 @@ function GuestLabView({ roomCode }: { roomCode: string }) {
     );
   }
 
-  const router = useRouter();
   const { labName, labCode, hostName, endTime } = state;
-  const [remaining, setRemaining] = useState(() => getRemaining(endTime));
-  useEffect(() => {
-    const t = setInterval(() => {
-      const secs = getRemaining(endTime);
-      setRemaining(secs);
-      if (secs === 0) router.replace('/dashboard');
-    }, 1000);
-    return () => clearInterval(t);
-  }, [endTime, router]);
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">

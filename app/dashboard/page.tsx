@@ -198,8 +198,6 @@ export default function DashboardPage() {
         if (!!prev === !!next) return prev; // ไม่เปลี่ยน → ไม่ re-render
         return next;
       });
-      if (!activeSession && next && activeRef.current)
-        animate(activeRef.current, { opacity: [0, 1], translateY: [12, 0], scale: [0.98, 1], duration: 500, ease: 'outBack' });
     }
 
     // poll ทุก 60 วิ
@@ -214,7 +212,16 @@ export default function DashboardPage() {
     }
 
     return () => { clearInterval(interval); if (precise) clearTimeout(precise); };
-  }, [loading, stats?.upcoming_bookings, activeSession]);
+  }, [loading, stats?.upcoming_bookings]);
+
+  // ── animate แบนเนอร์เมื่อ active session ปรากฏ ────────────────────────────
+  const prevActiveRef = useRef<boolean>(false);
+  useEffect(() => {
+    const isNowActive = !!activeSession;
+    if (isNowActive && !prevActiveRef.current && activeRef.current)
+      animate(activeRef.current, { opacity: [0, 1], translateY: [12, 0], scale: [0.98, 1], duration: 500, ease: 'outBack' });
+    prevActiveRef.current = isNowActive;
+  }, [activeSession]);
 
   async function refreshStats() {
     const res = await fetch('/api/dashboard/stats');
@@ -248,7 +255,7 @@ export default function DashboardPage() {
       if (!res.ok || !data.ok) {
         setJoinError(data.error ?? 'รหัสห้องไม่ถูกต้อง');
       } else {
-        router.push(`/lab?room=${data.room_code}`);
+        router.push(`/view/${data.room_code}`);
       }
     } finally {
       setJoining(false);

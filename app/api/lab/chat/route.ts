@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { verifySession } from '@/lib/session';
 import { RowDataPacket } from 'mysql2';
 
 async function ensureTable() {
@@ -45,7 +46,9 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ ok: false }, { status: 401 });
 
   try {
-    const { uid } = JSON.parse(Buffer.from(session.value, 'base64').toString());
+    const payload = verifySession(session.value);
+    if (!payload) return NextResponse.json({ ok: false }, { status: 401 });
+    const uid = payload.uid as string;
     const { lab, content } = await req.json();
     if (!content?.trim()) return NextResponse.json({ ok: false }, { status: 400 });
 
