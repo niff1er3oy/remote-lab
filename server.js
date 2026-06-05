@@ -12,6 +12,7 @@ const crypto = require('crypto')
 const port = parseInt(process.env.PORT || '3000', 10)
 const dev = process.env.NODE_ENV !== 'production'
 const hostname = 'localhost'
+const listenHost = process.env.LISTEN_HOST || (dev ? 'localhost' : '0.0.0.0')
 
 const app = next({ dev, hostname, port, turbopack: dev })
 const handle = app.getRequestHandler()
@@ -282,8 +283,8 @@ app.prepare().then(() => {
 
   httpServer
     .once('error', (err) => { console.error(err); process.exit(1) })
-    .listen(port, hostname, () => {
-      console.log(`> Ready on http://${hostname}:${port} [${dev ? 'dev' : 'production'}]`)
-      console.log(`> WebSocket on ws://${hostname}:${port}/ws`)
+    .listen(port, listenHost, () => {
+      console.log(`> Ready on http://${listenHost}:${port} [${dev ? 'dev' : 'production'}]`)
+      console.log(`> WebSocket on ws://${listenHost}:${port}/ws`)
     })
 })

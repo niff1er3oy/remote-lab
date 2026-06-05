@@ -1,0 +1,42 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: schema
+    volumes:
+      - db_data:/var/lib/mysql
+  phpmyadmin:
+    image: phpmyadmin:latest
+    restart: always
+    ports:
+      - 8080:80
+    environment:
+      PMA_HOST: db
+    depends_on:
+      - db
+  app:
+    image: remote-lab:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      DB_NAME: schema
+      TYPHOON_API_KEY: sk-hTbDFFKg4OvIopAPelhVAuX5Q3kAQbh5p2F9v0RAZtTBbXYz
+  cloudflare:
+    container_name: Tunnel
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token eyJhIjoiNmQ0MTkwOGNkZDNmYjM0NWExMzQ3MGMzM2VkZDcwN2YiLCJ0IjoiZmZkYjBmMTYtZGYxZS00ZDlhLWJiNDktMDBjMmViMjc1Y2Q5IiwicyI6Ik9XRmlZbVF4TkRrdE5Ua3hOeTAwWkdFMkxXSTVNemN0WlRrd01EVXpORGRqTWpJMyJ9
+
+volumes:
+  db_data:
