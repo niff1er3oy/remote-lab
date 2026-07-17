@@ -45,7 +45,14 @@
       "PowerShell(Get-ChildItem -Path \"d:\\\\remote-lab\" | Where-Object { $_.Name -notmatch 'node_modules|\\\\.next|\\\\.git' } | Select-Object Name, PSIsContainer)",
       "PowerShell(ls \"d:\\\\remote-lab\" | Where-Object { $_.Name -ne \"node_modules\" -and $_.Name -ne \".next\" -and $_.Name -ne \".git\" })",
       "PowerShell(ls \"d:\\\\remote-lab\\\\app\" -Recurse | Where-Object { -not $_.PSIsContainer })",
-      "PowerShell(-join \\(\\(1..64\\) | ForEach-Object { '{0:x}' -f \\(Get-Random -Maximum 16\\) }\\))"
+      "PowerShell(-join \\(\\(1..64\\) | ForEach-Object { '{0:x}' -f \\(Get-Random -Maximum 16\\) }\\))",
+      "Bash(curl -s -o /dev/null -w \"camera1: %{http_code}\\\\n\" http://34.87.165.238:8889/camera1)",
+      "Bash(curl -s -o /dev/null -w \"camera2: %{http_code}\\\\n\" http://34.87.165.238:8889/camera2)",
+      "Bash(curl -s -o /dev/null -w \"camera3: %{http_code}\\\\n\" http://34.87.165.238:8889/camera3)",
+      "Bash(curl -s -o /dev/null -w \"dji: %{http_code}\\\\n\" http://34.87.165.238:8889/dji)",
+      "Bash(curl -s -o /dev/null -w \"webc1: %{http_code}\\\\n\" http://34.87.165.238:8889/webc1)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

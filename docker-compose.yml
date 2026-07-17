@@ -32,7 +32,9 @@ services:
       DB_PASSWORD: rootpass
       DB_NAME: schema
       TYPHOON_API_KEY: sk-hTbDFFKg4OvIopAPelhVAuX5Q3kAQbh5p2F9v0RAZtTBbXYz
-      MEDIAMTX_URL: http://34.87.165.238:8889
+      cam1: http://34.87.165.238:8889/camera1
+      cam2: http://34.87.165.238:8889/camera2
+      cam3: http://34.87.165.238:8889/camera3
   cloudflare:
     container_name: Tunnel
     image: cloudflare/cloudflared:latest

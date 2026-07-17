@@ -776,10 +776,10 @@ function HostLabPage() {
             className={`flex-1 min-h-0 grid gap-3 grid-cols-1 xl:grid-cols-2`}
             style={{ opacity: 0 }}
           >
-            <CameraSection stream="camera1" label="กล้องหลัก — ด้านหน้า" />
+            <CameraSection stream="cam1" label="กล้องหลัก — ด้านหน้า" />
             <div ref={rightColRef} className="flex flex-col gap-3 h-full min-h-0">
               <CameraSection
-                stream={inst.type === 'solenoid' ? 'camera2' : 'camera3'}
+                stream={inst.type === 'solenoid' ? 'cam2' : 'cam3'}
                 label="กล้องเสริม — ด้านข้าง"
               />
             </div>
