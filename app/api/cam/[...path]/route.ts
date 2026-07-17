@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+const MEDIAMTX_URL = process.env.MEDIAMTX_URL ?? 'http://127.0.0.1:8889';
+
 const AUTH = 'Basic ' + Buffer.from(
   `${process.env.CAM_USER ?? 'admin'}:${process.env.CAM_PASSWORD ?? ''}`
 ).toString('base64');
@@ -10,7 +12,7 @@ const AUTH = 'Basic ' + Buffer.from(
 export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const resolvedParams = await params;
   const targetPath = resolvedParams.path.join('/');
-  const targetUrl = `http://127.0.0.1:8889/dji/${targetPath}`;
+  const targetUrl = `${MEDIAMTX_URL}/${targetPath}`;
 
   try {
     const body = await req.text();
@@ -37,7 +39,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
   const resolvedParams = await params;
   const targetPath = resolvedParams.path.join('/');
   const url = new URL(req.url);
-  const targetUrl = `http://127.0.0.1:8889/dji/${targetPath}${url.search}`;
+  const targetUrl = `${MEDIAMTX_URL}/${targetPath}${url.search}`;
 
   try {
     const response = await fetch(targetUrl, {
