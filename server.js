@@ -6,8 +6,7 @@ const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
 const { WebSocketServer } = require('ws')
-const mysql = require('mysql2/promise')
-const crypto = require('crypto')
+const admin = require('firebase-admin')
 
 const port = parseInt(process.env.PORT || '3000', 10)
 const dev = process.env.NODE_ENV !== 'production'
@@ -17,37 +16,18 @@ const listenHost = process.env.LISTEN_HOST || (dev ? 'localhost' : '0.0.0.0')
 const app = next({ dev, hostname, port, turbopack: dev })
 const handle = app.getRequestHandler()
 
-// Shared DB pool for session validation — created after env vars are loaded
-const pool = mysql.createPool({
-  host:     process.env.DB_HOST     ?? 'localhost',
-  port:     Number(process.env.DB_PORT ?? 3306),
-  user:     process.env.DB_USER     ?? 'root',
-  password: process.env.DB_PASSWORD ?? '',
-  database: process.env.DB_NAME     ?? 'remote_lab',
-  waitForConnections: true,
-  connectionLimit: 5,
-  charset: 'utf8mb4',
-  timezone: 'Z',
-})
-
-const SESSION_SECRET = process.env.SESSION_SECRET ?? 'dev-secret-change-me'
-
-function verifySessionToken(token) {
-  try {
-    const dot = token.lastIndexOf('.')
-    if (dot === -1) return null
-    const data     = token.slice(0, dot)
-    const sig      = token.slice(dot + 1)
-    const expected = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('hex')
-    if (sig.length !== expected.length) return null
-    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null
-    return JSON.parse(Buffer.from(data, 'base64').toString())
-  } catch {
-    return null
-  }
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+      privateKey: (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    }),
+  })
 }
 
-// Parse the 'session' cookie and return { userId, role } or null
+// Parse the 'session' cookie and return { userId, role } or null.
+// Pure JWT verification against Firebase's cached public keys — no DB call.
 async function validateSession(request) {
   try {
     const cookieHeader = request.headers.cookie || ''
@@ -60,18 +40,8 @@ async function validateSession(request) {
     const session = cookies['session']
     if (!session) return null
 
-    const payload = verifySessionToken(session)
-    if (!payload) return null
-    const { uid } = payload
-    if (!uid) return null
-
-    const [rows] = await pool.query(
-      'SELECT user_id, role FROM users WHERE user_id = ?', [uid]
-    )
-    const user = rows[0]
-    if (!user) return null
-
-    return { userId: String(user.user_id), role: user.role }
+    const decoded = await admin.auth().verifySessionCookie(session, false)
+    return { userId: decoded.uid, role: decoded.role }
   } catch {
     return null
   }

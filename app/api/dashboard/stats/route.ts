@@ -1,45 +1,43 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { verifySession } from '@/lib/session';
-import { RowDataPacket } from 'mysql2';
+import { Timestamp } from 'firebase-admin/firestore';
+import { adminDb } from '@/lib/firebase-admin';
+import { getSessionUser } from '@/lib/session';
+
+const NOT_CANCELLED = ['pending', 'confirmed', 'in_progress', 'completed'];
 
 export async function GET() {
-  const store = await cookies();
-  const session = store.get('session');
-  if (!session) return NextResponse.json({ ok: false }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ ok: false }, { status: 401 });
 
   try {
-    const payload = verifySession(session.value);
-    if (!payload) return NextResponse.json({ ok: false }, { status: 401 });
-    const { uid } = payload;
+    const upcomingSnap = await adminDb.collection('bookings')
+      .where('user_id', '==', user.uid)
+      .where('status', 'in', NOT_CANCELLED)
+      .where('start_time', '>=', Timestamp.now())
+      .orderBy('start_time', 'asc')
+      .limit(5)
+      .get();
 
-    const [upcoming] = await pool.query<RowDataPacket[]>(
-      `SELECT b.booking_id,
-              CONCAT(l.code, ' — ', l.name_th) AS equipment_name,
-              b.start_time, b.end_time, b.status
-       FROM bookings b
-       JOIN labs l ON l.lab_id = b.lab_id
-       WHERE b.user_id = ?
-         AND b.start_time >= ?
-         AND b.status != 'cancelled'
-       ORDER BY b.start_time ASC LIMIT 5`,
-      [uid, new Date()]
-    );
+    const upcoming = await Promise.all(upcomingSnap.docs.map(async d => {
+      const b = d.data() as { lab_id: string; start_time: Timestamp; end_time: Timestamp; status: string };
+      const lab = (await adminDb.collection('labs').doc(b.lab_id).get()).data();
+      return {
+        booking_id: d.id,
+        equipment_name: `${lab?.code} — ${lab?.name_th}`,
+        start_time: b.start_time.toDate().toISOString(),
+        end_time: b.end_time.toDate().toISOString(),
+        status: b.status,
+      };
+    }));
 
-    const [[{ count: session_count }]] = await pool.query<RowDataPacket[]>(
-      'SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?', [uid]
-    ) as [RowDataPacket[], unknown];
-
-    const [[{ count: active_labs }]] = await pool.query<RowDataPacket[]>(
-      'SELECT COUNT(*) AS count FROM labs WHERE is_active = 1'
-    ) as [RowDataPacket[], unknown];
+    const sessionCountSnap = await adminDb.collection('sessions').where('user_id', '==', user.uid).count().get();
+    const activeLabsSnap = await adminDb.collection('labs').where('is_active', '==', true).count().get();
 
     return NextResponse.json({
       ok: true,
       upcoming_bookings: upcoming,
-      session_count,
-      available_equipment: active_labs,
+      session_count: sessionCountSnap.data().count,
+      available_equipment: activeLabsSnap.data().count,
     });
   } catch (err) {
     console.error('[dashboard/stats]', err);

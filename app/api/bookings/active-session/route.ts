@@ -1,70 +1,66 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { ensureRoomCodeColumn } from '@/lib/ensure-room-code';
-import { verifySession } from '@/lib/session';
-import { RowDataPacket } from 'mysql2';
+import { Timestamp } from 'firebase-admin/firestore';
+import { adminDb } from '@/lib/firebase-admin';
+import { getSessionUser } from '@/lib/session';
+
+const ACTIVE_STATUSES = ['confirmed', 'pending', 'in_progress'];
 
 export async function GET() {
-  const store = await cookies();
-  const session = store.get('session');
-  if (!session) return NextResponse.json({ ok: false }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ ok: false }, { status: 401 });
 
   try {
-    const payload = verifySession(session.value);
-    if (!payload) return NextResponse.json({ ok: false }, { status: 401 });
-    const { uid } = payload;
-    await ensureRoomCodeColumn();
-    const now = new Date();
+    const now = Date.now();
 
-    const [activeRows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.booking_id, b.start_time, b.end_time, b.room_code, l.code, l.name_th
-       FROM bookings b
-       JOIN labs l ON l.lab_id = b.lab_id
-       WHERE b.user_id = ?
-         AND b.status IN ('confirmed', 'pending', 'in_progress')
-         AND b.start_time <= ?
-         AND b.end_time   >= ?
-       LIMIT 1`,
-      [uid, now, now]
-    );
+    const activeSnap = await adminDb.collection('bookings')
+      .where('user_id', '==', user.uid)
+      .where('status', 'in', ACTIVE_STATUSES)
+      .where('start_time', '<=', Timestamp.fromMillis(now))
+      .get();
+    const active = activeSnap.docs
+      .map(d => ({ booking_id: d.id, ...d.data() as { lab_id: string; start_time: Timestamp; end_time: Timestamp; room_code: string | null } }))
+      .find(b => b.end_time.toMillis() >= now);
 
-    if ((activeRows as RowDataPacket[]).length > 0) {
-      const b = (activeRows as RowDataPacket[])[0];
+    if (active) {
+      const labSnap = await adminDb.collection('labs').doc(active.lab_id).get();
+      const lab = labSnap.data();
       return NextResponse.json({
         ok: true,
         active: true,
         booking: {
-          booking_id:      b.booking_id,
-          experiment_code: b.code,
-          experiment_name: b.name_th,
-          start_time:      b.start_time,
-          end_time:        b.end_time,
-          room_code:       b.room_code ?? null,
+          booking_id:      active.booking_id,
+          experiment_code: lab?.code,
+          experiment_name: lab?.name_th,
+          start_time:      active.start_time.toDate().toISOString(),
+          end_time:        active.end_time.toDate().toISOString(),
+          room_code:       active.room_code ?? null,
         },
       });
     }
 
-    const [nextRows] = await pool.query<RowDataPacket[]>(
-      `SELECT b.start_time, l.code, l.name_th
-       FROM bookings b
-       JOIN labs l ON l.lab_id = b.lab_id
-       WHERE b.user_id = ?
-         AND b.status IN ('confirmed', 'pending')
-         AND b.start_time > ?
-       ORDER BY b.start_time ASC LIMIT 1`,
-      [uid, now]
-    );
+    const nextSnap = await adminDb.collection('bookings')
+      .where('user_id', '==', user.uid)
+      .where('status', 'in', ['confirmed', 'pending'])
+      .where('start_time', '>', Timestamp.fromMillis(now))
+      .orderBy('start_time', 'asc')
+      .limit(1)
+      .get();
 
-    const next = (nextRows as RowDataPacket[])[0] ?? null;
+    if (nextSnap.empty)
+      return NextResponse.json({ ok: true, active: false, next_booking: null });
+
+    const nextData = nextSnap.docs[0].data() as { lab_id: string; start_time: Timestamp };
+    const labSnap = await adminDb.collection('labs').doc(nextData.lab_id).get();
+    const lab = labSnap.data();
+
     return NextResponse.json({
       ok: true,
       active: false,
-      next_booking: next ? {
-        start_time:      next.start_time,
-        experiment_code: next.code,
-        experiment_name: next.name_th,
-      } : null,
+      next_booking: {
+        start_time:      nextData.start_time.toDate().toISOString(),
+        experiment_code: lab?.code,
+        experiment_name: lab?.name_th,
+      },
     });
   } catch (err) {
     console.error('[active-session]', err);

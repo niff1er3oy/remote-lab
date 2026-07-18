@@ -15,7 +15,7 @@ function hhmmss(s: number): string {
 }
 
 type RoomInfo = { labName: string; labCode: string; hostName: string; endTime: string };
-type ChatMsg  = { id: number; user_id: string; user_name: string; content: string; created_at: string };
+type ChatMsg  = { id: string; user_id: string; user_name: string; content: string; created_at: string };
 
 function getOrCreateViewerId(): string {
   const key = 'viewer_id';
@@ -38,7 +38,7 @@ function ViewerChatPanel({ roomCode }: { roomCode: string }) {
   const [sendError, setSendError] = useState('');
   const labCodeRef                = useRef<string | null>(null);
   const viewerIdRef               = useRef<string>('');
-  const lastIdRef                 = useRef(0);
+  const lastTsRef                 = useRef('');
   const bottomRef                 = useRef<HTMLDivElement>(null);
   const inputRef                  = useRef<HTMLInputElement>(null);
   const audioRef                  = useRef<HTMLAudioElement | null>(null);
@@ -56,7 +56,7 @@ function ViewerChatPanel({ roomCode }: { roomCode: string }) {
       const seen  = new Set(prev.map(m => m.id));
       const fresh = incoming.filter(m => !seen.has(m.id));
       if (!fresh.length) return prev;
-      lastIdRef.current = Math.max(lastIdRef.current, fresh[fresh.length - 1].id);
+      lastTsRef.current = fresh.reduce((max, m) => m.created_at > max ? m.created_at : max, lastTsRef.current);
 
       if (readyForSound.current && fresh.some(m => m.user_id !== viewerIdRef.current)) {
         if (!audioRef.current) audioRef.current = new Audio('/sound/ack.mp3');
@@ -70,7 +70,8 @@ function ViewerChatPanel({ roomCode }: { roomCode: string }) {
   }, []);
 
   const fetchMessages = useCallback(async () => {
-    const res = await fetch(`/api/lab/chat-view?room=${roomCode}&since=${lastIdRef.current}`);
+    const since = lastTsRef.current ? `&since=${encodeURIComponent(lastTsRef.current)}` : '';
+    const res = await fetch(`/api/lab/chat-view?room=${roomCode}${since}`);
     if (!res.ok) return;
     const data = await res.json();
     if (data.lab_code && !labCodeRef.current) {

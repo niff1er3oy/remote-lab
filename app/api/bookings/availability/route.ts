@@ -1,41 +1,36 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { verifySession } from '@/lib/session';
-import { RowDataPacket } from 'mysql2';
+import { Timestamp } from 'firebase-admin/firestore';
+import { adminDb } from '@/lib/firebase-admin';
+import { getSessionUser } from '@/lib/session';
 
 const TIME_SLOTS = [
   '00:00', '02:00', '04:00', '06:00', '08:00', '10:00',
   '12:00', '14:00', '16:00', '18:00', '20:00', '22:00',
 ];
+const ACTIVE_STATUSES = ['pending', 'confirmed', 'in_progress'];
 
 export type SlotStatus = 'free' | 'mine' | 'taken';
 
 export async function GET() {
   try {
-    let uid: string | null = null;
-    try {
-      const store = await cookies();
-      const session = store.get('session');
-      if (session) uid = (verifySession(session.value)?.uid as string) ?? null;
-    } catch {}
+    const user = await getSessionUser();
+    const uid = user?.uid ?? null;
 
     // Thai midnight as UTC timestamp — works regardless of server timezone
     const todayThaiStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
     const thaiMidnight = new Date(todayThaiStr + 'T00:00:00+07:00');
     const endDate = new Date(thaiMidnight.getTime() + 7 * 86400000);
 
-    const [labs] = await pool.query<RowDataPacket[]>(
-      'SELECT lab_id AS room_id, code, name_th, name_en FROM labs WHERE is_active = 1 ORDER BY code'
-    );
+    const labsSnap = await adminDb.collection('labs').where('is_active', '==', true).orderBy('code').get();
+    const labs = labsSnap.docs.map(d => ({ room_id: d.id, ...d.data() }));
 
-    const [bookingRows] = await pool.query<RowDataPacket[]>(
-      `SELECT booking_id, lab_id, user_id, start_time, end_time
-       FROM bookings
-       WHERE status IN ('pending','confirmed','in_progress')
-         AND start_time < ? AND end_time > ?`,
-      [endDate, thaiMidnight]
-    );
+    const bookingsSnap = await adminDb.collection('bookings')
+      .where('status', 'in', ACTIVE_STATUSES)
+      .where('start_time', '<', Timestamp.fromDate(endDate))
+      .get();
+    const bookingRows = bookingsSnap.docs
+      .map(d => ({ booking_id: d.id, ...d.data() as { lab_id: string; user_id: string; start_time: Timestamp; end_time: Timestamp } }))
+      .filter(b => b.end_time.toMillis() > thaiMidnight.getTime());
 
     const THAI_MS = 7 * 3600 * 1000;
     const dates = Array.from({ length: 7 }, (_, i) => {
@@ -46,7 +41,7 @@ export async function GET() {
     const slotsByRoom: Record<string, SlotStatus[][]> = {};
     const mineBookingIds: Record<string, Record<string, string>> = {};
 
-    for (const lab of labs as RowDataPacket[]) {
+    for (const lab of labs) {
       const matrix: SlotStatus[][] = TIME_SLOTS.map(() => Array(7).fill('free') as SlotStatus[]);
 
       for (let day = 0; day < 7; day++) {
@@ -55,24 +50,24 @@ export async function GET() {
           const slotStart = new Date(thaiMidnight.getTime() + day * 86400000 + hours * 3600000);
           const slotEnd   = new Date(slotStart.getTime() + 2 * 3600000);
 
-          const booking = (bookingRows as RowDataPacket[]).find(
+          const booking = bookingRows.find(
             b => b.lab_id === lab.room_id &&
-                 new Date(b.start_time) < slotEnd &&
-                 new Date(b.end_time)   > slotStart
+                 b.start_time.toDate() < slotEnd &&
+                 b.end_time.toDate()   > slotStart
           );
 
           if (booking) {
             const isMine = uid && booking.user_id === uid;
             matrix[ti][day] = isMine ? 'mine' : 'taken';
             if (isMine) {
-              if (!mineBookingIds[lab.room_id as string]) mineBookingIds[lab.room_id as string] = {};
-              mineBookingIds[lab.room_id as string][`${ti}-${day}`] = booking.booking_id as string;
+              if (!mineBookingIds[lab.room_id]) mineBookingIds[lab.room_id] = {};
+              mineBookingIds[lab.room_id][`${ti}-${day}`] = booking.booking_id;
             }
           }
         }
       }
 
-      slotsByRoom[lab.room_id as string] = matrix;
+      slotsByRoom[lab.room_id] = matrix;
     }
 
     return NextResponse.json({

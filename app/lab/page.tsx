@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
+import { FieldViz3D } from './FieldViz';
 
 // ── Physics (Lab 8: Biot–Savart) ─────────────────────────────────────────────
 
@@ -36,25 +37,6 @@ function pad(n: number) { return String(Math.floor(n)).padStart(2, '0'); }
 function hhmmss(s: number) { return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`; }
 function nowTime() { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
 function clamp(v: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, v)); }
-
-function useFlPathAnimation(
-  svgRef: React.RefObject<SVGSVGElement | null>,
-  getDuration: (i: number) => number,
-  dep: unknown,
-) {
-  useEffect(() => {
-    if (!svgRef.current) return;
-    const paths = svgRef.current.querySelectorAll<SVGPathElement>('.fl');
-    paths.forEach((p, i) => {
-      const len = p.getTotalLength();
-      const dash = len * 0.55, gap = len * 0.45;
-      p.style.strokeDasharray = `${dash} ${gap}`;
-      p.style.strokeDashoffset = '0';
-      animate(p, { strokeDashoffset: [0, -(dash + gap)], duration: getDuration(i), ease: 'linear', loop: true });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dep]);
-}
 
 interface ChatMsg { id: number; role: 'user' | 'assistant'; content: string }
 let _cid = 0;
@@ -228,13 +210,13 @@ function AccessDeniedScreen({ access }: { access: Extract<AccessState, { status:
           <>
             <h1 className="text-xl font-bold text-white mb-2">ไม่สามารถเข้าใช้งานได้</h1>
             <p className="text-sm text-gray-400 mb-1">ขณะนี้ไม่มีการจองที่ active อยู่</p>
-            <p className="text-xs text-gray-600 mb-6">สามารถเข้าใช้งานได้เฉพาะในช่วงเวลาที่จองไว้เท่านั้น</p>
+            <p className="text-sm text-gray-600 mb-6">สามารถเข้าใช้งานได้เฉพาะในช่วงเวลาที่จองไว้เท่านั้น</p>
 
             {access.next ? (
               <div className="mb-6 rounded-xl border border-[#c8ff00]/20 bg-[#c8ff00]/5 px-4 py-3 text-sm">
-                <p className="text-xs text-gray-500 mb-1">การจองถัดไป</p>
+                <p className="text-sm text-gray-500 mb-1">การจองถัดไป</p>
                 <p className="font-semibold text-white">{access.next.experiment_name}</p>
-                <p className="text-xs text-[#c8ff00] mt-0.5">{formatDateTime(access.next.start_time)}</p>
+                <p className="text-sm text-[#c8ff00] mt-0.5">{formatDateTime(access.next.start_time)}</p>
               </div>
             ) : (
               <div className="mb-6 rounded-xl border border-white/10 bg-gray-900/50 px-4 py-3 text-sm text-gray-500">
@@ -281,7 +263,7 @@ function LabDocsPanel({ onClose }: { onClose: () => void }) {
               href={`/doc/lab8/${encodeURIComponent(file)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3 text-xs text-gray-300 hover:text-[#c8ff00] hover:bg-white/[0.03] transition-colors group"
+              className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-[#c8ff00] hover:bg-white/[0.03] transition-colors group"
               onClick={onClose}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-600 group-hover:text-[#c8ff00] transition-colors">
@@ -289,7 +271,7 @@ function LabDocsPanel({ onClose }: { onClose: () => void }) {
                 <polyline points="14 2 14 8 20 8" />
               </svg>
               <span className="flex-1 truncate">{label}</span>
-              <span className="text-[9px] text-gray-600 font-mono shrink-0">PDF</span>
+              <span className="text-sm text-gray-600 font-mono shrink-0">PDF</span>
             </a>
           </li>
         ))}
@@ -349,7 +331,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
 
         {/* Header */}
         <div className="mb-8 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[#c8ff00]/30 bg-[#c8ff00]/10 px-3 py-1 text-xs font-semibold text-[#c8ff00] mb-4">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#c8ff00]/30 bg-[#c8ff00]/10 px-3 py-1 text-sm font-semibold text-[#c8ff00] mb-4">
             <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse inline-block" />
             LAB8 · กำลังจะเริ่มการทดลอง
           </span>
@@ -367,7 +349,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
 
           {/* Time remaining */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/[0.06]">
-            <span className="text-xs text-gray-500 flex items-center gap-1.5">
+            <span className="text-sm text-gray-500 flex items-center gap-1.5">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
               </svg>
@@ -379,7 +361,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
           </div>
 
           {/* Lab info */}
-          <div className="grid grid-cols-2 gap-3 mb-5 text-xs">
+          <div className="grid grid-cols-2 gap-3 mb-5 text-sm">
             {[
               { label: 'รหัสการทดลอง', value: 'LAB8' },
               { label: 'ระยะเวลา', value: '120 นาที' },
@@ -394,7 +376,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
           </div>
 
           {/* Documents */}
-          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">เอกสารประกอบการทดลอง</p>
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">เอกสารประกอบการทดลอง</p>
           <div ref={docsRef} className="flex flex-col gap-2">
             {LAB8_DOCS.map(({ label, file }) => (
               <a
@@ -402,7 +384,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
                 href={`/doc/lab8/${encodeURIComponent(file)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="doc-btn flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gray-950/60 px-4 py-2.5 text-xs text-gray-300 hover:border-[#c8ff00]/30 hover:text-[#c8ff00] transition-colors group"
+                className="doc-btn flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gray-950/60 px-4 py-2.5 text-sm text-gray-300 hover:border-[#c8ff00]/30 hover:text-[#c8ff00] transition-colors group"
                 style={{ opacity: 0 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-600 group-hover:text-[#c8ff00] transition-colors">
@@ -412,7 +394,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
                   <polyline points="9 15 12 18 15 15" />
                 </svg>
                 <span className="flex-1 truncate">{label}</span>
-                <span className="text-[10px] text-gray-600 font-mono shrink-0">PDF</span>
+                <span className="text-sm text-gray-600 font-mono shrink-0">PDF</span>
               </a>
             ))}
           </div>
@@ -517,16 +499,16 @@ function GuestLabView({ roomCode }: { roomCode: string }) {
       {/* Header */}
       <div className="relative z-10 shrink-0 h-12 border-b border-white/10 bg-gray-950/80 backdrop-blur flex items-center justify-between px-4 gap-4">
         <div className="flex items-center gap-3 min-w-0">
-          <span className="shrink-0 rounded-md border border-[#c8ff00]/30 bg-[#c8ff00]/10 px-2 py-0.5 font-mono text-xs font-bold tracking-widest text-[#c8ff00]">
+          <span className="shrink-0 rounded-md border border-[#c8ff00]/30 bg-[#c8ff00]/10 px-2 py-0.5 font-mono text-sm font-bold tracking-widest text-[#c8ff00]">
             {roomCode}
           </span>
           <span className="text-sm text-white truncate">{labName}</span>
-          <span className="hidden sm:block text-[10px] text-gray-500 shrink-0">เจ้าของห้อง: {hostName}</span>
+          <span className="hidden sm:block text-sm text-gray-500 shrink-0">เจ้าของห้อง: {hostName}</span>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <span className="text-xs text-gray-500 font-mono">{hhmmss(remaining)}</span>
-          <span className="text-[10px] border border-[#c8ff00]/20 text-[#c8ff00]/60 rounded-full px-2 py-0.5">Guest</span>
-          <a href="/dashboard" className="text-[11px] text-gray-500 hover:text-white transition-colors">← Dashboard</a>
+          <span className="text-sm text-gray-500 font-mono">{hhmmss(remaining)}</span>
+          <span className="text-sm border border-[#c8ff00]/20 text-[#c8ff00]/60 rounded-full px-2 py-0.5">Guest</span>
+          <a href="/dashboard" className="text-sm text-gray-500 hover:text-white transition-colors">← Dashboard</a>
         </div>
       </div>
 
@@ -538,8 +520,8 @@ function GuestLabView({ roomCode }: { roomCode: string }) {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#c8ff00] opacity-60" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-[#c8ff00]" />
             </span>
-            <span className="text-xs font-semibold text-white">แชทห้องแลป</span>
-            <span className="ml-auto font-mono text-[10px] text-gray-600">{labCode}</span>
+            <span className="text-sm font-semibold text-white">แชทห้องแลป</span>
+            <span className="ml-auto font-mono text-sm text-gray-600">{labCode}</span>
           </div>
           <div className="flex-1 min-h-0">
             <LabChatPanel labCode={roomCode} />
@@ -584,6 +566,8 @@ function HostLabPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
   const isBusy = isRunning || isMoving;
+  const [compactTab, setCompactTab] = useState<'camera' | 'setup' | 'viz' | 'assist'>('camera');
+  const [compactCam, setCompactCam] = useState<'main' | 'secondary'>('main');
   const topRowRef = useRef<HTMLDivElement>(null);
   const btmRowRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -767,13 +751,14 @@ function HostLabPage() {
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
       <SessionBar endTime={access.end_time} onComplete={onComplete} onExit={handleLabExit} roomCode={access.room_code} />
-      <div className="flex-1 overflow-hidden p-3 flex gap-3">
+      {/* Tablet/desktop tree — ≥1024px, side-by-side columns */}
+      <div className="hidden lg:flex flex-1 overflow-hidden p-3 gap-3">
 
         {/* Left ── Camera + FieldViz (top) · InstrSel + Sensor (bottom) */}
         <div ref={leftColRef} className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
           <div
             ref={topRowRef}
-            className={`flex-1 min-h-0 grid gap-3 grid-cols-1 xl:grid-cols-2`}
+            className={`flex-1 min-h-0 grid gap-3 grid-cols-1 lg:grid-cols-2`}
             style={{ opacity: 0 }}
           >
             <CameraSection stream="cam1" label="กล้องหลัก — ด้านหน้า" />
@@ -786,11 +771,11 @@ function HostLabPage() {
           </div>
           <div
             ref={btmRowRef}
-            className="shrink-0 flex items-stretch gap-3"
+            className="flex-1 min-h-0 flex items-stretch gap-3"
             style={{ opacity: 0 }}
           >
             {/* Left column — selector stacked above sensor values */}
-            <div className="shrink-0 flex flex-col gap-3 w-[230px]">
+            <div className="shrink-0 flex flex-col gap-3 w-[190px] xl:w-[230px]">
               <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} />
               <SensorPanel
                 inst={inst} I={I} I0={I0}
@@ -798,7 +783,7 @@ function HostLabPage() {
                 z={z}
               />
             </div>
-            <FormulaPanel inst={inst} I={I} z={z} />
+            <FormulaPanel inst={inst} I={I} z={z} widthClassName="w-[210px] xl:w-[240px]" />
             <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3">
               <div className="flex-1 min-h-0 flex flex-col">
                 <SplitFieldPanel
@@ -826,7 +811,7 @@ function HostLabPage() {
         {/* Right ── AI / Log / Chat tabs */}
         <div
           ref={rightRef}
-          className="w-[260px] shrink-0 flex flex-col overflow-hidden"
+          className="w-[220px] xl:w-[260px] shrink-0 flex flex-col overflow-hidden"
           style={{ opacity: 0 }}
         >
           <RightTabs
@@ -837,13 +822,148 @@ function HostLabPage() {
         </div>
 
       </div>
+
+      {/* Compact tree — <1024px, one region at a time via bottom tab bar */}
+      <div className="flex lg:hidden flex-1 min-h-0 flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3">
+          {compactTab === 'camera' && (
+            <div className="h-full flex flex-col gap-3">
+              <div className="shrink-0 flex rounded-xl border border-white/10 overflow-hidden bg-gray-900/50">
+                <button
+                  onClick={() => setCompactCam('main')}
+                  className={`flex-1 py-2 text-sm font-semibold transition-colors ${compactCam === 'main' ? 'bg-[#c8ff00]/10 text-[#c8ff00] border-b border-[#c8ff00]/50' : 'text-gray-500 hover:text-gray-300'}`}
+                >กล้องหลัก</button>
+                <button
+                  onClick={() => setCompactCam('secondary')}
+                  className={`flex-1 py-2 text-sm font-semibold transition-colors ${compactCam === 'secondary' ? 'bg-[#c8ff00]/10 text-[#c8ff00] border-b border-[#c8ff00]/50' : 'text-gray-500 hover:text-gray-300'}`}
+                >กล้องเสริม</button>
+              </div>
+              <div className="flex-1 min-h-0">
+                {compactCam === 'main' ? (
+                  <CameraSection stream="cam1" label="กล้องหลัก — ด้านหน้า" />
+                ) : (
+                  <CameraSection
+                    stream={inst.type === 'solenoid' ? 'cam2' : 'cam3'}
+                    label="กล้องเสริม — ด้านข้าง"
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {compactTab === 'setup' && (
+            <div className="flex flex-col gap-3">
+              <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} />
+              <SensorPanel
+                inst={inst} I={I} I0={I0}
+                bTheory={bTheory} bMeasured={bMeasured}
+                z={z}
+              />
+              <FormulaPanel inst={inst} I={I} z={z} widthClassName="w-full" />
+            </div>
+          )}
+
+          {compactTab === 'viz' && (
+            <div className="h-full flex flex-col gap-3">
+              <div className="flex-1 min-h-[280px] flex flex-col">
+                <SplitFieldPanel
+                  instType={inst.type}
+                  bTheory={bTheory} bMeasured={bMeasured}
+                  I={I} I0={I0} z={z}
+                />
+              </div>
+              {inst.type === 'solenoid' && (
+                <div className="flex-1 min-h-[220px] flex flex-col">
+                  <SolenoidDataPanel
+                    z={z} setZ={setZ}
+                    bMeasured={bMeasured} bTheory={bTheory}
+                    measData={measData} setMeasData={setMeasData}
+                    N={inst.N}
+                    isMoving={isMoving} setIsMoving={setIsMoving}
+                    disabled={isBusy}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {compactTab === 'assist' && (
+            <div className="h-full flex flex-col">
+              <RightTabs
+                chatProps={{ inst, I, I0, bTheory, bMeasured, z }}
+                logProps={{ instrument, I, bMeasured, z, instType: inst.type }}
+                labCode={access.room_code}
+              />
+            </div>
+          )}
+        </div>
+
+        <CompactTabBar active={compactTab} onSelect={setCompactTab} />
+      </div>
+    </div>
+  );
+}
+
+// ── Compact bottom tab bar (< lg) ──────────────────────────────────────────────
+
+function CompactTabBar({ active, onSelect }: {
+  active: 'camera' | 'setup' | 'viz' | 'assist';
+  onSelect: (tab: 'camera' | 'setup' | 'viz' | 'assist') => void;
+}) {
+  const TABS: { id: 'camera' | 'setup' | 'viz' | 'assist'; label: string; icon: React.ReactNode }[] = [
+    {
+      id: 'camera', label: 'กล้อง', icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />
+        </svg>
+      )
+    },
+    {
+      id: 'setup', label: 'อุปกรณ์', icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" />
+          <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" />
+          <line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
+        </svg>
+      )
+    },
+    {
+      id: 'viz', label: 'กราฟ', icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 3v18h18" /><path d="M18.4 8.6L13 14l-3-3-4.4 4.4" />
+        </svg>
+      )
+    },
+    {
+      id: 'assist', label: 'ผู้ช่วย', icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+        </svg>
+      )
+    },
+  ];
+
+  return (
+    <div className="shrink-0 flex border-t border-white/10 bg-gray-950/95">
+      {TABS.map(t => (
+        <button
+          key={t.id}
+          onClick={() => onSelect(t.id)}
+          className={`flex-1 flex flex-col items-center gap-1 py-2 text-sm font-semibold transition-colors ${active === t.id ? 'text-[#c8ff00]' : 'text-gray-500 hover:text-gray-300'
+            }`}
+        >
+          {t.icon}
+          {t.label}
+        </button>
+      ))}
     </div>
   );
 }
 
 // ── Right Tabs ───────────────────────────────────────────────────────────────
 
-type ChatRoomMsg = { id: number; user_id: string; user_name: string; content: string; created_at: string };
+type ChatRoomMsg = { id: string; user_id: string; user_name: string; content: string; created_at: string };
 
 function LabChatPanel({ labCode }: { labCode: string | null }) {
   const [messages, setMessages] = useState<ChatRoomMsg[]>([]);
@@ -851,7 +971,7 @@ function LabChatPanel({ labCode }: { labCode: string | null }) {
   const [sending, setSending] = useState(false);
   const [myName, setMyName] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
-  const lastIdRef = useRef(0);
+  const lastTsRef = useRef('');
   const myNameRef = useRef('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const readyForSound = useRef(false); // true after initial fetch completes
@@ -869,7 +989,8 @@ function LabChatPanel({ labCode }: { labCode: string | null }) {
       const seen = new Set(prev.map(m => m.id));
       const fresh = incoming.filter(m => !seen.has(m.id));
       if (!fresh.length) return prev;
-      lastIdRef.current = Math.max(lastIdRef.current, fresh[fresh.length - 1].id);
+      const maxTs = fresh.reduce((max, m) => m.created_at > max ? m.created_at : max, lastTsRef.current);
+      lastTsRef.current = maxTs;
 
       // Play sound only for others' messages after initial load
       if (
@@ -890,7 +1011,8 @@ function LabChatPanel({ labCode }: { labCode: string | null }) {
   // Initial load + poll fallback (catches missed WS messages)
   const fetchMessages = useCallback(async () => {
     if (!labCode) return;
-    const res = await fetch(`/api/lab/chat?lab=${labCode}&since=${lastIdRef.current}`);
+    const since = lastTsRef.current ? `&since=${encodeURIComponent(lastTsRef.current)}` : '';
+    const res = await fetch(`/api/lab/chat?lab=${labCode}${since}`);
     if (!res.ok) return;
     const data = await res.json();
     if (data.messages?.length) addMessages(data.messages);
@@ -969,7 +1091,7 @@ function LabChatPanel({ labCode }: { labCode: string | null }) {
   if (!labCode) {
     return (
       <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex items-center justify-center">
-        <p className="text-[11px] text-gray-600">แชทไม่พร้อมใช้งาน</p>
+        <p className="text-sm text-gray-600">แชทไม่พร้อมใช้งาน</p>
       </div>
     );
   }
@@ -978,17 +1100,17 @@ function LabChatPanel({ labCode }: { labCode: string | null }) {
     <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
         {messages.length === 0 && (
-          <p className="text-center text-[10px] text-gray-600 pt-4">ยังไม่มีข้อความ</p>
+          <p className="text-center text-sm text-gray-600 pt-4">ยังไม่มีข้อความ</p>
         )}
         {messages.map(m => {
           const isMe = m.user_name === myName;
           return (
             <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[88%] text-[11px] rounded-xl px-2.5 py-1.5 leading-relaxed ${isMe
+              <div className={`max-w-[88%] text-sm rounded-xl px-2.5 py-1.5 leading-relaxed ${isMe
                 ? 'bg-[#c8ff00]/10 border border-[#c8ff00]/20 text-[#c8ff00]/90'
                 : 'bg-gray-800/60 border border-white/[0.07] text-gray-300'
                 }`}>
-                {!isMe && <p className="text-[9px] text-gray-500 mb-0.5 font-semibold">{m.user_name}</p>}
+                {!isMe && <p className="text-sm text-gray-500 mb-0.5 font-semibold">{m.user_name}</p>}
                 {m.content}
               </div>
             </div>
@@ -1002,7 +1124,7 @@ function LabChatPanel({ labCode }: { labCode: string | null }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           placeholder="ส่งข้อความ…"
-          className="flex-1 rounded-lg border border-white/10 bg-gray-950/80 px-2.5 py-1.5 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-[#c8ff00]/40 transition-colors"
+          className="flex-1 rounded-lg border border-white/10 bg-gray-950/80 px-2.5 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c8ff00]/40 transition-colors"
         />
         <button onClick={handleSend} disabled={sending || !input.trim()}
           className="shrink-0 h-8 w-8 rounded-lg bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] flex items-center justify-center hover:bg-[#c8ff00]/20 disabled:opacity-30 transition-colors">
@@ -1038,7 +1160,7 @@ function RightTabs({ chatProps, logProps, labCode }: {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-1.5 text-[10px] font-semibold transition-colors ${tab === t.id
+            className={`flex-1 py-1.5 text-sm font-semibold transition-colors ${tab === t.id
               ? 'bg-[#c8ff00]/10 text-[#c8ff00] border-b border-[#c8ff00]/50'
               : 'text-gray-500 hover:text-gray-300'
               }`}
@@ -1094,12 +1216,12 @@ function RoomCodeBadge({ code }: { code: string }) {
 
   return (
     <span className="flex items-center gap-1.5">
-      <span className="text-gray-500 text-[10px]">รหัสห้อง</span>
+      <span className="text-gray-500 text-sm">รหัสห้อง</span>
       <button
         ref={badgeRef}
         onClick={handleCopy}
         title="คัดลอกรหัสห้อง"
-        className={`flex items-center gap-1 font-mono font-bold tracking-widest rounded-md border px-1.5 py-0.5 text-[11px] transition-colors cursor-pointer
+        className={`flex items-center gap-1 font-mono font-bold tracking-widest rounded-md border px-1.5 py-0.5 text-sm transition-colors cursor-pointer
           ${copied
             ? 'border-[#c8ff00]/60 bg-[#c8ff00]/15 text-[#c8ff00]'
             : 'border-[#c8ff00]/30 bg-[#c8ff00]/5 text-[#c8ff00] hover:bg-[#c8ff00]/15 hover:border-[#c8ff00]/50'
@@ -1171,7 +1293,8 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
         <Image src="/logo.svg" width={24} height={24} alt="PaNa LabS" className="rounded-md shrink-0" />
         <span className="text-sm font-semibold">PaNa<span className="text-[#c8ff00]">LabS</span></span>
       </div>
-      <div className="hidden md:flex items-center gap-4 text-xs">
+      {/* Full cluster — decorative details only shown when there's room */}
+      <div className="hidden lg:flex items-center gap-4 text-sm">
         <span className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse inline-block" style={{ boxShadow: '0 0 4px #c8ff00' }} />
           <span className="text-[#c8ff00] font-semibold">LIVE</span>
@@ -1199,6 +1322,18 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
           >
             {fmtCountdown(remaining)}
           </span>
+        </span>
+      </div>
+
+      {/* Compact essentials — countdown + room code must never disappear, even on the smallest screens */}
+      <div className="flex lg:hidden items-center gap-2.5 text-sm min-w-0">
+        {roomCode && <RoomCodeBadge code={roomCode} />}
+        <span className={`flex items-center gap-1 font-mono font-semibold tabular-nums shrink-0 ${remaining < 300 ? 'text-red-400 animate-pulse' : remaining < 600 ? 'text-yellow-400' : 'text-white'
+          }`}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+          </svg>
+          {fmtCountdown(remaining)}
         </span>
       </div>
       <div className="flex items-center gap-2 shrink-0">
@@ -1258,7 +1393,7 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
         </div>
         <button
           onClick={() => router.push('/dashboard')}
-          className="text-xs px-3 py-1.5 rounded-md border border-white/10 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+          className="text-sm px-3 py-1.5 rounded-md border border-white/10 text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
@@ -1267,7 +1402,7 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
         </button>
         <button
           onClick={handleLeave}
-          className="text-xs px-3 py-1.5 rounded-md bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] hover:bg-[#c8ff00]/20 font-semibold transition-colors flex items-center gap-1.5"
+          className="text-sm px-3 py-1.5 rounded-md bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] hover:bg-[#c8ff00]/20 font-semibold transition-colors flex items-center gap-1.5"
           style={{ boxShadow: '0 0 12px rgba(200,255,0,0.15)' }}
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1396,7 +1531,7 @@ function CameraSection({ stream = 'dji', label = 'กล้องหลัก �
               <svg className="animate-spin text-[#c8ff00]" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 12a9 9 0 11-6.219-8.56" />
               </svg>
-              <span className="text-[10px] text-[#c8ff00] font-mono tracking-widest uppercase">{streamError}</span>
+              <span className="text-sm text-[#c8ff00] font-mono tracking-widest uppercase">{streamError}</span>
             </div>
           </div>
         )}
@@ -1410,7 +1545,7 @@ function CameraSection({ stream = 'dji', label = 'กล้องหลัก �
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(200,255,0,0.12)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />
           </svg>
-          <span className="text-[9px] text-[#c8ff00]/20 font-mono uppercase tracking-widest">{label}</span>
+          <span className="text-sm text-[#c8ff00]/20 font-mono uppercase tracking-widest">{label}</span>
         </div>
         <div ref={cornersRef}>
           <div className="corner absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
@@ -1418,7 +1553,7 @@ function CameraSection({ stream = 'dji', label = 'กล้องหลัก �
           <div className="corner absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
           <div className="corner absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
         </div>
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-black/70 border border-white/10 px-2.5 py-0.5 text-[10px] z-20">
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-black/70 border border-white/10 px-2.5 py-0.5 text-sm z-20">
           <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
           <span className="text-white font-semibold">REC</span>
           <span className="text-gray-500">·</span>
@@ -1444,14 +1579,14 @@ function CamTimestamp() {
     const t = setInterval(() => setTime(nowTime()), 1000);
     return () => clearInterval(t);
   }, []);
-  return <div className="absolute bottom-2 right-2 text-[9px] font-mono text-[#c8ff00]/40 z-20 select-none">{time}</div>;
+  return <div className="absolute bottom-2 right-2 text-sm font-mono text-[#c8ff00]/40 z-20 select-none">{time}</div>;
 }
 
 // ── Instrument Selector ───────────────────────────────────────────────────────
 
 function InstrumentSelector({ active, onSelect, disabled }: { active: number; onSelect: (i: number) => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
-  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+  const [dropPos, setDropPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number }>({ top: 0, left: 0, width: 0, maxHeight: 400 });
   const wrapRef = useRef<HTMLDivElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const activeInst = instruments[active];
@@ -1460,7 +1595,19 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
     if (!open) return;
     if (wrapRef.current) {
       const r = wrapRef.current.getBoundingClientRect();
-      setDropPos({ top: r.bottom + 6, left: r.left, width: r.width });
+      const margin = 8;
+      const spaceBelow = window.innerHeight - r.bottom - margin;
+      const spaceAbove = r.top - margin;
+
+      // Flip upward when there isn't enough room below and above has more
+      // space — otherwise the dropdown can run off the bottom of the
+      // viewport (the instrument selector sits near the bottom of the page
+      // on the tablet/desktop layout).
+      if (spaceBelow >= 200 || spaceBelow >= spaceAbove) {
+        setDropPos({ top: r.bottom + 6, left: r.left, width: r.width, maxHeight: Math.max(spaceBelow, 120) });
+      } else {
+        setDropPos({ bottom: window.innerHeight - r.top + 6, left: r.left, width: r.width, maxHeight: Math.max(spaceAbove, 120) });
+      }
     }
     if (!dropRef.current) return;
     animate(dropRef.current, { opacity: [0, 1], translateY: [-8, 0], scale: [0.96, 1], duration: 260, ease: 'outBack' });
@@ -1493,11 +1640,11 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
       >
         <div className={disabled ? 'text-gray-600' : 'text-[#c8ff00]'}>{activeInst.icon}</div>
         <div className="min-w-0">
-          <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider leading-none mb-0.5">อุปกรณ์วัด</p>
-          <p className="text-[12px] font-semibold text-white leading-none truncate">{activeInst.name}</p>
-          <p className="text-[9px] text-gray-500 mt-0.5 truncate">{activeInst.sub}</p>
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider leading-none mb-0.5">อุปกรณ์วัด</p>
+          <p className="text-sm font-semibold text-white leading-none truncate">{activeInst.name}</p>
+          <p className="text-sm text-gray-500 mt-0.5 truncate">{activeInst.sub}</p>
         </div>
-        <div className="flex items-center gap-1 text-[9px] font-semibold text-[#c8ff00] shrink-0 ml-1">
+        <div className="flex items-center gap-1 text-sm font-semibold text-[#c8ff00] shrink-0 ml-1">
           <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse" />
           <span>ON</span>
         </div>
@@ -1513,12 +1660,16 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
         <>
           <div className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
           <div ref={dropRef}
-            className="fixed z-[100] rounded-xl border border-white/10 bg-gray-950 p-2 flex flex-col gap-0.5"
-            style={{ opacity: 0, top: dropPos.top, left: dropPos.left, width: dropPos.width, boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)' }}
+            className="fixed z-[100] rounded-xl border border-white/10 bg-gray-950 p-2 flex flex-col gap-0.5 overflow-y-auto"
+            style={{
+              opacity: 0, left: dropPos.left, width: dropPos.width, maxHeight: dropPos.maxHeight,
+              top: dropPos.top, bottom: dropPos.bottom,
+              boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)',
+            }}
           >
             {GROUPS.map(g => (
               <div key={g.type}>
-                <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest px-2 py-1">{g.label}</p>
+                <p className="text-sm font-bold text-gray-600 uppercase tracking-widest px-2 py-1">{g.label}</p>
                 {instruments.map((inst, i) => {
                   if (inst.type !== g.type) return null;
                   const isCur = i === active;
@@ -1537,11 +1688,11 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
                       <div className="flex items-center gap-2">
                         <div className={isCur ? 'text-[#c8ff00]' : 'text-gray-600'}>{inst.icon}</div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-semibold leading-none truncate">{inst.name}</p>
-                          <p className={`text-[9px] mt-0.5 truncate ${isCur ? 'text-[#c8ff00]/60' : 'text-gray-600'}`}>{inst.sub}</p>
+                          <p className="text-sm font-semibold leading-none truncate">{inst.name}</p>
+                          <p className={`text-sm mt-0.5 truncate ${isCur ? 'text-[#c8ff00]/60' : 'text-gray-600'}`}>{inst.sub}</p>
                         </div>
                         {isCur && (
-                          <div className="ml-auto flex items-center gap-1 text-[9px] font-semibold text-[#c8ff00] shrink-0">
+                          <div className="ml-auto flex items-center gap-1 text-sm font-semibold text-[#c8ff00] shrink-0">
                             <span className="h-1 w-1 rounded-full bg-[#c8ff00] animate-pulse inline-block" />ON
                           </div>
                         )}
@@ -1567,32 +1718,21 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z }: {
   I: number; I0: number;
   z: number;
 }) {
-  const [split, setSplit] = useState(50);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-
-  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragging.current = true;
-  }
-  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!dragging.current || !containerRef.current) return;
-    const r = containerRef.current.getBoundingClientRect();
-    setSplit(clamp(((e.clientX - r.left) / r.width) * 100, 10, 90));
-  }
-  function onPointerUp() { dragging.current = false; }
-
-  const Viz = instType === 'solenoid' ? SolenoidSVG : CoilSVG;
-
   return (
     <div className="flex-1 flex flex-col rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden min-h-0">
       <div className="shrink-0 px-4 py-2 border-b border-white/5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wider">
-          <span style={{ color: '#c8ff00' }}>ทฤษฎี · {bTheory.toFixed(3)} mT</span>
+        <div className="flex items-center gap-3 text-sm lg:text-base font-semibold uppercase tracking-wider">
+          <span className="flex items-center gap-1.5" style={{ color: '#c8ff00' }}>
+            <span className="h-2 w-2 rounded-full inline-block" style={{ backgroundColor: '#c8ff00' }} />
+            ทฤษฎี · {bTheory.toFixed(3)} mT
+          </span>
           <span className="text-gray-600 font-normal">vs</span>
-          <span style={{ color: '#22d3ee' }}>วัดจริง · {bMeasured.toFixed(3)} mT</span>
+          <span className="flex items-center gap-1.5" style={{ color: '#22d3ee' }}>
+            <span className="h-2 w-2 rounded-full inline-block" style={{ backgroundColor: '#22d3ee' }} />
+            วัดจริง · {bMeasured.toFixed(3)} mT
+          </span>
         </div>
-        <div className="flex items-center gap-3 text-[9px] font-mono shrink-0">
+        <div className="flex items-center gap-3 text-sm font-mono shrink-0">
           {instType === 'solenoid' && (
             <span className="text-gray-500">Z = <span style={{ color: '#a78bfa' }}>{(z * 100).toFixed(0)} cm</span></span>
           )}
@@ -1601,178 +1741,10 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z }: {
         </div>
       </div>
 
-      <div ref={containerRef} className="flex-1 relative min-h-0 overflow-hidden select-none">
-        <div className="absolute inset-0" style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}>
-          <Viz mode="theory" />
-        </div>
-        <div className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${split}%)` }}>
-          <Viz mode="measured" />
-        </div>
-        <span className="absolute top-2 left-3 text-[9px] font-bold pointer-events-none z-10 select-none" style={{ color: '#c8ff00', opacity: 0.6 }}>THEORY</span>
-        <span className="absolute top-2 right-3 text-[9px] font-bold pointer-events-none z-10 select-none" style={{ color: '#22d3ee', opacity: 0.6 }}>MEASURED</span>
-        <div
-          className="absolute top-0 bottom-0 z-20 cursor-col-resize touch-none"
-          style={{ left: `calc(${split}% - 12px)`, width: 24 }}
-          onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-        >
-          <div className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-px bg-white/25" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-7 rounded-full bg-gray-800 border border-white/20 flex items-center justify-center gap-0.5">
-            <div className="w-px h-3 bg-white/40 rounded-full" />
-            <div className="w-px h-3 bg-white/40 rounded-full" />
-          </div>
-        </div>
+      <div className="flex-1 min-h-0">
+        <FieldViz3D instType={instType} />
       </div>
     </div>
-  );
-}
-
-// ── Field SVGs ────────────────────────────────────────────────────────────────
-// Path directions follow physical field flow:
-//   Solenoid inside: left → right (B field direction)
-//   Solenoid outside: right → left (returning via top and bottom arcs)
-//   Coil upper arcs: right (162) → left (158) via top
-//   Coil lower arcs: right (162) → left (158) via bottom  ← corrected
-
-const SOLENOID_OUTER: Record<'theory' | 'measured', string[]> = {
-  theory: [
-    'M 260,90 C 292,70 294,32 160,32 C 26,32 28,70 60,90',    // top small  RIGHT→LEFT ✓
-    'M 260,90 C 292,110 294,148 160,148 C 26,148 28,110 60,90', // btm small  RIGHT→LEFT ✓
-    'M 260,90 C 310,55 312,5 160,5 C 8,5 10,55 60,90',          // top large  RIGHT→LEFT ✓
-    'M 260,90 C 310,125 312,175 160,175 C 8,175 10,125 60,90',  // btm large  RIGHT→LEFT ✓
-  ],
-  measured: [
-    'M 260,90 C 294,72 296,30 160,34 C 23,30 24,68 60,90',
-    'M 260,90 C 296,110 298,150 160,146 C 22,150 24,112 60,90',
-    'M 260,90 C 312,57 314,3 160,7 C 6,3 8,53 60,90',
-    'M 260,90 C 314,125 316,177 160,173 C 4,177 8,127 60,90',
-  ],
-};
-// Inside: L→R (correct field direction)
-const SOLENOID_INSIDE = ['M 60,74 L 260,74', 'M 60,90 L 260,90', 'M 60,106 L 260,106'];
-
-function SolenoidSVG({ mode }: { mode: 'theory' | 'measured' }) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const color = mode === 'theory' ? '#c8ff00' : '#22d3ee';
-  useFlPathAnimation(svgRef, (i) => {
-    // Scale duration to path length: inside lines ~200px, outer arcs ~350-500px
-    if (i < 4) return 2800 + i * 300;   // outer arcs (longer path → slower dash)
-    return 1600 + (i - 4) * 100;         // inside lines (shorter, faster flow)
-  }, mode);
-  return (
-    <svg ref={svgRef} viewBox="0 0 320 180" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-      {/* Solenoid body */}
-      <rect x="60" y="64" width="200" height="52" fill={`${color}04`} stroke={`${color}25`} strokeWidth="1" />
-      {/* Coil winding bumps — top edge (arcs bulging upward) */}
-      {Array.from({ length: 11 }, (_, i) => (
-        <path key={i} d={`M ${62 + i * 18},64 A 9,7 0 0 0 ${80 + i * 18},64`}
-          fill="none" stroke={`${color}60`} strokeWidth="1.8" />
-      ))}
-      {/* Coil winding bumps — bottom edge (arcs bulging downward) */}
-      {Array.from({ length: 11 }, (_, i) => (
-        <path key={i} d={`M ${62 + i * 18},116 A 9,7 0 0 1 ${80 + i * 18},116`}
-          fill="none" stroke={`${color}60`} strokeWidth="1.8" />
-      ))}
-      {/* N/S labels */}
-      <text x="268" y="94" fontSize="11" fill={`${color}90`} fontFamily="monospace" fontWeight="bold">N</text>
-      <text x="42" y="94" fontSize="11" fill={`${color}90`} fontFamily="monospace" fontWeight="bold">S</text>
-      {/* Current direction arrows at ends */}
-      <text x="268" y="108" fontSize="9" fill={`${color}50`} fontFamily="monospace">↑I</text>
-      <text x="42" y="108" fontSize="9" fill={`${color}50`} fontFamily="monospace">↓I</text>
-      {/* Outer field line loops (animated) */}
-      {SOLENOID_OUTER[mode].map((d, i) => (
-        <path key={i} className="fl" d={d} fill="none" stroke={color}
-          strokeWidth={i < 2 ? 1.1 : 0.7} opacity={i < 2 ? 0.55 : 0.3} />
-      ))}
-      {/* Outer arc direction arrows (static) at midpoints */}
-      <polygon points="165,28 157,32 165,36" fill={color} opacity="0.55" />  {/* top small arc mid */}
-      <polygon points="165,144 157,148 165,152" fill={color} opacity="0.55" />  {/* btm small arc mid */}
-      <polygon points="165,1 157,5 165,9" fill={color} opacity="0.3" />  {/* top large arc mid */}
-      <polygon points="165,171 157,175 165,179" fill={color} opacity="0.3" />  {/* btm large arc mid */}
-      {/* Inside field lines (animated) */}
-      {SOLENOID_INSIDE.map((d, i) => (
-        <path key={i} className="fl" d={d} fill="none" stroke={color} strokeWidth="1.5" opacity="0.9" />
-      ))}
-      {/* Inside direction arrows (static) */}
-      {[74, 90, 106].map(y => (
-        <polygon key={y} points={`154,${y - 4} 162,${y} 154,${y + 4}`} fill={color} opacity="0.8" />
-      ))}
-      <text x="160" y="171" fontSize="9" fill={`${color}35`} fontFamily="monospace" textAnchor="middle">
-        {mode === 'theory' ? 'THEORETICAL · Bz=μ₀NI(a+b)/2L' : 'MEASURED · sensor data'}
-      </text>
-    </svg>
-  );
-}
-
-// Coil axis lines: left axis flows RIGHT→LEFT (B points toward S on left side)
-//                 right axis flows LEFT→RIGHT (B points away from N on right side)
-const COIL_AXIAL = ['M 148,90 L 5,90', 'M 172,90 L 315,90'];
-const COIL_LOOPS: Record<'theory' | 'measured', string[]> = {
-  theory: [
-    'M 162,88 C 183,78 190,56 160,46 C 130,56 137,78 158,88',   // upper small  R→L via top ✓
-    'M 162,92 C 183,102 190,124 160,134 C 130,124 137,102 158,92', // lower small  R→L via btm ✓
-    'M 162,88 C 200,70 206,32 160,20 C 114,32 120,70 158,88',    // upper mid    R→L via top ✓
-    'M 162,92 C 200,110 206,148 160,160 C 114,148 120,110 158,92', // lower mid    R→L via btm ✓
-    'M 162,88 C 214,60 218,8 160,4 C 102,8 106,60 158,88',       // upper large  R→L via top ✓
-    'M 162,92 C 214,120 218,172 160,176 C 102,172 106,120 158,92', // lower large  R→L via btm ✓
-  ],
-  measured: [
-    'M 162,88 C 186,76 192,54 160,44 C 128,56 135,80 158,88',
-    'M 162,92 C 186,102 192,122 160,136 C 128,126 135,104 158,92',
-    'M 162,88 C 204,68 208,30 160,18 C 112,34 118,72 158,88',
-    'M 162,92 C 204,108 208,146 160,162 C 112,150 118,112 158,92',
-    'M 162,88 C 218,58 220,6 160,2 C 100,10 104,62 158,88',
-    'M 162,92 C 218,122 220,174 160,178 C 100,170 104,118 158,92',
-  ],
-};
-
-function CoilSVG({ mode }: { mode: 'theory' | 'measured' }) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const color = mode === 'theory' ? '#c8ff00' : '#22d3ee';
-  useFlPathAnimation(svgRef, (i) => {
-    if (i < 6) return 2200 + i * 280;   // field line loops
-    return 1800 + i * 100;               // axis lines
-  }, mode);
-  return (
-    <svg ref={svgRef} viewBox="0 0 320 180" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-      {/* Coil ring (ellipse seen slightly from side) */}
-      <ellipse cx="160" cy="90" rx="7" ry="24"
-        fill={`${color}04`} stroke={`${color}55`} strokeWidth="2" />
-      {/* Wire cross-sections: top = × (into page), bottom = • (out of page) */}
-      <circle cx="160" cy="68" r="5" fill={`${color}12`} stroke={`${color}70`} strokeWidth="1.5" />
-      <line x1="157" y1="65" x2="163" y2="71" stroke={`${color}70`} strokeWidth="1.5" />
-      <line x1="163" y1="65" x2="157" y2="71" stroke={`${color}70`} strokeWidth="1.5" />
-      <circle cx="160" cy="112" r="5" fill={`${color}20`} stroke={`${color}70`} strokeWidth="1.5" />
-      <circle cx="160" cy="112" r="2" fill={color} opacity="0.8" />
-      {/* Field line loops (animated — all R→L via top, R→L via bottom) */}
-      {COIL_LOOPS[mode].map((d, i) => (
-        <path key={i} className="fl" d={d} fill="none" stroke={color}
-          strokeWidth={i < 2 ? 1.5 : i < 4 ? 1.1 : 0.75}
-          opacity={i < 2 ? 0.85 : i < 4 ? 0.6 : 0.35}
-        />
-      ))}
-      {/* Direction arrows on loops (static, at arc midpoints) */}
-      {/* Upper arcs: mid at top, field going LEFT */}
-      <polygon points="165,42 157,46 165,50" fill={color} opacity="0.75" />
-      <polygon points="165,16 157,20 165,24" fill={color} opacity="0.55" />
-      <polygon points="165,-1 157,3 165,7" fill={color} opacity="0.3" />
-      {/* Lower arcs: mid at bottom, field going LEFT */}
-      <polygon points="165,130 157,134 165,138" fill={color} opacity="0.75" />
-      <polygon points="165,156 157,160 165,164" fill={color} opacity="0.55" />
-      <polygon points="165,172 157,176 165,180" fill={color} opacity="0.3" />
-      {/* Axis lines (animated) */}
-      {COIL_AXIAL.map((d, i) => (
-        <path key={i} className="fl" d={d} fill="none" stroke={color} strokeWidth="1.2" opacity="0.65" />
-      ))}
-      {/* Axis arrows: left axis points LEFT, right axis points RIGHT */}
-      <polygon points="78,86 70,90 78,94" fill={color} opacity="0.65" />
-      <polygon points="242,86 250,90 242,94" fill={color} opacity="0.65" />
-      {/* N/S labels */}
-      <text x="276" y="86" fontSize="11" fill={`${color}90`} fontFamily="monospace" fontWeight="bold">N</text>
-      <text x="32" y="86" fontSize="11" fill={`${color}90`} fontFamily="monospace" fontWeight="bold">S</text>
-      <text x="160" y="172" fontSize="9" fill={`${color}35`} fontFamily="monospace" textAnchor="middle">
-        {mode === 'theory' ? 'THEORETICAL · B₀=μ₀nI/2R' : 'MEASURED · sensor data'}
-      </text>
-    </svg>
   );
 }
 
@@ -1818,7 +1790,7 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
 
   return (
     <div ref={panelRef} className="flex-1 rounded-xl border border-white/10 bg-gray-900/50 p-3">
-      <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">ค่าที่วัดได้</h2>
+      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2.5">ค่าที่วัดได้</h2>
       <div className="space-y-1.5">
         {rows.map(r => (
           <SensorRow key={r.label} {...r} />
@@ -1839,10 +1811,10 @@ function SensorRow({ label, value, unit, color }: { label: string; value: string
   }, [value]);
   return (
     <div className="s-card flex items-center justify-between rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5 py-2">
-      <span className="text-[10px] text-gray-400">{label}</span>
+      <span className="text-sm text-gray-400">{label}</span>
       <div className="flex items-baseline gap-1">
-        <span ref={valRef} className="text-sm font-mono font-bold tabular-nums" style={{ color }}>{value}</span>
-        <span className="text-[9px] text-gray-500">{unit}</span>
+        <span ref={valRef} className="text-sm lg:text-base font-mono font-bold tabular-nums" style={{ color }}>{value}</span>
+        <span className="text-sm text-gray-500">{unit}</span>
       </div>
     </div>
   );
@@ -1862,11 +1834,11 @@ function parseInline(text: string, key?: string | number): React.ReactNode {
         if (p.startsWith('*') && p.endsWith('*'))
           return <em key={i} className="italic text-gray-200">{p.slice(1, -1)}</em>;
         if (p.startsWith('`') && p.endsWith('`'))
-          return <code key={i} className="font-mono text-[10px] bg-gray-950/90 text-[#c8ff00]/80 px-1 py-0.5 rounded">{p.slice(1, -1)}</code>;
+          return <code key={i} className="font-mono text-sm bg-gray-950/90 text-[#c8ff00]/80 px-1 py-0.5 rounded">{p.slice(1, -1)}</code>;
         if (p.startsWith('$$') && p.endsWith('$$'))
-          return <span key={i} className="block overflow-x-auto font-mono text-[10px] text-violet-300 bg-violet-950/30 border border-violet-500/20 px-2 py-1 rounded my-1 text-center">{p.slice(2, -2).trim()}</span>;
+          return <span key={i} className="block overflow-x-auto font-mono text-sm text-violet-300 bg-violet-950/30 border border-violet-500/20 px-2 py-1 rounded my-1 text-center">{p.slice(2, -2).trim()}</span>;
         if (p.startsWith('$') && p.endsWith('$'))
-          return <span key={i} className="font-mono text-[10px] text-violet-300 bg-violet-950/20 px-0.5 rounded">{p.slice(1, -1)}</span>;
+          return <span key={i} className="font-mono text-sm text-violet-300 bg-violet-950/20 px-0.5 rounded">{p.slice(1, -1)}</span>;
         return p;
       })}
     </span>
@@ -1890,7 +1862,7 @@ function MarkdownMessage({ content, streaming = false }: { content: string; stre
       while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++; }
       nodes.push(
         <pre key={`cb-${i}`} className="my-1.5 overflow-x-auto rounded-lg bg-gray-950 border border-white/[0.06] px-3 py-2">
-          <code className="text-[10px] font-mono text-emerald-400/90 leading-relaxed whitespace-pre">{codeLines.join('\n')}</code>
+          <code className="text-sm font-mono text-emerald-400/90 leading-relaxed whitespace-pre">{codeLines.join('\n')}</code>
         </pre>
       );
       i++; continue;
@@ -1903,7 +1875,7 @@ function MarkdownMessage({ content, streaming = false }: { content: string; stre
       while (i < lines.length && !lines[i].startsWith('$$')) { mathLines.push(lines[i]); i++; }
       nodes.push(
         <div key={`dm-${i}`} className="my-1.5 overflow-x-auto rounded-lg bg-violet-950/20 border border-violet-500/20 px-3 py-2 text-center">
-          <span className="font-mono text-[10px] text-violet-300">{mathLines.join(' ')}</span>
+          <span className="font-mono text-sm text-violet-300">{mathLines.join(' ')}</span>
         </div>
       );
       i++; continue;
@@ -1913,7 +1885,7 @@ function MarkdownMessage({ content, streaming = false }: { content: string; stre
     const h3 = line.match(/^###\s+(.+)/);
     const h2 = line.match(/^##\s+(.+)/);
     const h1 = line.match(/^#\s+(.+)/);
-    if (h1) { nodes.push(<p key={i} className="font-bold text-white text-xs mt-2 mb-1">{parseInline(h1[1])}</p>); i++; continue; }
+    if (h1) { nodes.push(<p key={i} className="font-bold text-white text-sm mt-2 mb-1">{parseInline(h1[1])}</p>); i++; continue; }
     if (h2) { nodes.push(<p key={i} className="font-semibold text-[#c8ff00]/90 mt-1.5 mb-0.5">{parseInline(h2[1])}</p>); i++; continue; }
     if (h3) { nodes.push(<p key={i} className="font-semibold text-gray-200 mt-1 mb-0.5">{parseInline(h3[1])}</p>); i++; continue; }
 
@@ -1934,7 +1906,7 @@ function MarkdownMessage({ content, streaming = false }: { content: string; stre
     if (ol) {
       nodes.push(
         <div key={i} className="flex gap-1.5 leading-relaxed">
-          <span className="font-mono text-[10px] text-[#c8ff00]/50 shrink-0 mt-px">{ol[1]}.</span>
+          <span className="font-mono text-sm text-[#c8ff00]/50 shrink-0 mt-px">{ol[1]}.</span>
           <span>{parseInline(ol[2])}</span>
         </div>
       );
@@ -1956,7 +1928,7 @@ function MarkdownMessage({ content, streaming = false }: { content: string; stre
   }
 
   return (
-    <div className="text-[11px] text-gray-300 space-y-0.5">
+    <div className="text-sm text-gray-300 space-y-0.5">
       {nodes}
       {streaming && (
         <span className="inline-block w-0.5 h-[0.85em] bg-[#c8ff00]/70 ml-0.5 animate-pulse align-middle rounded-sm" />
@@ -2080,17 +2052,17 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
             <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
           </svg>
         </div>
-        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">AI ผู้ช่วยสอน</span>
-        {streaming && <span className="ml-auto text-[9px] text-[#c8ff00] animate-pulse">กำลังคิด…</span>}
+        <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">AI ผู้ช่วยสอน</span>
+        {streaming && <span className="ml-auto text-sm text-[#c8ff00] animate-pulse">กำลังคิด…</span>}
       </div>
 
       <div ref={listRef} className="flex-1 overflow-y-auto p-2.5 space-y-2">
         {messages.length === 0 && (
           <div className="flex flex-col gap-1.5 pt-1">
-            <p className="text-[10px] text-gray-600 text-center mb-1">ถามเกี่ยวกับ Lab 8 ได้เลย</p>
+            <p className="text-sm text-gray-600 text-center mb-1">ถามเกี่ยวกับ Lab 8 ได้เลย</p>
             {suggestions.map(s => (
               <button key={s} onClick={() => send(s)}
-                className="text-left text-[10px] rounded-lg border border-white/[0.08] bg-gray-950/60 px-2.5 py-1.5 text-gray-400 hover:border-[#c8ff00]/30 hover:text-[#c8ff00]/80 transition-colors"
+                className="text-left text-sm rounded-lg border border-white/[0.08] bg-gray-950/60 px-2.5 py-1.5 text-gray-400 hover:border-[#c8ff00]/30 hover:text-[#c8ff00]/80 transition-colors"
               >{s}</button>
             ))}
           </div>
@@ -2098,7 +2070,7 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
         {messages.map(msg => (
           <div key={msg.id} className={`chat-bubble flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} style={{ opacity: 0 }}>
             {msg.role === 'user' ? (
-              <div className="max-w-[90%] rounded-xl px-2.5 py-1.5 text-[11px] leading-5 bg-[#c8ff00]/10 border border-[#c8ff00]/25 text-[#c8ff00]/90 whitespace-pre-wrap">
+              <div className="max-w-[90%] rounded-xl px-2.5 py-1.5 text-sm leading-5 bg-[#c8ff00]/10 border border-[#c8ff00]/25 text-[#c8ff00]/90 whitespace-pre-wrap">
                 {msg.content}
               </div>
             ) : (
@@ -2120,7 +2092,7 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
           onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
           placeholder="ถามเกี่ยวกับการทดลอง…"
           rows={1} disabled={streaming}
-          className="flex-1 resize-none rounded-lg border border-white/10 bg-gray-950/80 px-2.5 py-1.5 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-[#c8ff00]/40 disabled:opacity-50 transition-colors"
+          className="flex-1 resize-none rounded-lg border border-white/10 bg-gray-950/80 px-2.5 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c8ff00]/40 disabled:opacity-50 transition-colors"
           style={{ minHeight: '32px', maxHeight: '80px' }}
         />
         <button onClick={() => send(input)} disabled={streaming || !input.trim()}
@@ -2142,19 +2114,19 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
     const result = calcBCoil(n, I, R);
     return (
       <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5">
-        <div className="text-[9px] font-semibold text-gray-600 uppercase tracking-wider shrink-0">
+        <div className="text-sm font-semibold text-gray-600 uppercase tracking-wider shrink-0">
           Biot–Savart · ขดลวดเดี่ยว
         </div>
 
         <div className="flex-1 flex flex-col justify-evenly min-h-0 font-mono">
           {/* Algebraic form */}
-          <div className="text-[10px]">
+          <div className="text-sm">
             <span style={{ color: '#c8ff00' }}>B₀</span>
             <span className="text-gray-400"> = μ₀ · n · I / (2R)</span>
           </div>
 
           {/* Substituted fraction */}
-          <div className="text-[8.5px] text-gray-400 pl-3 space-y-0.5">
+          <div className="text-sm text-gray-400 pl-3 space-y-0.5">
             <div className="text-gray-500">=</div>
             <div className="text-gray-300">4π×10⁻⁷ × {n} × {I.toFixed(3)}</div>
             <div className="h-px bg-gray-700" />
@@ -2162,7 +2134,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
           </div>
 
           {/* Parameters */}
-          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[8.5px]">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-sm">
             {([
               { k: 'n', v: `${n} รอบ`, c: '#a3e635' },
               { k: 'R', v: `${(R * 1000).toFixed(0)} มม.` },
@@ -2179,12 +2151,12 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 
         {/* Result */}
         <div className="shrink-0 pt-2 mt-1 border-t border-white/[0.07] flex items-baseline gap-2">
-          <span className="font-mono text-[9px] text-gray-500">B₀ =</span>
+          <span className="font-mono text-sm text-gray-500">B₀ =</span>
           <span className="font-mono text-2xl font-bold tabular-nums"
             style={{ color: '#c8ff00', textShadow: '0 0 18px rgba(200,255,0,0.45)' }}>
             {result.toFixed(3)}
           </span>
-          <span className="text-[10px] text-gray-500">mT</span>
+          <span className="text-sm text-gray-500">mT</span>
         </div>
       </div>
     );
@@ -2202,20 +2174,20 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5">
-      <div className="text-[9px] font-semibold text-gray-600 uppercase tracking-wider shrink-0">
+      <div className="text-sm font-semibold text-gray-600 uppercase tracking-wider shrink-0">
         โซลีนอยด์จำกัดความยาว
       </div>
 
       <div className="flex-1 flex flex-col justify-evenly min-h-0 font-mono">
         {/* Formula */}
-        <div className="text-[9px] space-y-0.5">
+        <div className="text-sm space-y-0.5">
           <div><span style={{ color: '#c8ff00' }}>B_z</span><span className="text-gray-400"> = (μ₀NI / 2L)</span></div>
           <div className="text-gray-400 pl-4">× [cosα₁ + cosα₂]</div>
-          <div className="text-[9px] text-gray-600 pl-4">cosα = x / √(R² + x²)</div>
+          <div className="text-sm text-gray-600 pl-4">cosα = x / √(R² + x²)</div>
         </div>
 
         {/* a and b */}
-        <div className="text-[8.5px] space-y-0.5">
+        <div className="text-sm space-y-0.5">
           <div className="text-gray-600">
             a = {halfLcm} + {zCm} = <span style={{ color: '#a78bfa' }}>{(a * 100).toFixed(0)} cm</span>
           </div>
@@ -2225,14 +2197,14 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
         </div>
 
         {/* cosα values */}
-        <div className="text-[8.5px] space-y-0.5">
+        <div className="text-sm space-y-0.5">
           <div className="text-gray-600">cosα₁ = <span className="text-gray-300">{cosA1.toFixed(4)}</span></div>
           <div className="text-gray-600">cosα₂ = <span className="text-gray-300">{cosA2.toFixed(4)}</span></div>
           <div className="text-gray-600">cosα₁ + cosα₂ = <span className="text-gray-200">{(cosA1 + cosA2).toFixed(4)}</span></div>
         </div>
 
         {/* Parameters */}
-        <div className="grid grid-cols-3 gap-x-2 gap-y-0.5 text-[9px]">
+        <div className="grid grid-cols-3 gap-x-2 gap-y-0.5 text-sm">
           <span className="text-gray-600">N=<span style={{ color: '#a3e635' }}>{N}</span></span>
           <span className="text-gray-600">L=<span className="text-gray-400">{(L * 1000).toFixed(0)}mm</span></span>
           <span className="text-gray-600">R=<span className="text-gray-400">{(R * 1000).toFixed(0)}mm</span></span>
@@ -2242,12 +2214,12 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 
       {/* Result */}
       <div className="shrink-0 pt-2 mt-1 border-t border-white/[0.07] flex items-baseline gap-2">
-        <span className="font-mono text-[9px] text-gray-500">B_z =</span>
+        <span className="font-mono text-sm text-gray-500">B_z =</span>
         <span className="font-mono text-2xl font-bold tabular-nums"
           style={{ color: '#c8ff00', textShadow: '0 0 18px rgba(200,255,0,0.45)' }}>
           {result.toFixed(3)}
         </span>
-        <span className="text-[10px] text-gray-500">mT</span>
+        <span className="text-sm text-gray-500">mT</span>
       </div>
     </div>
   );
@@ -2255,10 +2227,10 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 
 // ── Formula Panel ────────────────────────────────────────────────────────────
 
-function FormulaPanel({ inst, I, z }: { inst: Inst; I: number; z: number }) {
+function FormulaPanel({ inst, I, z, widthClassName = 'w-[200px]' }: { inst: Inst; I: number; z: number; widthClassName?: string }) {
   return (
-    <div className="shrink-0 w-[200px] rounded-xl border border-white/10 bg-gray-900/50 p-3 flex flex-col">
-      <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 shrink-0">สูตรการคำนวณ</h2>
+    <div className={`shrink-0 ${widthClassName} rounded-xl border border-white/10 bg-gray-900/50 p-3 flex flex-col`}>
+      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2 shrink-0">สูตรการคำนวณ</h2>
       <FormulaCard inst={inst} I={I} z={z} />
     </div>
   );
@@ -2282,8 +2254,8 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   const zCm = Math.round(z * 100);
   const recorded = measData.size;
   const allZ = Array.from({ length: 31 }, (_, i) => i - 15); // −15…+15
-  const COL_W = 48; // px per Z column
-  const LABEL_W = 72; // px for row-label column
+  const COL_W = 64; // px per Z column
+  const LABEL_W = 100; // px for row-label column
 
   const liveRef = useRef({ bMeasured, bTheory });
   useEffect(() => { liveRef.current = { bMeasured, bTheory }; }, [bMeasured, bTheory]);
@@ -2366,13 +2338,13 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
       {/* Header bar */}
       <div className="shrink-0 px-3 py-1.5 border-b border-white/5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 shrink-0">
-          <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ข้อมูลแนวแกน Z</h2>
-          <span className="text-[9px] font-mono text-gray-600">N={N}</span>
-          <span className="text-[9px] font-semibold" style={{ color: recorded === 31 ? '#c8ff00' : '#22d3ee' }}>{recorded}/31</span>
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">ข้อมูลแนวแกน Z</h2>
+          <span className="text-sm font-mono text-gray-600">N={N}</span>
+          <span className="text-sm font-semibold" style={{ color: recorded === 31 ? '#c8ff00' : '#22d3ee' }}>{recorded}/31</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {isMoving && (
-            <div className="flex items-center gap-1.5 text-[9px] text-violet-400">
+            <div className="flex items-center gap-1.5 text-sm text-violet-400">
               <svg className="animate-spin" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M21 12a9 9 0 11-6.219-8.56" />
               </svg>
@@ -2391,7 +2363,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
                 </svg>
               </button>
               <button onClick={clearAll}
-                className="text-[9px] px-1.5 py-1 rounded-md border border-white/10 text-gray-600 hover:text-gray-400 transition-colors leading-none">
+                className="text-sm px-1.5 py-1 rounded-md border border-white/10 text-gray-600 hover:text-gray-400 transition-colors leading-none">
                 ล้าง
               </button>
             </>
@@ -2405,12 +2377,12 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
         {/* Sticky row-label column */}
         <div className="shrink-0 flex flex-col border-r border-white/[0.06]" style={{ width: LABEL_W }}>
           {/* Z-header cell */}
-          <div className="shrink-0 h-[26px] px-2 flex items-center text-[9px] font-semibold text-gray-600 uppercase tracking-wider border-b border-white/5 select-none">
+          <div className="shrink-0 h-[30px] px-2 flex items-center text-sm font-semibold text-gray-600 uppercase tracking-wider border-b border-white/5 select-none">
             Z (cm)
           </div>
           {dataRows.map(r => (
             <div key={r.key} className="flex-1 flex items-center px-2 border-b border-white/[0.04] last:border-0">
-              <span className="text-[9px] font-semibold truncate" style={{ color: r.color }}>{r.label}</span>
+              <span className="text-sm font-semibold truncate" style={{ color: r.color }}>{r.label}</span>
             </div>
           ))}
         </div>
@@ -2432,7 +2404,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
                   <button
                     onClick={() => moveToPosition(zVal)}
                     disabled={disabled || isCurrent}
-                    className={`shrink-0 h-[26px] w-full flex items-center justify-center text-[9px] font-mono font-semibold border-b border-white/5 transition-colors
+                    className={`shrink-0 h-[30px] w-full flex items-center justify-center text-sm font-mono font-semibold border-b border-white/5 transition-colors
                       ${isCurrent && isMoving ? 'text-violet-400 animate-pulse' : ''}
                       ${isCurrent && !isMoving ? 'text-[#c8ff00]' : ''}
                       ${!isCurrent && !isMoving ? 'text-gray-600 hover:text-gray-300 hover:bg-white/5 cursor-pointer' : ''}
@@ -2447,7 +2419,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
                     return (
                       <div key={r.key} className="flex-1 flex items-center justify-center border-b border-white/[0.04] last:border-0">
                         <span
-                          className="text-[9px] font-mono tabular-nums"
+                          className="text-sm font-mono tabular-nums whitespace-nowrap"
                           style={{ color: cell ? cell.color : undefined, opacity: cell ? 1 : 0.18 }}
                         >
                           {cell ? cell.text : '—'}
@@ -2531,10 +2503,10 @@ function LogPanel({ instrument, I, bMeasured, z, instType }: {
   return (
     <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex flex-col overflow-hidden">
       <div className="shrink-0 px-3 py-1.5 border-b border-white/5 flex items-center justify-between">
-        <h2 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">บันทึก</h2>
-        <span className="text-[9px] text-gray-600 font-mono">{logs.length}</span>
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">บันทึก</h2>
+        <span className="text-sm text-gray-600 font-mono">{logs.length}</span>
       </div>
-      <div ref={listRef} className="overflow-y-auto p-2 space-y-0.5 font-mono text-[9px]">
+      <div ref={listRef} className="overflow-y-auto p-2 space-y-0.5 font-mono text-sm">
         {logs.map(log => (
           <div key={log.id} className="log-row flex items-start gap-1.5 leading-4">
             <span className="text-gray-700 shrink-0 tabular-nums">{log.ts}</span>

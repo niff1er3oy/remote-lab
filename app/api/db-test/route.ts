@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { adminDb } from '@/lib/firebase-admin';
 
 export async function GET() {
   try {
-    const [rows] = await pool.query('SELECT code, name_th FROM labs');
-    return NextResponse.json({ ok: true, labs: rows });
+    const snap = await adminDb.collection('labs').limit(5).get();
+    const labs = snap.docs.map(d => ({ code: d.data().code, name_th: d.data().name_th }));
+    return NextResponse.json({ ok: true, labs });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

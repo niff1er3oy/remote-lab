@@ -1,39 +1,36 @@
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { verifySession } from '@/lib/session';
-import { RowDataPacket } from 'mysql2';
-
-async function ensureTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS lab_chat (
-      id         BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      lab_code   VARCHAR(20)  NOT NULL,
-      user_id    CHAR(36)     NOT NULL,
-      user_name  VARCHAR(255) NOT NULL,
-      content    TEXT         NOT NULL,
-      created_at DATETIME     NOT NULL DEFAULT NOW(),
-      KEY idx_lab_chat (lab_code, created_at DESC)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  `);
-}
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { adminDb, adminAuth } from '@/lib/firebase-admin';
+import { getSessionUser } from '@/lib/session';
 
 export async function GET(req: NextRequest) {
-  const store = await cookies();
-  if (!store.get('session')) return NextResponse.json({ ok: false }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ ok: false }, { status: 401 });
 
   const lab   = req.nextUrl.searchParams.get('lab') ?? 'LAB8';
-  const since = Number(req.nextUrl.searchParams.get('since') ?? 0);
+  const since = req.nextUrl.searchParams.get('since');
+  const sinceDate = since ? new Date(since) : new Date(0);
 
   try {
-    await ensureTable();
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT id, user_id, user_name, content, created_at
-       FROM lab_chat WHERE lab_code = ? AND id > ?
-       ORDER BY created_at ASC LIMIT 80`,
-      [lab, since]
-    );
-    return NextResponse.json({ ok: true, messages: rows });
+    const snap = await adminDb.collection('lab_chat')
+      .where('lab_code', '==', lab)
+      .where('created_at', '>', Timestamp.fromDate(sinceDate))
+      .orderBy('created_at', 'asc')
+      .limit(80)
+      .get();
+
+    const messages = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        user_id: data.user_id,
+        user_name: data.user_name,
+        content: data.content,
+        created_at: (data.created_at as Timestamp).toDate().toISOString(),
+      };
+    });
+
+    return NextResponse.json({ ok: true, messages });
   } catch (err) {
     console.error('[lab/chat GET]', err);
     return NextResponse.json({ ok: false }, { status: 500 });
@@ -41,35 +38,29 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const store = await cookies();
-  const session = store.get('session');
-  if (!session) return NextResponse.json({ ok: false }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ ok: false }, { status: 401 });
 
   try {
-    const payload = verifySession(session.value);
-    if (!payload) return NextResponse.json({ ok: false }, { status: 401 });
-    const uid = payload.uid as string;
     const { lab, content } = await req.json();
     if (!content?.trim()) return NextResponse.json({ ok: false }, { status: 400 });
 
-    const [userRows] = await pool.query<RowDataPacket[]>(
-      'SELECT name FROM users WHERE user_id = ?', [uid]
-    );
-    const userName = (userRows as RowDataPacket[])[0]?.name ?? 'ผู้ใช้';
+    const authUser = await adminAuth.getUser(user.uid);
+    const userName = authUser.displayName ?? 'ผู้ใช้';
     const chatKey = lab ?? 'LAB8';
     const now = new Date();
 
-    await ensureTable();
-    const [result] = await pool.query(
-      `INSERT INTO lab_chat (lab_code, user_id, user_name, content, created_at)
-       VALUES (?, ?, ?, ?, UTC_TIMESTAMP())`,
-      [chatKey, uid, userName, content.trim()]
-    );
-    const insertId = (result as { insertId: number }).insertId;
+    const ref = await adminDb.collection('lab_chat').add({
+      lab_code: chatKey,
+      user_id: user.uid,
+      user_name: userName,
+      content: content.trim(),
+      created_at: FieldValue.serverTimestamp(),
+    });
 
     const message = {
-      id: insertId,
-      user_id: uid,
+      id: ref.id,
+      user_id: user.uid,
       user_name: userName,
       content: content.trim(),
       created_at: now.toISOString(),

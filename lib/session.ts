@@ -1,23 +1,36 @@
-import crypto from 'crypto';
+import { cookies } from 'next/headers';
+import { adminAuth } from '@/lib/firebase-admin';
 
-const SECRET = process.env.SESSION_SECRET ?? 'dev-secret-change-me';
+export const SESSION_COOKIE_NAME = 'session';
+export const SESSION_MAX_AGE_MS = 60 * 60 * 24 * 7 * 1000; // 7 days
 
-export function signSession(payload: Record<string, unknown>): string {
-  const data = Buffer.from(JSON.stringify(payload)).toString('base64');
-  const sig  = crypto.createHmac('sha256', SECRET).update(data).digest('hex');
-  return `${data}.${sig}`;
+export interface SessionUser {
+  uid: string;
+  email?: string;
+  name?: string;
+  role?: string;
 }
 
-export function verifySession(token: string): Record<string, unknown> | null {
+// Mints an httpOnly session cookie value from a client-verified Firebase ID token.
+export async function createSessionCookie(idToken: string): Promise<string> {
+  return adminAuth.createSessionCookie(idToken, { expiresIn: SESSION_MAX_AGE_MS });
+}
+
+// Reads + verifies the `session` cookie for the current request. Pure JWT
+// verification against Firebase's cached public keys — no Firestore read.
+export async function getSessionUser(): Promise<SessionUser | null> {
   try {
-    const dot = token.lastIndexOf('.');
-    if (dot === -1) return null;
-    const data     = token.slice(0, dot);
-    const sig      = token.slice(dot + 1);
-    const expected = crypto.createHmac('sha256', SECRET).update(data).digest('hex');
-    if (sig.length !== expected.length) return null;
-    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-    return JSON.parse(Buffer.from(data, 'base64').toString());
+    const store = await cookies();
+    const session = store.get(SESSION_COOKIE_NAME);
+    if (!session) return null;
+
+    const decoded = await adminAuth.verifySessionCookie(session.value, false);
+    return {
+      uid: decoded.uid,
+      email: decoded.email,
+      name: decoded.name,
+      role: decoded.role,
+    };
   } catch {
     return null;
   }

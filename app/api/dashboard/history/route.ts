@@ -1,53 +1,85 @@
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { verifySession } from '@/lib/session';
-import { RowDataPacket } from 'mysql2';
+import { Timestamp } from 'firebase-admin/firestore';
+import { adminDb } from '@/lib/firebase-admin';
+import { getSessionUser } from '@/lib/session';
+
+const LIMIT = 10;
+const OVERFETCH = 30; // raw bookings fetched per underlying query, before filtering to "history" rows
+const MAX_ITERATIONS = 5;
 
 export async function GET(req: NextRequest) {
-  const store = await cookies();
-  const session = store.get('session');
-  if (!session) return NextResponse.json({ ok: false }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ ok: false }, { status: 401 });
 
-  const offset = Number(req.nextUrl.searchParams.get('offset') ?? 0);
-  const limit  = 10;
+  const cursorParam = req.nextUrl.searchParams.get('cursor');
+  let cursorDate: Date | null = cursorParam ? new Date(cursorParam) : null;
 
   try {
-    const payload = verifySession(session.value);
-    if (!payload) return NextResponse.json({ ok: false }, { status: 401 });
-    const { uid } = payload;
+    const items: Array<{
+      booking_id: string; lab_code: string | undefined; lab_name: string | undefined;
+      start_time: string; end_time: string; status: string;
+      duration_seconds: number | null; session_id: string | null;
+    }> = [];
 
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT
-         b.booking_id,
-         l.code    AS lab_code,
-         l.name_th AS lab_name,
-         b.start_time,
-         b.end_time,
-         b.status,
-         -- ถ้า session ปิดแล้วใช้ duration_seconds, ถ้ายังเปิดอยู่คำนวณจากเวลาจริง (cap ที่ end_time)
-         COALESCE(
-           s.duration_seconds,
-           CASE WHEN s.session_id IS NOT NULL
-             THEN TIMESTAMPDIFF(SECOND, s.start_time, LEAST(b.end_time, UTC_TIMESTAMP()))
-             ELSE NULL
-           END
-         ) AS duration_seconds,
-         s.session_id
-       FROM bookings b
-       JOIN labs l ON l.lab_id = b.lab_id
-       LEFT JOIN sessions s ON s.booking_id = b.booking_id
-       WHERE b.user_id = ?
-         AND (b.status IN ('completed','cancelled') OR b.end_time < ?)
-       ORDER BY b.start_time DESC
-       LIMIT ? OFFSET ?`,
-      [uid, new Date(), limit + 1, offset]
-    );
+    let hasMoreRaw = true;
+    let iterations = 0;
+    const now = Date.now();
 
-    const has_more = (rows as RowDataPacket[]).length > limit;
-    const items    = (rows as RowDataPacket[]).slice(0, limit);
+    while (items.length <= LIMIT && hasMoreRaw && iterations < MAX_ITERATIONS) {
+      iterations++;
+      let q = adminDb.collection('bookings')
+        .where('user_id', '==', user.uid)
+        .orderBy('start_time', 'desc')
+        .limit(OVERFETCH);
+      if (cursorDate) q = q.startAfter(Timestamp.fromDate(cursorDate));
 
-    return NextResponse.json({ ok: true, items, has_more });
+      const snap = await q.get();
+      hasMoreRaw = snap.size === OVERFETCH;
+      if (snap.empty) break;
+
+      for (const doc of snap.docs) {
+        const b = doc.data() as { lab_id: string; start_time: Timestamp; end_time: Timestamp; status: string };
+        cursorDate = b.start_time.toDate();
+
+        const isHistory = ['completed', 'cancelled'].includes(b.status) || b.end_time.toMillis() < now;
+        if (!isHistory) continue;
+
+        const [labSnap, sessionSnap] = await Promise.all([
+          adminDb.collection('labs').doc(b.lab_id).get(),
+          adminDb.collection('sessions').doc(doc.id).get(),
+        ]);
+        const lab = labSnap.data();
+
+        let durationSeconds: number | null = null;
+        if (sessionSnap.exists) {
+          const s = sessionSnap.data()!;
+          durationSeconds = s.duration_seconds ?? (
+            s.start_time
+              ? Math.floor((Math.min(b.end_time.toMillis(), now) - (s.start_time as Timestamp).toMillis()) / 1000)
+              : null
+          );
+        }
+
+        items.push({
+          booking_id: doc.id,
+          lab_code: lab?.code,
+          lab_name: lab?.name_th,
+          start_time: b.start_time.toDate().toISOString(),
+          end_time: b.end_time.toDate().toISOString(),
+          status: b.status,
+          duration_seconds: durationSeconds,
+          session_id: sessionSnap.exists ? doc.id : null,
+        });
+
+        if (items.length > LIMIT) break;
+      }
+    }
+
+    const has_more = items.length > LIMIT;
+    const page = items.slice(0, LIMIT);
+    const cursor = page.length ? page[page.length - 1].start_time : null;
+
+    return NextResponse.json({ ok: true, items: page, has_more, cursor });
   } catch (err) {
     console.error('[dashboard/history]', err);
     return NextResponse.json({ ok: false }, { status: 500 });

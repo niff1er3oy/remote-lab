@@ -1,6 +1,5 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { verifySession } from '@/lib/session';
+import { getSessionUser } from '@/lib/session';
 import { exec } from 'child_process';
 import util from 'util';
 
@@ -13,9 +12,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const store = await cookies();
-  const session = store.get('session');
-  if (!session || !verifySession(session.value))
+  if (!(await getSessionUser()))
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (armBusy)

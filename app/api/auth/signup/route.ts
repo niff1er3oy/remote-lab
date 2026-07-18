@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import bcrypt from 'bcryptjs';
-import { RowDataPacket } from 'mysql2';
+import { adminAuth } from '@/lib/firebase-admin';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,21 +11,18 @@ export async function POST(req: NextRequest) {
     if (password.length < 8)
       return NextResponse.json({ ok: false, error: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' }, { status: 400 });
 
-    const [existing] = await pool.query<RowDataPacket[]>(
-      'SELECT user_id FROM users WHERE email = ?', [email]
-    );
-    if ((existing as RowDataPacket[]).length > 0)
-      return NextResponse.json({ ok: false, error: 'อีเมลนี้ถูกใช้งานแล้ว' }, { status: 409 });
-
-    const hash = await bcrypt.hash(password, 12);
-
-    await pool.query(
-      'INSERT INTO users (user_id, email, name, password_hash, role) VALUES (UUID(), ?, ?, ?, ?)',
-      [email, name.trim(), hash, role]
-    );
+    const userRecord = await adminAuth.createUser({
+      email,
+      password,
+      displayName: name.trim(),
+    });
+    await adminAuth.setCustomUserClaims(userRecord.uid, { role });
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'auth/email-already-exists')
+      return NextResponse.json({ ok: false, error: 'อีเมลนี้ถูกใช้งานแล้ว' }, { status: 409 });
+
     console.error('[signup]', err);
     const msg = process.env.NODE_ENV === 'development' && err instanceof Error ? err.message : 'เกิดข้อผิดพลาด กรุณาลองใหม่';
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });

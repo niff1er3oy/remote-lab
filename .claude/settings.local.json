@@ -52,7 +52,18 @@
       "Bash(curl -s -o /dev/null -w \"dji: %{http_code}\\\\n\" http://34.87.165.238:8889/dji)",
       "Bash(curl -s -o /dev/null -w \"webc1: %{http_code}\\\\n\" http://34.87.165.238:8889/webc1)",
       "Bash(git check-ignore *)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"--- package.json ---\" && cat package.json && echo \"--- .env keys \\(names only\\) ---\" && sed -E 's/=.*/=.../' .env 2>/dev/null)",
+      "Bash(npx next *)",
+      "Bash(npm uninstall *)",
+      "Bash(node \"C:\\\\Users\\\\Niff1er\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--GitHub-remote-lab\\\\4bda018a-a67d-4d4d-86c7-62ac888a1576\\\\scratchpad\\\\seed-labs.js\")",
+      "Bash(node seed-labs.js)",
+      "Bash(node /d/GitHub/remote-lab/seed-labs.js)",
+      "Bash(node -e \"require.resolve\\('google-auth-library'\\); console.log\\('found'\\)\")",
+      "Bash(node /d/GitHub/remote-lab/create-indexes.js)"
+    ],
+    "additionalDirectories": [
+      "d:\\GitHub\\remote-lab"
     ]
   }
 }

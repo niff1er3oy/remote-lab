@@ -82,7 +82,7 @@ export default function DashboardPage() {
   const [joining,       setJoining]       = useState(false);
   const [joinError,     setJoinError]     = useState('');
   const [copied,        setCopied]        = useState(false);
-  const offset = useRef(0);
+  const historyCursor = useRef<string | null>(null);
 
   const headerRef       = useRef<HTMLDivElement>(null);
   const nameRef         = useRef<HTMLSpanElement>(null);
@@ -100,7 +100,7 @@ export default function DashboardPage() {
         setUser(user);
         const [statsRes, histRes, activeRes] = await Promise.all([
           fetch('/api/dashboard/stats'),
-          fetch('/api/dashboard/history?offset=0'),
+          fetch('/api/dashboard/history'),
           fetch('/api/bookings/active-session'),
         ]);
         if (statsRes.ok) setStats(await statsRes.json());
@@ -108,7 +108,7 @@ export default function DashboardPage() {
           const hd = await histRes.json();
           setHistory(hd.items ?? []);
           setHasMore(hd.has_more ?? false);
-          offset.current = hd.items?.length ?? 0;
+          historyCursor.current = hd.cursor ?? null;
         }
         if (activeRes.ok) {
           const ad = await activeRes.json();
@@ -231,12 +231,13 @@ export default function DashboardPage() {
   async function loadMoreHistory() {
     setLoadingMore(true);
     try {
-      const res = await fetch(`/api/dashboard/history?offset=${offset.current}`);
+      const cursorQs = historyCursor.current ? `?cursor=${encodeURIComponent(historyCursor.current)}` : '';
+      const res = await fetch(`/api/dashboard/history${cursorQs}`);
       if (res.ok) {
         const hd = await res.json();
         setHistory(prev => [...prev, ...(hd.items ?? [])]);
         setHasMore(hd.has_more ?? false);
-        offset.current += hd.items?.length ?? 0;
+        historyCursor.current = hd.cursor ?? historyCursor.current;
       }
     } finally {
       setLoadingMore(false);

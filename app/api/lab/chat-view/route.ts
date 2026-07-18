@@ -1,24 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { RowDataPacket } from 'mysql2';
-
-async function validateRoom(roomCode: string): Promise<boolean> {
-  const now = new Date();
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT 1 FROM bookings b
-     WHERE b.room_code = ?
-       AND b.status IN ('confirmed','pending','in_progress')
-       AND b.start_time <= ?
-       AND b.end_time   >= ?
-     LIMIT 1`,
-    [roomCode, now, now]
-  );
-  return rows.length > 0;
-}
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { adminDb } from '@/lib/firebase-admin';
+import { validateRoom } from '@/lib/validate-room';
 
 export async function GET(req: NextRequest) {
   const roomCode = req.nextUrl.searchParams.get('room')?.toUpperCase().trim();
-  const since    = Number(req.nextUrl.searchParams.get('since') ?? 0);
+  const since    = req.nextUrl.searchParams.get('since');
+  const sinceDate = since ? new Date(since) : new Date(0);
 
   if (!roomCode)
     return NextResponse.json({ ok: false }, { status: 400 });
@@ -26,12 +14,23 @@ export async function GET(req: NextRequest) {
   try {
     if (!await validateRoom(roomCode)) return NextResponse.json({ ok: false }, { status: 404 });
 
-    const [messages] = await pool.query<RowDataPacket[]>(
-      `SELECT id, user_id, user_name, content, created_at
-       FROM lab_chat WHERE lab_code = ? AND id > ?
-       ORDER BY created_at ASC LIMIT 80`,
-      [roomCode, since]
-    );
+    const snap = await adminDb.collection('lab_chat')
+      .where('lab_code', '==', roomCode)
+      .where('created_at', '>', Timestamp.fromDate(sinceDate))
+      .orderBy('created_at', 'asc')
+      .limit(80)
+      .get();
+
+    const messages = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        user_id: data.user_id,
+        user_name: data.user_name,
+        content: data.content,
+        created_at: (data.created_at as Timestamp).toDate().toISOString(),
+      };
+    });
 
     return NextResponse.json({ ok: true, messages, lab_code: roomCode });
   } catch (err) {
@@ -59,14 +58,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'ห้องปิดแล้วหรือไม่มีอยู่' }, { status: 404 });
 
     const now = new Date();
-    const [result] = await pool.query(
-      `INSERT INTO lab_chat (lab_code, user_id, user_name, content, created_at)
-       VALUES (?, ?, ?, ?, UTC_TIMESTAMP())`,
-      [roomCode, viewerId, name, content]
-    );
-    const insertId = (result as { insertId: number }).insertId;
+    const ref = await adminDb.collection('lab_chat').add({
+      lab_code: roomCode,
+      user_id: viewerId,
+      user_name: name,
+      content,
+      created_at: FieldValue.serverTimestamp(),
+    });
 
-    const message = { id: insertId, user_id: viewerId, user_name: name, content, created_at: now.toISOString() };
+    const message = { id: ref.id, user_id: viewerId, user_name: name, content, created_at: now.toISOString() };
 
     const broadcast = (global as { __wssBroadcastToRoom?: (room: string, msg: unknown) => void }).__wssBroadcastToRoom;
     if (broadcast) broadcast(`lab:${roomCode}`, { type: 'chat', payload: message });

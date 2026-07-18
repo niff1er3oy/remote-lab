@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { animate, stagger, scrambleText } from 'animejs';
 import Image from 'next/image';
 import Link from 'next/link';
-
-type Step = 'info' | 'verify';
+import { establishSession } from '@/lib/auth-client';
 
 const ROLES = [
   { value: 'student',     label: 'นักศึกษา' },
@@ -15,7 +14,6 @@ const ROLES = [
 ];
 
 export default function SignupPage() {
-  const [step, setStep] = useState<Step>('info');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -72,17 +70,16 @@ export default function SignupPage() {
       const data = await res.json();
       if (!data.ok) {
         setError(data.error ?? 'เกิดข้อผิดพลาด');
-      } else {
-        setStep('verify');
+        return;
       }
+      await establishSession(email, password);
+      window.location.href = '/dashboard';
     } catch {
       setError('ไม่สามารถเชื่อมต่อได้ กรุณาลองใหม่');
     } finally {
       setLoading(false);
     }
   }
-
-  if (step === 'verify') return <VerifyStep email={email} />;
 
   return (
     <div className="min-h-screen bg-[#030712] flex flex-col">
@@ -261,44 +258,6 @@ export default function SignupPage() {
           </p>
         </div>
       </main>
-    </div>
-  );
-}
-
-function VerifyStep({ email }: { email: string }) {
-  return (
-    <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center px-4">
-      <div className="fixed inset-0 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(200,255,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.03) 1px, transparent 1px)',
-        backgroundSize: '64px 64px',
-      }} />
-      <div className="relative z-10 w-full max-w-sm text-center">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#c8ff00]/10 border border-[#c8ff00]/25"
-          style={{ boxShadow: '0 0 40px rgba(200,255,0,0.12)' }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c8ff00" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-            <polyline points="22,6 12,13 2,6"/>
-          </svg>
-        </div>
-        <h2 className="text-xl font-bold text-white mb-2">ตรวจสอบอีเมลของคุณ</h2>
-        <p className="text-sm text-gray-400 mb-1">
-          เราส่งลิงก์ยืนยันไปที่
-        </p>
-        <p className="text-sm font-medium text-[#c8ff00] mb-6">{email}</p>
-        <p className="text-xs text-gray-600 mb-8">
-          คลิกลิงก์ในอีเมลเพื่อเปิดใช้งานบัญชีของคุณ<br />
-          ตรวจสอบโฟลเดอร์ Spam หากไม่พบอีเมล
-        </p>
-        <Link href="/login"
-          className="inline-block rounded-xl bg-[#c8ff00] px-6 py-2.5 text-sm font-semibold text-gray-950 hover:bg-white transition-colors"
-          style={{ boxShadow: '0 0 20px rgba(200,255,0,0.25)' }}>
-          ไปยังหน้าเข้าสู่ระบบ
-        </Link>
-        <p className="mt-4 text-xs text-gray-600">
-          ไม่ได้รับอีเมล?{' '}
-          <button className="text-[#c8ff00] hover:text-white transition-colors">ส่งอีกครั้ง</button>
-        </p>
-      </div>
     </div>
   );
 }
