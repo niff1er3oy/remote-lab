@@ -60,7 +60,9 @@
       "Bash(node seed-labs.js)",
       "Bash(node /d/GitHub/remote-lab/seed-labs.js)",
       "Bash(node -e \"require.resolve\\('google-auth-library'\\); console.log\\('found'\\)\")",
-      "Bash(node /d/GitHub/remote-lab/create-indexes.js)"
+      "Bash(node /d/GitHub/remote-lab/create-indexes.js)",
+      "Bash(node --check server.js)",
+      "Bash(node -e \"console.log\\(Object.keys\\(require\\('firebase-admin/app'\\)\\)\\); console.log\\(Object.keys\\(require\\('firebase-admin/auth'\\)\\)\\)\")"
     ],
     "additionalDirectories": [
       "d:\\GitHub\\remote-lab"

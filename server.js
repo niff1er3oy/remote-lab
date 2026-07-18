@@ -6,7 +6,8 @@ const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
 const { WebSocketServer } = require('ws')
-const admin = require('firebase-admin')
+const { initializeApp, getApps, cert } = require('firebase-admin/app')
+const { getAuth } = require('firebase-admin/auth')
 
 const port = parseInt(process.env.PORT || '3000', 10)
 const dev = process.env.NODE_ENV !== 'production'
@@ -16,9 +17,9 @@ const listenHost = process.env.LISTEN_HOST || (dev ? 'localhost' : '0.0.0.0')
 const app = next({ dev, hostname, port, turbopack: dev })
 const handle = app.getRequestHandler()
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
+if (!getApps().length) {
+  initializeApp({
+    credential: cert({
       projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
       clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
       privateKey: (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
@@ -40,7 +41,7 @@ async function validateSession(request) {
     const session = cookies['session']
     if (!session) return null
 
-    const decoded = await admin.auth().verifySessionCookie(session, false)
+    const decoded = await getAuth().verifySessionCookie(session, false)
     return { userId: decoded.uid, role: decoded.role }
   } catch {
     return null
