@@ -1,6 +1,16 @@
 import { NextRequest } from 'next/server';
+import { getSessionUser } from '@/lib/session';
 
 const TYPHOON_API = 'https://api.opentyphoon.ai/v1/chat/completions';
+
+// The conversation is trimmed before it goes upstream: the key is ours, so the
+// size of a request must not be up to the caller.
+const MAX_TURNS = 20;
+const MAX_TURN_CHARS = 4000;
+// Long enough for a worked calculation in Thai. The page tells the student
+// when an answer still runs into this limit.
+const MAX_ANSWER_TOKENS = 1536;
+const UPSTREAM_TIMEOUT_MS = 60_000;
 
 interface ChatContext {
   instrumentName: string;
@@ -13,6 +23,8 @@ interface ChatContext {
   z?: number;
 }
 
+type Turn = { role: 'user' | 'assistant'; content: string };
+
 const SYSTEM_PROMPT = `คุณคือ "ครูฟิสิกส์ Typhoon" ผู้เชี่ยวชาญการสอนวิชาฟิสิกส์ระดับมัธยมปลายและมหาวิทยาลัย
 หน้าที่ของคุณคือการช่วยให้นักเรียนเข้าใจ "ที่มาและหลักการ" ของฟิสิกส์ ไม่ใช่แค่การบอกคำตอบเพียงอย่างเดียว
 
@@ -23,6 +35,7 @@ const SYSTEM_PROMPT = `คุณคือ "ครูฟิสิกส์ Typhoo
    - ใช้ Markdown ในการจัดหัวข้อให้ชัดเจน
    - ใช้ LaTeX สำหรับสูตรทางฟิสิกส์เสมอ เช่น $F = ma$ หรือ $$E = mc^2$$
    - หากต้องมีการคำนวณ ให้แสดงวิธีทำเป็นลำดับขั้นตอน (Step-by-step)
+   - ตอบให้กระชับ ยาวไม่เกินประมาณ 200 คำต่อครั้ง ถ้าเนื้อหายาวหรือต้องคำนวณหลายขั้น ให้ทำทีละช่วงแล้วถามนักเรียนก่อนไปขั้นต่อไป
 4. ข้อจำกัด: หากนักเรียนถามเรื่องที่ไม่เกี่ยวข้องกับฟิสิกส์ ให้ตอบอย่างสุภาพว่า "ครูเชี่ยวชาญด้านฟิสิกส์ ลองกลับมาคุยเรื่องแรง พลังงาน หรือคลื่นกันดีกว่านะครับ"
 
 **โครงสร้างการตอบ:**
@@ -33,21 +46,71 @@ const SYSTEM_PROMPT = `คุณคือ "ครูฟิสิกส์ Typhoo
 
 การทดลองที่ 8 "สนามแม่เหล็กในขดลวดเดี่ยวและกฎของไบโอต-ซาวัต" รายวิชา 04203102:
 - ตอนที่ 1 ขดลวดเดี่ยว: วัด B ที่จุดกึ่งกลาง สำหรับ n = 1, 2, 3 รอบ ที่ I = 5 A  สูตร $B_0 = \\mu_0 n I / (2R)$
-- ตอนที่ 2 โซลีนอยด์: วัด B ตามแนวแกน Z ทุก 1 cm (Z = −15 ถึง +15 cm) ที่ I = 1 A  L = 160 mm, R = 13 mm  สูตร $B_z = \\frac{\\mu_0 N I}{2L}\\left[\\frac{L/2+Z}{\\sqrt{R^2+(L/2+Z)^2}} + \\frac{L/2-Z}{\\sqrt{R^2+(L/2-Z)^2}}\\right]$`;
+- ตอนที่ 2 โซลีนอยด์ (ชุดทดลองมีขดเดียว N = 75 รอบ): วัด B ตามแนวแกน Z ทุก 1 cm (Z = −15 ถึง +15 cm) ที่ I = 1 A  L = 160 mm, R = 13 mm  สูตร $B_z = \\frac{\\mu_0 N I}{2L}\\left[\\frac{L/2+Z}{\\sqrt{R^2+(L/2+Z)^2}} + \\frac{L/2-Z}{\\sqrt{R^2+(L/2-Z)^2}}\\right]$`;
+
+function reply(error: string, status: number) {
+  return new Response(JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+// Only what the lab page sends is let through: user and assistant turns of
+// plain text, ending on the student's question. A "system" turn from the
+// caller would replace the tutor's instructions, so it is dropped.
+function readTurns(raw: unknown): Turn[] | null {
+  if (!Array.isArray(raw)) return null;
+  const turns: Turn[] = [];
+  for (const m of raw as { role?: unknown; content?: unknown }[]) {
+    if (!m || (m.role !== 'user' && m.role !== 'assistant')) continue;
+    if (typeof m.content !== 'string' || !m.content.trim()) continue;
+    turns.push({ role: m.role, content: m.content.slice(0, MAX_TURN_CHARS) });
+  }
+  const recent = turns.slice(-MAX_TURNS);
+  if (!recent.length || recent[recent.length - 1].role !== 'user') return null;
+  return recent;
+}
+
+// The readings end up inside the system prompt, so they are checked rather
+// than trusted: numbers must be numbers, and the two labels are cut to one
+// short line each.
+function readContext(raw: unknown): ChatContext | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const c = raw as Record<string, unknown>;
+  const label = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 60) : '');
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+  const I = num(c.I), I0 = num(c.I0), bTheory = num(c.bTheory), bMeasured = num(c.bMeasured);
+  if (I === null || I0 === null || bTheory === null || bMeasured === null) return null;
+  if (c.instType !== 'coil' && c.instType !== 'solenoid') return null;
+
+  return {
+    instrumentName: label(c.instrumentName),
+    instSub: label(c.instSub),
+    instType: c.instType,
+    I, I0, bTheory, bMeasured,
+    z: num(c.z) ?? undefined,
+  };
+}
 
 export async function POST(req: NextRequest) {
+  // The assistant is part of the lab room; like everything else there it is
+  // for signed-in users, not an open door to the Typhoon key.
+  const user = await getSessionUser();
+  if (!user) return reply('กรุณาเข้าสู่ระบบก่อนใช้ผู้ช่วยสอน', 401);
+
   const apiKey = process.env.TYPHOON_API_KEY;
   if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: 'ยังไม่ได้ตั้งค่า TYPHOON_API_KEY กรุณาเพิ่มใน .env.local' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    console.error('[chat] TYPHOON_API_KEY is not set');
+    return reply('ผู้ช่วยสอนยังไม่พร้อมใช้งาน กรุณาแจ้งผู้ดูแลระบบ', 503);
   }
 
-  const { messages, context }: { messages: { role: string; content: string }[]; context: ChatContext } =
-    await req.json();
+  const body = await req.json().catch(() => null);
+  const messages = readTurns(body?.messages);
+  const context = readContext(body?.context);
+  if (!messages || !context) return reply('คำขอไม่ถูกต้อง', 400);
 
   const delta = context.bMeasured - context.bTheory;
+  const percent = context.bTheory !== 0
+    ? ` (${Math.abs(delta / context.bTheory * 100).toFixed(1)}% ต่างจากทฤษฎี)`
+    : '';
   const zLine = context.instType === 'solenoid' && context.z !== undefined
     ? `\n- ตำแหน่งหัววัด Z = ${(context.z * 100).toFixed(0)} cm จากจุดกึ่งกลาง`
     : '';
@@ -58,33 +121,42 @@ export async function POST(req: NextRequest) {
 - กระแสที่วัดได้ I = ${context.I.toFixed(4)} A${zLine}
 - สนามแม่เหล็กทฤษฎี B_theory = ${context.bTheory.toFixed(3)} mT
 - สนามแม่เหล็กวัดจริง B_measured = ${context.bMeasured.toFixed(3)} mT
-- ΔB = ${delta >= 0 ? '+' : ''}${delta.toFixed(3)} mT (${Math.abs(delta / context.bTheory * 100).toFixed(1)}% ต่างจากทฤษฎี)`;
+- ΔB = ${delta >= 0 ? '+' : ''}${delta.toFixed(3)} mT${percent}`;
 
-  const upstream = await fetch(TYPHOON_API, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'typhoon-v2.5-30b-a3b-instruct',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT + contextBlock },
-        ...messages,
-      ],
-      temperature: 0.6,
-      max_completion_tokens: 512,
-      top_p: 0.6,
-      stream: true,
-    }),
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(TYPHOON_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'typhoon-v2.5-30b-a3b-instruct',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT + contextBlock },
+          ...messages,
+        ],
+        temperature: 0.6,
+        max_completion_tokens: MAX_ANSWER_TOKENS,
+        top_p: 0.6,
+        stream: true,
+      }),
+      // Stops the upstream call when the student leaves or it takes too long.
+      signal: AbortSignal.any([req.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
+    });
+  } catch (err) {
+    console.error('[chat] could not reach Typhoon:', err);
+    return reply('เชื่อมต่อผู้ช่วยสอนไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง', 502);
+  }
 
   if (!upstream.ok) {
-    const err = await upstream.text();
-    return new Response(
-      JSON.stringify({ error: `Typhoon API error: ${err}` }),
-      { status: upstream.status, headers: { 'Content-Type': 'application/json' } }
-    );
+    // The upstream message stays in the server log: it can name the key or the
+    // account, and it means nothing to a student.
+    console.error(`[chat] Typhoon answered ${upstream.status}:`, (await upstream.text()).slice(0, 500));
+    return upstream.status === 429
+      ? reply('มีผู้ใช้ผู้ช่วยสอนจำนวนมาก รอสักครู่แล้วลองใหม่', 429)
+      : reply('ผู้ช่วยสอนตอบไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง', 502);
   }
 
   return new Response(upstream.body, {

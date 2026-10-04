@@ -5,58 +5,75 @@ Remote Lab is a web platform that lets students, researchers, and instructors bo
 ## Tech stack
 
 - **Next.js 16** (App Router, Turbopack) + **React 19** + **TypeScript**
-- **Custom Node server** (`server.js`) wrapping Next.js — needed because the app also runs a raw `ws` WebSocket server on the same port/process for real-time chat, notifications, and lab data
-- **Firebase Authentication** — user accounts (email/password + Google)
-- **Firestore** — all application data (bookings, sessions, chat, notifications, lab catalog)
+- **Custom Node server** (`server.js`) wrapping Next.js — a thin wrapper that loads env and picks the listen host. It used to host a `ws` WebSocket server for room chat; that was removed together with the room-sharing feature, so it runs no WebSocket code of its own any more
+- **Firebase Authentication** — user accounts (Google sign-in only)
+- **Firestore** — all application data (bookings, sessions, notifications, lab catalog)
 - **Tailwind CSS 4** — dark navy × bright green (`#c8ff00`) theme, see `AGENTS.md`
 - **Anime.js** — UI micro-animations throughout
 - **Three.js** — 3D field visualization (`app/lab/FieldViz.tsx`)
+- **KaTeX** — typesets the formulas in the AI assistant's replies; loaded on demand, the first time a reply contains one
 - **MediaMTX** (external service) — WebRTC (WHEP) camera streaming, proxied through the Next server
-- **Typhoon API** (Claude-compatible LLM) — the in-lab AI teaching assistant
+- **Typhoon API** (OpenAI-compatible LLM) — the in-lab AI teaching assistant
 
 ## Directory structure
 
 ```
 app/
-├── page.tsx, layout.tsx            — landing page, root layout
-├── login/, signup/                 — auth pages (client-side Firebase sign-in)
-├── dashboard/page.tsx               — booking calendar, stats, history, notifications
+├── page.tsx, layout.tsx            — landing page (hero with an interactive plot of the
+│                                     solenoid's theoretical B(Z), booking calendar,
+│                                     experiment overview, steps), root layout
+├── login/page.tsx                  — sign-in page (Google popup via the Firebase client SDK)
+├── dashboard/page.tsx               — session hero (live countdown / next round), booking
+│                                     calendar beside the booked rounds, handouts, history
 ├── lab/
 │   ├── page.tsx                    — the lab room itself: camera feeds, instrument
 │   │                                 selector, sensor/formula panels, field viz,
-│   │                                 AI chat, room chat, activity log (~2500 lines,
-│   │                                 all client components co-located in one file)
+│   │                                 AI chat, activity log (~2200 lines, all client
+│   │                                 components co-located in one file)
 │   └── FieldViz.tsx                — Three.js magnetic field visualization
-├── view/[code]/page.tsx            — read-only spectator view via a room code (no login)
 ├── components/                     — BookingCalendar, DashboardNav, GlobalNotifications,
-│                                     PortraitGuard, useNotifications (poll-based hook)
+│                                     PortraitGuard, useNotifications (poll-based hook),
+│                                     FieldDiagram (to-scale field-line drawings of the
+│                                     coil and solenoid, used on the landing page),
+│                                     SlideIn (panel that slides in when it appears),
+│                                     KatexMath / MathSource (a formula in the AI chat,
+│                                     typeset by KaTeX or shown as its LaTeX source)
 └── api/                            — Next.js Route Handlers, see "API routes" below
 
 lib/
 ├── firebase-admin.ts               — server-side Firestore + Auth (Admin SDK) singleton
 ├── firebase-client.ts              — browser-side Firebase Auth singleton
-├── auth-client.ts                  — sign-in helpers (email/password, Google) shared by
-│                                     login/signup pages
-├── session.ts                      — session cookie mint/verify (wraps Admin SDK)
-└── validate-room.ts                — shared "is this room code live right now?" lookup,
-                                      used by 3 different lab-room routes
+├── auth-client.ts                  — Google sign-in helper used by the login page
+├── physics.ts                      — Lab 8 formulas (calcBCoil, calcBSolenoid), shared by
+│                                     the lab room and the landing page's field plot
+├── webrtc-latency.ts               — reads a camera feed's delay (network + jitter buffer
+│                                     + decode) from RTCPeerConnection.getStats(); used by
+│                                     the latency readout on the lab room's camera panes
+├── field-lines.ts                  — generated: field-line paths for FieldDiagram
+├── motion.ts                       — shared anime.js helpers (reduced-motion check,
+│                                     reveal-on-scroll, press feedback) for the landing
+│                                     page, dashboard and booking calendar
+└── session.ts                      — session cookie mint/verify (wraps Admin SDK)
 
-server.js                           — custom server: boots Next.js + a `ws` WebSocket
-                                      server on the same HTTP server/port
+scripts/
+└── field-lines.mjs                 — regenerates lib/field-lines.ts by tracing the exact
+                                      Biot-Savart field of the rig's coil and solenoid;
+                                      rerun it if their dimensions change
+
+server.js                           — custom server: loads env and boots Next.js
 ```
 
 ## API routes (`app/api/`)
 
 | Route | Purpose |
 |---|---|
-| `auth/signup`, `auth/session`, `auth/me`, `auth/logout` | Account creation and session management |
+| `auth/session`, `auth/me`, `auth/logout` | Session management |
 | `bookings`, `bookings/[id]`, `bookings/availability`, `bookings/active-session`, `bookings/notify-upcoming` | Booking CRUD, the 7-day availability grid, "do I have an active session right now" check, and reminder notifications |
-| `lab/join`, `lab/view`, `lab/chat`, `lab/chat-view` | Room-code based lab access (authenticated + anonymous variants) and lab chat |
 | `dashboard/history`, `dashboard/stats` | Dashboard data |
 | `notifications` | Notification feed |
 | `hardware` | Executes a local Python script to drive the physical coil/solenoid rig (session-gated, no DB access) |
 | `cam/[...path]` | Reverse proxy for WHEP camera signaling — see "Camera streaming" below |
-| `chat` | Proxies to the Typhoon LLM API for the AI teaching assistant |
+| `chat` | Proxies to the Typhoon LLM API for the AI teaching assistant. Signed-in users only; accepts user/assistant turns (last 20, 4,000 characters each) plus the current readings, and streams the answer back as SSE |
 | `db-test` | Trivial Firestore connectivity health-check |
 
 ## Data model (Firestore)
@@ -64,19 +81,21 @@ server.js                           — custom server: boots Next.js + a `ws` We
 There is no fixed schema file — Firestore is schemaless — but the app expects these collections:
 
 - **`labs/{labId}`** — the experiment catalog (currently one seeded document, `LAB8`). Fields: `code`, `name_th`, `name_en`, `description_th`, `duration_minutes`, `is_active`. `labId` doubles as the human-readable code (e.g. `"LAB8"`) — no separate UUID.
-- **`bookings/{bookingId}`** (auto-ID) — `user_id`, `lab_id`, `start_time`/`end_time` (Timestamps), `status` (`pending`/`confirmed`/`in_progress`/`completed`/`cancelled`), `room_code` (globally unique, generated at creation), plus `notified_can_enter_at`/`notified_starting_soon_at` (reminder de-dup flags).
+- **`bookings/{bookingId}`** (auto-ID) — `user_id`, `lab_id`, `start_time`/`end_time` (Timestamps), `status` (`pending`/`confirmed`/`in_progress`/`completed`/`cancelled`), plus `notified_can_enter_at`/`notified_starting_soon_at` (reminder de-dup flags).
 - **`sessions/{bookingId}`** — one doc per booking, **keyed by the booking's own ID** (not a separate auto-ID) so "start" is a plain existence-check-then-create instead of an upsert. Fields: `user_id`, `lab_id`, `booking_id`, `start_time`, `end_time`, `duration_seconds`, `status`.
-- **`lab_chat/{messageId}`** (auto-ID) — live in-room chat. `lab_code`, `user_id`, `user_name`, `content`, `created_at` (server timestamp).
 - **`notifications/{notificationId}`** (auto-ID) — `user_id`, `title`, `message`, `type`, `action_url`, `is_read`, `created_at`.
 
-User profile data (`name`, `role`) is **not** stored in Firestore — it lives on the Firebase Auth user record itself (`displayName` for name, a custom claim for `role`), so reading the current user (`/api/auth/me`, the WebSocket auth handshake) is pure JWT verification with zero database reads.
+Leftovers from the removed room-sharing feature may still exist in the database and are no longer read or written: the `lab_chat` collection, and a `room_code` field on bookings created before the removal.
+
+User profile data (`name`, `role`) is **not** stored in Firestore — it lives on the Firebase Auth user record itself (`displayName` for name, a custom claim for `role`), so reading the current user (`/api/auth/me`) is pure JWT verification with zero database reads.
 
 ## Auth & sessions
 
-- **Email/password signup** (`POST /api/auth/signup`) is server-side: Admin SDK `createUser()` + `setCustomUserClaims({role})`.
-- **Login** (both email/password and Google) happens **client-side** via the Firebase Auth SDK — the server never sees a plaintext password, and Google sign-in is a browser popup. The client then POSTs the resulting ID token to `POST /api/auth/session`, which mints an **httpOnly session cookie** via `adminAuth.createSessionCookie()`.
-- First-time Google sign-ins have no `role` claim yet; `/api/auth/session` defaults it to `'student'` and asks the client to force-refresh its ID token once before retrying, since a session cookie's claims are a snapshot of whatever ID token minted it — not the live user record.
-- Every server-side route (and the WebSocket upgrade handler in `server.js`) verifies the same `session` cookie via `adminAuth.verifySessionCookie(cookie, /* checkRevoked */ false)` — a local JWT check against Firebase's cached public keys, no network round-trip and no database read. `server.js` duplicates a small piece of this logic (it's a plain `.js` CommonJS file, not part of the Next.js/TS module graph) but authenticates against the exact same session cookie.
+- **Google is the only sign-in method.** There is no signup flow and no email/password login — a user's Firebase Auth record is created automatically by their first Google sign-in.
+- **Login** happens **client-side** via the Firebase Auth SDK (a Google popup). The client then POSTs the resulting ID token to `POST /api/auth/session`, which mints an **httpOnly session cookie** via `adminAuth.createSessionCookie()`.
+- `/api/auth/session` rejects (403) any ID token whose `firebase.sign_in_provider` is not `google.com`. The login page offers nothing else, but the project's public web API key would otherwise let a caller obtain an ID token from another provider straight from the Firebase Auth REST API — so the Email/Password provider should also be disabled in the Firebase console.
+- First-time sign-ins have no `role` claim yet; `/api/auth/session` defaults it to `'student'` and asks the client to force-refresh its ID token once before retrying, since a session cookie's claims are a snapshot of whatever ID token minted it — not the live user record. Nothing in the app assigns any other role.
+- Server-side routes that need a user verify the `session` cookie through `getSessionUser()` in `lib/session.ts`, i.e. `adminAuth.verifySessionCookie(cookie, /* checkRevoked */ false)` — a local JWT check against Firebase's cached public keys, no network round-trip and no database read.
 
 ## Booking overlap prevention
 
@@ -86,9 +105,11 @@ Firestore has no equivalent of a SQL `CHECK` constraint, so `end_time > start_ti
 
 ## Real-time architecture
 
-`server.js` runs a `ws` WebSocket server (`/ws`) alongside the Next.js request handler, in the same process. On upgrade, it authenticates the request's `session` cookie the same way API routes do, then joins the socket to a room (`?room=<id>`, default `user:<uid>`). Message types: `chat`, `lab_data`, `booking_status`, `notification`, `join_room`, `ping`. API routes can broadcast into a room via `global.__wssBroadcastToRoom`, set up by `server.js` at boot (e.g. `lab/chat` broadcasts a new message to `lab:<roomCode>` right after writing it to Firestore).
+The app has no WebSocket server of its own. The room-sharing feature (room codes, the `/view/[code]` spectator page, in-room chat and the `/ws` room server in `server.js`) was removed; a lab session now has exactly one participant, the user who booked it.
 
-Notifications, by contrast, are **not** pushed over the WebSocket to the client UI — `useNotifications()` polls `/api/notifications` + `/api/bookings/notify-upcoming` every 30 seconds, plus immediately on a `booking-created` DOM event fired by the booking calendar. The WS `notification` message type exists in the server's router but nothing in the current client subscribes to it.
+The only live socket is the sensor feed: the lab page opens `/ws/sensor`, which `next.config.ts` rewrites to the sensor service at `http://127.0.0.1:8000/ws/sensor`. Next.js attaches its own upgrade listener to the HTTP server for that rewrite (and for HMR in development), so `server.js` needs no upgrade handling.
+
+Notifications are polled, not pushed — `useNotifications()` calls `/api/notifications` + `/api/bookings/notify-upcoming` every 30 seconds, plus immediately on a `booking-created` DOM event fired by the booking calendar.
 
 ## Camera streaming
 
@@ -98,10 +119,10 @@ Two physical cameras (`cam1`, `cam2`, `cam3` per experiment type — main + seco
 
 - `Dockerfile` builds the Next app into a single image (`remote-lab:latest`).
 - `docker-compose.yml` runs that image plus a `cloudflared` tunnel container for public ingress — there is no database container; all server-side env vars (Firebase Admin credentials, camera URLs, Typhoon key, tunnel token) are supplied via `.env` (`env_file: .env`).
-- Firestore composite indexes are not defined in a `firestore.indexes.json` — they were created ad hoc through the Firebase Console as each query's `FAILED_PRECONDITION` error surfaced during development. If Firestore is ever reset, the composite indexes needed are: `labs(is_active, code)`, `bookings(lab_id, status, start_time)`, `bookings(status, start_time)`, `bookings(user_id, status, start_time)`, `bookings(user_id, start_time desc)`, `lab_chat(lab_code, created_at)`, `notifications(user_id, created_at desc)`.
+- Firestore composite indexes are not defined in a `firestore.indexes.json` — they were created ad hoc through the Firebase Console as each query's `FAILED_PRECONDITION` error surfaced during development. If Firestore is ever reset, the composite indexes needed are: `labs(is_active, code)`, `bookings(lab_id, status, start_time)`, `bookings(status, start_time)`, `bookings(user_id, status, start_time)`, `bookings(user_id, start_time desc)`, `notifications(user_id, created_at desc)`.
 
 ## Notable non-obvious behavior
 
-- **No pagination via offset/limit anywhere** — Firestore doesn't support it efficiently. `dashboard/history` uses a cursor (`start_time` of the last item returned) instead of a page number; the chat routes (`lab/chat`, `lab/chat-view`) use a `created_at` timestamp `since` cursor instead of an auto-increment row ID.
+- **No pagination via offset/limit anywhere** — Firestore doesn't support it efficiently. `dashboard/history` uses a cursor (`start_time` of the last item returned) instead of a page number.
 - **`labId` is a human-readable string, not a UUID** — `labs/LAB8` — chosen deliberately since Firestore doesn't need surrogate keys, and it keeps `lab_id` fields readable in the console.
-- **Two components implement the same lab-chat UI independently** — `LabChatPanel` in `app/lab/page.tsx` (authenticated) and `ViewerChatPanel` in `app/view/[code]/page.tsx` (anonymous) — they are not shared, so a fix to one's cursor/pagination logic does not automatically apply to the other.
+- **The lab room adapts to viewport height, not only width** — the page never scrolls as a whole, so the desktop tree (≥1024px) has to fit whatever height it gets. The camera row is sized from the 16:9 shape of the feeds; the bottom row (selector, readings, formula, field view, Z table) takes the rest but has a minimum height, so on an 11–12" screen (roughly 1024–1366 × 600–760 once browser chrome is subtracted) the cameras give up height first and the left column scrolls only as a last resort. The `short:` Tailwind variant (`max-height: 760px`, declared in `app/globals.css`) only tightens spacing on top of that. Below 1024px wide the tabbed compact tree is used instead. Both trees stay mounted and are switched with CSS.

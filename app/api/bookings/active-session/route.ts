@@ -18,7 +18,7 @@ export async function GET() {
       .where('start_time', '<=', Timestamp.fromMillis(now))
       .get();
     const active = activeSnap.docs
-      .map(d => ({ booking_id: d.id, ...d.data() as { lab_id: string; start_time: Timestamp; end_time: Timestamp; room_code: string | null } }))
+      .map(d => ({ booking_id: d.id, ...d.data() as { lab_id: string; start_time: Timestamp; end_time: Timestamp } }))
       .find(b => b.end_time.toMillis() >= now);
 
     if (active) {
@@ -33,7 +33,6 @@ export async function GET() {
           experiment_name: lab?.name_th,
           start_time:      active.start_time.toDate().toISOString(),
           end_time:        active.end_time.toDate().toISOString(),
-          room_code:       active.room_code ?? null,
         },
       });
     }

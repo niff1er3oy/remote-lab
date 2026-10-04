@@ -3,24 +3,12 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebase-admin';
 import { getSessionUser } from '@/lib/session';
 
-const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ACTIVE_STATUSES = ['pending', 'confirmed', 'in_progress'];
 
 class OverlapError extends Error {}
 
 function parseUtc(s: string): Date {
   return new Date(s.replace(' ', 'T') + 'Z');
-}
-
-async function generateRoomCode(): Promise<string> {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    let code = '';
-    for (let i = 0; i < 6; i++)
-      code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
-    const snap = await adminDb.collection('bookings').where('room_code', '==', code).limit(1).get();
-    if (snap.empty) return code;
-  }
-  throw new Error('room code collision');
 }
 
 export async function POST(req: NextRequest) {
@@ -46,13 +34,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'ไม่พบห้องทดลองนี้' }, { status: 404 });
     const lab = labSnap.data()!;
 
-    const roomCode = await generateRoomCode();
     const startTs = Timestamp.fromDate(startDate);
     const endTs = Timestamp.fromDate(endDate);
 
-    let roomCodeResult: string;
     try {
-      roomCodeResult = await adminDb.runTransaction(async (tx) => {
+      await adminDb.runTransaction(async (tx) => {
         const candidatesSnap = await tx.get(
           adminDb.collection('bookings')
             .where('lab_id', '==', room_id)
@@ -71,10 +57,8 @@ export async function POST(req: NextRequest) {
           start_time: startTs,
           end_time: endTs,
           status: 'confirmed',
-          room_code: roomCode,
           created_at: FieldValue.serverTimestamp(),
         });
-        return roomCode;
       });
     } catch (err) {
       if (err instanceof OverlapError)
@@ -94,7 +78,7 @@ export async function POST(req: NextRequest) {
       created_at: FieldValue.serverTimestamp(),
     }).catch(err => console.error('[bookings notify]', err));
 
-    return NextResponse.json({ ok: true, room_code: roomCodeResult });
+    return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     console.error('[bookings POST]', err);
     return NextResponse.json({ ok: false, error: 'เกิดข้อผิดพลาด กรุณาลองใหม่' }, { status: 500 });

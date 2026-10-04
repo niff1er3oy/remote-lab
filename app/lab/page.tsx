@@ -1,29 +1,19 @@
 'use client';
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { animate, stagger, scrambleText, createLayout } from 'animejs';
 import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
+import MathSource from '@/app/components/MathSource';
+import { calcBCoil, calcBSolenoid } from '@/lib/physics';
+import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { FieldViz3D } from './FieldViz';
 
-// ── Physics (Lab 8: Biot–Savart) ─────────────────────────────────────────────
-
-const MU0 = 4 * Math.PI * 1e-7;
-
-// Single coil at center (Z=0): B₀ = μ₀·n·I / (2R)  [mT]
-function calcBCoil(n: number, I: number, R: number): number {
-  return (MU0 * n * I) / (2 * R) * 1e3;
-}
-
-// Finite solenoid on axis at Z from center: [mT]
-// B_z = (μ₀·N·I / 2L) × [ (L/2+Z)/√(R²+(L/2+Z)²) + (L/2−Z)/√(R²+(L/2−Z)²) ]
-function calcBSolenoid(N: number, I: number, L: number, R: number, Z: number): number {
-  const a = L / 2 + Z;
-  const b = L / 2 - Z;
-  return (MU0 * N * I) / (2 * L) * (a / Math.sqrt(R * R + a * a) + b / Math.sqrt(R * R + b * b)) * 1e3;
-}
+// KaTeX is only needed once the assistant writes a formula, so it is fetched
+// then rather than with the page.
+const KatexMath = lazy(() => import('@/app/components/KatexMath'));
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,7 +28,9 @@ function hhmmss(s: number) { return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${
 function nowTime() { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
 function clamp(v: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, v)); }
 
-interface ChatMsg { id: number; role: 'user' | 'assistant'; content: string }
+// `error` marks a notice about a failed request (shown, never sent back to the
+// model); `cutShort` marks an answer that ran into the length limit.
+interface ChatMsg { id: number; role: 'user' | 'assistant'; content: string; error?: boolean; cutShort?: boolean }
 let _cid = 0;
 
 type LogType = 'info' | 'warn' | 'data' | 'cmd';
@@ -81,6 +73,7 @@ const instruments: Inst[] = [
     ),
   },
   // ตอนที่ 2 — โซลีนอยด์  L=160 mm · R=13 mm · I₀ = 1 A
+  // ชุดทดลองจริงมีโซลีนอยด์อันเดียวคือ 75 รอบ (ใบแลปกล่าวถึง 150 รอบด้วย แต่ไม่มีบนเครื่อง)
   {
     id: 3, type: 'solenoid', name: 'โซลีนอยด์ 75 รอบ', sub: 'N=75 · L=160 มม.',
     I0: 1, N: 75, L: 0.16, R: 0.013,
@@ -88,16 +81,6 @@ const instruments: Inst[] = [
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <rect x="2" y="9" width="20" height="6" rx="1" />
         <path d="M2 12h20" strokeDasharray="3 2" />
-      </svg>
-    ),
-  },
-  {
-    id: 4, type: 'solenoid', name: 'โซลีนอยด์ 150 รอบ', sub: 'N=150 · L=160 มม.',
-    I0: 1, N: 150, L: 0.16, R: 0.013,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-        <rect x="2" y="8" width="20" height="8" rx="1" />
-        <path d="M2 10.5h20M2 12h20M2 13.5h20" strokeDasharray="3 2" />
       </svg>
     ),
   },
@@ -109,7 +92,7 @@ type AccessState =
   | { status: 'loading' }
   | { status: 'denied'; reason: 'auth' }
   | { status: 'denied'; reason: 'no_booking'; next: { start_time: string; experiment_name: string } | null }
-  | { status: 'allowed'; end_time: string; experiment_name: string; room_code: string | null };
+  | { status: 'allowed'; end_time: string; experiment_name: string };
 
 function useAccessGate() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
@@ -139,7 +122,7 @@ function useAccessGate() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'start' }),
           }).catch(() => { });
-          setAccess({ status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name, room_code: d.booking.room_code ?? null });
+          setAccess({ status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name });
         } else {
           setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
         }
@@ -323,32 +306,34 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
   const timeColor = zone === 'critical' ? 'text-red-400' : zone === 'warn' ? 'text-yellow-400' : 'text-[#c8ff00]';
 
   return (
-    <div className="min-h-screen bg-[#030712] flex items-center justify-center px-6" style={{
+    // Spacing tightens under `short:` so the start button stays on screen
+    // without scrolling on an 11–12" display.
+    <div className="min-h-screen bg-[#030712] flex items-center justify-center px-6 py-6 short:py-3" style={{
       backgroundImage: 'linear-gradient(rgba(200,255,0,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.025) 1px, transparent 1px)',
       backgroundSize: '64px 64px',
     }}>
       <div ref={cardRef} className="w-full max-w-lg" style={{ opacity: 0 }}>
 
         {/* Header */}
-        <div className="mb-8 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[#c8ff00]/30 bg-[#c8ff00]/10 px-3 py-1 text-sm font-semibold text-[#c8ff00] mb-4">
+        <div className="mb-8 short:mb-3 text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#c8ff00]/30 bg-[#c8ff00]/10 px-3 py-1 text-sm font-semibold text-[#c8ff00] mb-4 short:mb-2">
             <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse inline-block" />
             LAB8 · กำลังจะเริ่มการทดลอง
           </span>
-          <h1 ref={titleRef} className="text-2xl font-bold text-white mb-2">
+          <h1 ref={titleRef} className="text-2xl short:text-xl font-bold text-white mb-2 short:mb-0">
             กฎของ Biot-Savart และสนามแม่เหล็ก
           </h1>
-          <p className="text-sm text-gray-500 leading-relaxed">
+          <p className="text-sm text-gray-500 leading-relaxed short:hidden">
             ศึกษาสนามแม่เหล็กที่เกิดจากลวดตัวนำรูปทรงต่างๆ<br />
             และตรวจสอบความถูกต้องของกฎ Biot-Savart เชิงทดลอง
           </p>
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-white/10 bg-gray-900/60 p-6 mb-5">
+        <div className="rounded-2xl border border-white/10 bg-gray-900/60 p-6 mb-5 short:p-4 short:mb-3">
 
           {/* Time remaining */}
-          <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center justify-between mb-5 pb-4 short:mb-3 short:pb-3 border-b border-white/[0.06]">
             <span className="text-sm text-gray-500 flex items-center gap-1.5">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
@@ -361,14 +346,14 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
           </div>
 
           {/* Lab info */}
-          <div className="grid grid-cols-2 gap-3 mb-5 text-sm">
+          <div className="grid grid-cols-2 gap-3 mb-5 short:gap-2 short:mb-3 text-sm">
             {[
               { label: 'รหัสการทดลอง', value: 'LAB8' },
               { label: 'ระยะเวลา', value: '120 นาที' },
               { label: 'อุปกรณ์หลัก', value: 'ขดลวด / โซลีนอยด์' },
               { label: 'ระดับ', value: 'ปฏิบัติการฟิสิกส์' },
             ].map(({ label, value }) => (
-              <div key={label} className="rounded-xl bg-gray-950/60 border border-white/[0.06] px-3 py-2.5">
+              <div key={label} className="rounded-xl bg-gray-950/60 border border-white/[0.06] px-3 py-2.5 short:py-1.5">
                 <p className="text-gray-600 mb-0.5">{label}</p>
                 <p className="text-white font-medium">{value}</p>
               </div>
@@ -376,15 +361,15 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
           </div>
 
           {/* Documents */}
-          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">เอกสารประกอบการทดลอง</p>
-          <div ref={docsRef} className="flex flex-col gap-2">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 short:mb-2">เอกสารประกอบการทดลอง</p>
+          <div ref={docsRef} className="flex flex-col gap-2 short:gap-1.5">
             {LAB8_DOCS.map(({ label, file }) => (
               <a
                 key={file}
                 href={`/doc/lab8/${encodeURIComponent(file)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="doc-btn flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gray-950/60 px-4 py-2.5 text-sm text-gray-300 hover:border-[#c8ff00]/30 hover:text-[#c8ff00] transition-colors group"
+                className="doc-btn flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gray-950/60 px-4 py-2.5 short:py-1.5 text-sm text-gray-300 hover:border-[#c8ff00]/30 hover:text-[#c8ff00] transition-colors group"
                 style={{ opacity: 0 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-600 group-hover:text-[#c8ff00] transition-colors">
@@ -404,7 +389,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
         <button
           ref={btnRef}
           onClick={onStart}
-          className="w-full rounded-2xl bg-[#c8ff00] py-3.5 text-sm font-bold text-gray-950 hover:bg-white transition-colors"
+          className="w-full rounded-2xl bg-[#c8ff00] py-3.5 short:py-3 text-sm font-bold text-gray-950 hover:bg-white transition-colors"
           style={{ opacity: 0, boxShadow: '0 0 32px rgba(200,255,0,0.3)' }}
         >
           เริ่มการทดลอง →
@@ -414,148 +399,9 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
   );
 }
 
-// ── Guest Lab View ────────────────────────────────────────────────────────────
-
-type GuestState =
-  | { status: 'loading' }
-  | { status: 'ready'; labName: string; labCode: string; hostName: string; endTime: string }
-  | { status: 'error'; message: string };
-
-function GuestLabView({ roomCode }: { roomCode: string }) {
-  const [state, setState] = useState<GuestState>({ status: 'loading' });
-  const router = useRouter();
-  const [remaining, setRemaining] = useState(0);
-
-  useEffect(() => {
-    fetch(`/api/lab/join?room=${roomCode}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.ok) {
-          setState({ status: 'ready', labName: d.lab_name, labCode: d.lab_code, hostName: d.host_name, endTime: d.end_time });
-          setRemaining(getRemaining(d.end_time));
-        } else {
-          setState({ status: 'error', message: d.error ?? 'รหัสห้องไม่ถูกต้อง' });
-        }
-      })
-      .catch(() => setState({ status: 'error', message: 'ไม่สามารถเชื่อมต่อได้' }));
-  }, [roomCode]);
-
-  useEffect(() => {
-    if (state.status !== 'ready') return;
-    const { endTime } = state;
-    const t = setInterval(() => {
-      const secs = getRemaining(endTime);
-      setRemaining(secs);
-      if (secs === 0) router.replace('/dashboard');
-    }, 1000);
-    return () => clearInterval(t);
-  }, [state, router]);
-
-  if (state.status === 'loading') {
-    return (
-      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
-        <svg className="animate-spin text-[#c8ff00]" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 12a9 9 0 11-6.219-8.56" />
-        </svg>
-      </div>
-    );
-  }
-
-  if (state.status === 'error') {
-    return (
-      <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center px-6 text-center">
-        <div className="fixed inset-0 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(200,255,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.03) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-        }} />
-        <div className="relative z-10 max-w-sm w-full">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-bold text-white mb-2">ไม่สามารถเข้าห้องได้</h1>
-          <p className="text-sm text-gray-400 mb-6">{state.message}</p>
-          <a href="/dashboard"
-            className="inline-block rounded-full bg-[#c8ff00] px-6 py-2.5 text-sm font-semibold text-gray-950 hover:bg-white transition-colors"
-            style={{ boxShadow: '0 0 20px rgba(200,255,0,0.25)' }}>
-            กลับ Dashboard
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  const { labName, labCode, hostName, endTime } = state;
-
-  return (
-    <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
-      <div className="fixed inset-0 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(200,255,0,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.025) 1px, transparent 1px)',
-        backgroundSize: '64px 64px',
-      }} />
-
-      {/* Header */}
-      <div className="relative z-10 shrink-0 h-12 border-b border-white/10 bg-gray-950/80 backdrop-blur flex items-center justify-between px-4 gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="shrink-0 rounded-md border border-[#c8ff00]/30 bg-[#c8ff00]/10 px-2 py-0.5 font-mono text-sm font-bold tracking-widest text-[#c8ff00]">
-            {roomCode}
-          </span>
-          <span className="text-sm text-white truncate">{labName}</span>
-          <span className="hidden sm:block text-sm text-gray-500 shrink-0">เจ้าของห้อง: {hostName}</span>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-sm text-gray-500 font-mono">{hhmmss(remaining)}</span>
-          <span className="text-sm border border-[#c8ff00]/20 text-[#c8ff00]/60 rounded-full px-2 py-0.5">Guest</span>
-          <a href="/dashboard" className="text-sm text-gray-500 hover:text-white transition-colors">← Dashboard</a>
-        </div>
-      </div>
-
-      {/* Chat */}
-      <div className="relative z-10 flex-1 min-h-0 max-w-2xl w-full mx-auto p-4">
-        <div className="h-full rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden flex flex-col">
-          <div className="shrink-0 px-4 py-2.5 border-b border-white/[0.06] flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#c8ff00] opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#c8ff00]" />
-            </span>
-            <span className="text-sm font-semibold text-white">แชทห้องแลป</span>
-            <span className="ml-auto font-mono text-sm text-gray-600">{labCode}</span>
-          </div>
-          <div className="flex-1 min-h-0">
-            <LabChatPanel labCode={roomCode} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-function LabPageInner() {
-  const searchParams = useSearchParams();
-  const guestRoom = searchParams.get('room');
-  if (guestRoom) return <GuestLabView roomCode={guestRoom.toUpperCase()} />;
-  return <HostLabPage />;
-}
-
 export default function RemoteLabPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
-        <svg className="animate-spin text-[#c8ff00]" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 12a9 9 0 11-6.219-8.56" />
-        </svg>
-      </div>
-    }>
-      <LabPageInner />
-    </Suspense>
-  );
-}
-
-function HostLabPage() {
   const { access, onComplete } = useAccessGate();
   const [labStarted, setLabStarted] = useState(false);
   const [instrument, setInstrument] = useState(0);
@@ -568,6 +414,7 @@ function HostLabPage() {
   const isBusy = isRunning || isMoving;
   const [compactTab, setCompactTab] = useState<'camera' | 'setup' | 'viz' | 'assist'>('camera');
   const [compactCam, setCompactCam] = useState<'main' | 'secondary'>('main');
+  const chat = useChat();
   const topRowRef = useRef<HTMLDivElement>(null);
   const btmRowRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -606,12 +453,14 @@ function HostLabPage() {
   }, [instrument]);
 
   // Reset I, Z, and measurement data when instrument changes
-  useEffect(() => {
+  const [prevInstrumentForReset, setPrevInstrumentForReset] = useState(instrument);
+  if (instrument !== prevInstrumentForReset) {
+    setPrevInstrumentForReset(instrument);
     const inst = instruments[instrument];
     setI(inst.I0);
     setZ(0);
     setMeasData(new Map());
-  }, [instrument]);
+  }
 
   const prevInstType = useRef<'coil' | 'solenoid'>('coil');
   const rightColRef = useRef<HTMLDivElement>(null);
@@ -638,7 +487,7 @@ function HostLabPage() {
   useEffect(() => {
 
     const inst = instruments[instrument];
-    const targetScript = ['coil_1.py', 'coil_2.py', 'coil_3.py', 'sole_75.py', 'sole_150.py'][instrument] || 'coil_1.py';
+    const targetScript = ['coil_1.py', 'coil_2.py', 'coil_3.py', 'sole_75.py'][instrument] || 'coil_1.py';
 
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
@@ -697,7 +546,7 @@ function HostLabPage() {
           if (data && typeof data.value === 'number') {
             setRealSensorValue(data.value);
           }
-        } catch (err) { }
+        } catch { }
       };
       ws.onclose = () => {
         reconnectTimeout = setTimeout(connect, 2000);
@@ -750,32 +599,36 @@ function HostLabPage() {
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
-      <SessionBar endTime={access.end_time} onComplete={onComplete} onExit={handleLabExit} roomCode={access.room_code} />
+      <SessionBar endTime={access.end_time} onComplete={onComplete} onExit={handleLabExit} />
       {/* Tablet/desktop tree — ≥1024px, side-by-side columns */}
-      <div className="hidden lg:flex flex-1 overflow-hidden p-3 gap-3">
+      <div className="hidden lg:flex flex-1 overflow-hidden p-3 gap-3 short:p-2 short:gap-2">
 
-        {/* Left ── Camera + FieldViz (top) · InstrSel + Sensor (bottom) */}
-        <div ref={leftColRef} className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+        {/* Left ── Camera (top) · InstrSel + Sensor + Formula + FieldViz (bottom).
+            The camera row takes the height its 16:9 feeds want and the bottom row
+            takes the rest, but never less than its readings need: on a short
+            screen the cameras give up height first and the column scrolls as a
+            last resort, so no reading is ever cut off. */}
+        <div ref={leftColRef} className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 short:gap-2 overflow-x-hidden overflow-y-auto">
           <div
             ref={topRowRef}
-            className={`flex-1 min-h-0 grid gap-3 grid-cols-1 lg:grid-cols-2`}
+            className="min-h-[180px] aspect-[32/9] grid grid-cols-2 gap-3 short:gap-2"
             style={{ opacity: 0 }}
           >
-            <CameraSection stream="cam1" label="กล้องหลัก — ด้านหน้า" />
+            <CameraSection stream="cam1" name="กล้องหลัก" view="ด้านหน้า" />
             <div ref={rightColRef} className="flex flex-col gap-3 h-full min-h-0">
               <CameraSection
                 stream={inst.type === 'solenoid' ? 'cam2' : 'cam3'}
-                label="กล้องเสริม — ด้านข้าง"
+                name="กล้องเสริม" view="ด้านข้าง"
               />
             </div>
           </div>
           <div
             ref={btmRowRef}
-            className="flex-1 min-h-0 flex items-stretch gap-3"
+            className="flex-1 min-h-[376px] short:min-h-[336px] flex items-stretch gap-3 short:gap-2"
             style={{ opacity: 0 }}
           >
             {/* Left column — selector stacked above sensor values */}
-            <div className="shrink-0 flex flex-col gap-3 w-[190px] xl:w-[230px]">
+            <div className="shrink-0 min-h-0 flex flex-col gap-3 short:gap-2 w-[200px] xl:w-[230px]">
               <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} />
               <SensorPanel
                 inst={inst} I={I} I0={I0}
@@ -784,7 +637,7 @@ function HostLabPage() {
               />
             </div>
             <FormulaPanel inst={inst} I={I} z={z} widthClassName="w-[210px] xl:w-[240px]" />
-            <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3">
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 short:gap-2">
               <div className="flex-1 min-h-0 flex flex-col">
                 <SplitFieldPanel
                   instType={inst.type}
@@ -793,7 +646,7 @@ function HostLabPage() {
                 />
               </div>
               {inst.type === 'solenoid' && (
-                <div className="flex-1 min-h-0 flex flex-col">
+                <div className="shrink-0 h-[190px] short:h-[150px] flex flex-col">
                   <SolenoidDataPanel
                     z={z} setZ={setZ}
                     bMeasured={bMeasured} bTheory={bTheory}
@@ -815,9 +668,9 @@ function HostLabPage() {
           style={{ opacity: 0 }}
         >
           <RightTabs
-            chatProps={{ inst, I, I0, bTheory, bMeasured, z }}
+            chat={chat}
+            readings={{ inst, I, I0, bTheory, bMeasured, z }}
             logProps={{ instrument, I, bMeasured, z, instType: inst.type }}
-            labCode={access.room_code}
           />
         </div>
 
@@ -840,11 +693,11 @@ function HostLabPage() {
               </div>
               <div className="flex-1 min-h-0">
                 {compactCam === 'main' ? (
-                  <CameraSection stream="cam1" label="กล้องหลัก — ด้านหน้า" />
+                  <CameraSection stream="cam1" name="กล้องหลัก" view="ด้านหน้า" />
                 ) : (
                   <CameraSection
                     stream={inst.type === 'solenoid' ? 'cam2' : 'cam3'}
-                    label="กล้องเสริม — ด้านข้าง"
+                    name="กล้องเสริม" view="ด้านข้าง"
                   />
                 )}
               </div>
@@ -890,9 +743,9 @@ function HostLabPage() {
           {compactTab === 'assist' && (
             <div className="h-full flex flex-col">
               <RightTabs
-                chatProps={{ inst, I, I0, bTheory, bMeasured, z }}
+                chat={chat}
+            readings={{ inst, I, I0, bTheory, bMeasured, z }}
                 logProps={{ instrument, I, bMeasured, z, instType: inst.type }}
-                labCode={access.room_code}
               />
             </div>
           )}
@@ -963,193 +816,18 @@ function CompactTabBar({ active, onSelect }: {
 
 // ── Right Tabs ───────────────────────────────────────────────────────────────
 
-type ChatRoomMsg = { id: string; user_id: string; user_name: string; content: string; created_at: string };
+type RightTabId = 'ai' | 'log';
 
-function LabChatPanel({ labCode }: { labCode: string | null }) {
-  const [messages, setMessages] = useState<ChatRoomMsg[]>([]);
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const [myName, setMyName] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const lastTsRef = useRef('');
-  const myNameRef = useRef('');
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const readyForSound = useRef(false); // true after initial fetch completes
-
-  useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => { if (d.ok) setMyName(d.user.name); });
-  }, []);
-
-  // Keep ref in sync so addMessages (stable callback) can access current name
-  useEffect(() => { myNameRef.current = myName; }, [myName]);
-
-  const addMessages = useCallback((incoming: ChatRoomMsg[]) => {
-    if (!incoming.length) return;
-    setMessages(prev => {
-      const seen = new Set(prev.map(m => m.id));
-      const fresh = incoming.filter(m => !seen.has(m.id));
-      if (!fresh.length) return prev;
-      const maxTs = fresh.reduce((max, m) => m.created_at > max ? m.created_at : max, lastTsRef.current);
-      lastTsRef.current = maxTs;
-
-      // Play sound only for others' messages after initial load
-      if (
-        readyForSound.current &&
-        myNameRef.current &&
-        fresh.some(m => m.user_name !== myNameRef.current)
-      ) {
-        if (!audioRef.current) audioRef.current = new Audio('/sound/ack.mp3');
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => { });
-      }
-
-      requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }));
-      return [...prev, ...fresh];
-    });
-  }, []);
-
-  // Initial load + poll fallback (catches missed WS messages)
-  const fetchMessages = useCallback(async () => {
-    if (!labCode) return;
-    const since = lastTsRef.current ? `&since=${encodeURIComponent(lastTsRef.current)}` : '';
-    const res = await fetch(`/api/lab/chat?lab=${labCode}${since}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.messages?.length) addMessages(data.messages);
-  }, [labCode, addMessages]);
-
-  useEffect(() => {
-    if (!labCode) return;
-    fetchMessages().then(() => { readyForSound.current = true; });
-    const t = setInterval(fetchMessages, 10_000);
-    return () => clearInterval(t);
-  }, [fetchMessages, labCode]);
-
-  // WebSocket — real-time delivery for all clients
-  useEffect(() => {
-    if (!labCode) return;
-    let active = true;
-    let ws: WebSocket | null = null;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let retryDelay = 1000;
-
-    function connect() {
-      if (!active) return;
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}/ws?room=${encodeURIComponent(`lab:${labCode}`)}`);
-
-      ws.onmessage = (e) => {
-        if (!active) return;
-        try {
-          const msg = JSON.parse(e.data as string);
-          if (msg.type === 'chat' && msg.payload?.id) addMessages([msg.payload]);
-        } catch { }
-      };
-
-      ws.onopen = () => { retryDelay = 1000; };
-
-      ws.onclose = () => {
-        if (!active) return;
-        // Reconnect with backoff (max 30s)
-        retryTimer = setTimeout(() => { retryDelay = Math.min(retryDelay * 2, 30_000); connect(); }, retryDelay);
-      };
-
-      // Suppress uncaught error — onclose will handle reconnect
-      ws.onerror = () => { };
-    }
-
-    connect();
-
-    return () => {
-      active = false;
-      if (retryTimer) clearTimeout(retryTimer);
-      ws?.close();
-    };
-  }, [labCode, addMessages]);
-
-  async function handleSend() {
-    if (!input.trim() || sending || !labCode) return;
-    setSending(true);
-    const text = input.trim();
-    setInput('');
-    try {
-      const res = await fetch('/api/lab/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lab: labCode, content: text }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // Add own message from response — WS broadcast handles delivery to others
-        if (data.message) addMessages([data.message]);
-      }
-    } finally {
-      setSending(false);
-    }
-  }
-
-  if (!labCode) {
-    return (
-      <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex items-center justify-center">
-        <p className="text-sm text-gray-600">แชทไม่พร้อมใช้งาน</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
-        {messages.length === 0 && (
-          <p className="text-center text-sm text-gray-600 pt-4">ยังไม่มีข้อความ</p>
-        )}
-        {messages.map(m => {
-          const isMe = m.user_name === myName;
-          return (
-            <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[88%] text-sm rounded-xl px-2.5 py-1.5 leading-relaxed ${isMe
-                ? 'bg-[#c8ff00]/10 border border-[#c8ff00]/20 text-[#c8ff00]/90'
-                : 'bg-gray-800/60 border border-white/[0.07] text-gray-300'
-                }`}>
-                {!isMe && <p className="text-sm text-gray-500 mb-0.5 font-semibold">{m.user_name}</p>}
-                {m.content}
-              </div>
-            </div>
-          );
-        })}
-        <div ref={bottomRef} />
-      </div>
-      <div className="shrink-0 p-2 border-t border-white/5 flex gap-1.5 items-center">
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-          placeholder="ส่งข้อความ…"
-          className="flex-1 rounded-lg border border-white/10 bg-gray-950/80 px-2.5 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[#c8ff00]/40 transition-colors"
-        />
-        <button onClick={handleSend} disabled={sending || !input.trim()}
-          className="shrink-0 h-8 w-8 rounded-lg bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] flex items-center justify-center hover:bg-[#c8ff00]/20 disabled:opacity-30 transition-colors">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-type RightTabId = 'ai' | 'log' | 'chat';
-
-function RightTabs({ chatProps, logProps, labCode }: {
-  chatProps: { inst: Inst; I: number; I0: number; bTheory: number; bMeasured: number; z: number };
+function RightTabs({ chat, readings, logProps }: {
+  chat: ReturnType<typeof useChat>;
+  readings: ChatReadings;
   logProps: { instrument: number; I: number; bMeasured: number; z: number; instType: 'coil' | 'solenoid' };
-  labCode: string | null;
 }) {
   const [tab, setTab] = useState<RightTabId>('ai');
 
   const TABS: { id: RightTabId; label: string }[] = [
     { id: 'ai', label: 'AI ผู้ช่วย' },
     { id: 'log', label: 'บันทึก' },
-    { id: 'chat', label: 'แชทห้อง' },
   ];
 
   return (
@@ -1172,13 +850,10 @@ function RightTabs({ chatProps, logProps, labCode }: {
 
       {/* Panels — all mounted, hidden by CSS to preserve state */}
       <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'ai' ? 'hidden' : ''}`}>
-        <ChatPanel {...chatProps} />
+        <ChatPanel chat={chat} readings={readings} />
       </div>
       <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'log' ? 'hidden' : ''}`}>
         <LogPanel {...logProps} />
-      </div>
-      <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'chat' ? 'hidden' : ''}`}>
-        <LabChatPanel labCode={labCode} />
       </div>
     </div>
   );
@@ -1197,51 +872,7 @@ function fmtCountdown(secs: number) {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function RoomCodeBadge({ code }: { code: string }) {
-  const [copied, setCopied] = useState(false);
-  const badgeRef = useRef<HTMLButtonElement>(null);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    if (badgeRef.current) {
-      animate(badgeRef.current, {
-        scale: [1, 1.18, 1],
-        duration: 400,
-        ease: 'outBack(2)',
-      });
-    }
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className="text-gray-500 text-sm">รหัสห้อง</span>
-      <button
-        ref={badgeRef}
-        onClick={handleCopy}
-        title="คัดลอกรหัสห้อง"
-        className={`flex items-center gap-1 font-mono font-bold tracking-widest rounded-md border px-1.5 py-0.5 text-sm transition-colors cursor-pointer
-          ${copied
-            ? 'border-[#c8ff00]/60 bg-[#c8ff00]/15 text-[#c8ff00]'
-            : 'border-[#c8ff00]/30 bg-[#c8ff00]/5 text-[#c8ff00] hover:bg-[#c8ff00]/15 hover:border-[#c8ff00]/50'
-          }`}
-        style={{ boxShadow: copied ? '0 0 14px rgba(200,255,0,0.35)' : '0 0 8px rgba(200,255,0,0.15)' }}
-      >
-        {copied ? (
-          <>
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-            คัดลอกแล้ว
-          </>
-        ) : code}
-      </button>
-    </span>
-  );
-}
-
-function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string; onComplete: () => void; onExit?: () => Promise<void>; roomCode?: string | null }) {
+function SessionBar({ endTime, onComplete, onExit }: { endTime: string; onComplete: () => void; onExit?: () => Promise<void> }) {
   const router = useRouter();
   const [secs, setSecs] = useState(0);
   const [remaining, setRemaining] = useState(() => getRemaining(endTime));
@@ -1293,24 +924,20 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
         <Image src="/logo.svg" width={24} height={24} alt="PaNa LabS" className="rounded-md shrink-0" />
         <span className="text-sm font-semibold">PaNa<span className="text-[#c8ff00]">LabS</span></span>
       </div>
-      {/* Full cluster — decorative details only shown when there's room */}
-      <div className="hidden lg:flex items-center gap-4 text-sm">
-        <span className="flex items-center gap-1.5">
+      {/* Full cluster — decorative details only shown when there's room.
+          Never wraps: below xl the lab title and elapsed time drop out, and the
+          title truncates before anything else is squeezed. */}
+      <div className="hidden lg:flex flex-1 min-w-0 items-center justify-center gap-3 xl:gap-4 text-sm whitespace-nowrap">
+        <span className="shrink-0 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse inline-block" style={{ boxShadow: '0 0 4px #c8ff00' }} />
           <span className="text-[#c8ff00] font-semibold">LIVE</span>
         </span>
-        {roomCode && (
-          <>
-            <span className="text-gray-600">|</span>
-            <RoomCodeBadge code={roomCode} />
-          </>
-        )}
-        <span className="text-gray-600">|</span>
-        <span className="text-gray-400">LAB 8: <span ref={labelRef} className="text-white">สนามแม่เหล็กและกฎไบโอต-ซาวัต</span></span>
-        <span className="text-gray-600">|</span>
-        <span className="text-gray-400">เวลา: <span className="font-mono text-white">{hhmmss(secs)}</span></span>
-        <span className="text-gray-600">|</span>
-        <span className="text-gray-400 flex items-center gap-1.5">
+        <span className="hidden xl:inline shrink-0 text-gray-600">|</span>
+        <span className="hidden xl:block min-w-0 truncate text-gray-400">LAB 8: <span ref={labelRef} className="text-white">สนามแม่เหล็กและกฎไบโอต-ซาวัต</span></span>
+        <span className="hidden xl:inline shrink-0 text-gray-600">|</span>
+        <span className="hidden xl:inline shrink-0 text-gray-400">เวลา: <span className="font-mono text-white">{hhmmss(secs)}</span></span>
+        <span className="shrink-0 text-gray-600">|</span>
+        <span className="shrink-0 text-gray-400 flex items-center gap-1.5">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
           </svg>
@@ -1325,9 +952,8 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
         </span>
       </div>
 
-      {/* Compact essentials — countdown + room code must never disappear, even on the smallest screens */}
+      {/* Compact essentials — the countdown must never disappear, even on the smallest screens */}
       <div className="flex lg:hidden items-center gap-2.5 text-sm min-w-0">
-        {roomCode && <RoomCodeBadge code={roomCode} />}
         <span className={`flex items-center gap-1 font-mono font-semibold tabular-nums shrink-0 ${remaining < 300 ? 'text-red-400 animate-pulse' : remaining < 600 ? 'text-yellow-400' : 'text-white'
           }`}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -1417,10 +1043,14 @@ function SessionBar({ endTime, onComplete, onExit, roomCode }: { endTime: string
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 
-function CameraSection({ stream = 'dji', label = 'กล้องหลัก — ด้านหน้า' }: { stream?: string; label?: string }) {
+// `name` is which camera this is (shown on the badge over the feed); `view` is
+// the angle it looks from, shown with the name while there is no picture.
+function CameraSection({ stream = 'dji', name = 'กล้องหลัก', view = 'ด้านหน้า' }: { stream?: string; name?: string; view?: string }) {
   const crossRef = useRef<HTMLDivElement>(null);
   const cornersRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // The connection in use, for the latency readout to take its statistics from.
+  const pcRef = useRef<RTCPeerConnection | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1446,6 +1076,7 @@ function CameraSection({ stream = 'dji', label = 'กล้องหลัก �
       setStreamError('กำลังเชื่อมต่อ WebRTC...');
 
       pc = new RTCPeerConnection();
+      pcRef.current = pc;
       pc.addTransceiver('video', { direction: 'recvonly' });
       pc.addTransceiver('audio', { direction: 'recvonly' });
 
@@ -1508,6 +1139,7 @@ function CameraSection({ stream = 'dji', label = 'กล้องหลัก �
     return () => {
       stopped = true;
       pc?.close();
+      pcRef.current = null;
       if (video) video.srcObject = null;
     };
   }, [stream]);
@@ -1516,9 +1148,11 @@ function CameraSection({ stream = 'dji', label = 'กล้องหลัก �
     <div className="rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden h-full">
       <div className="relative h-full bg-[#050810] overflow-hidden flex items-center justify-center">
         {/* Video stream */}
+        {/* On a short screen the box is wider than the feed; show the whole
+            frame there instead of cropping the top and bottom of the rig. */}
         <video
           ref={videoRef}
-          className="absolute inset-0 w-full h-full object-cover z-0"
+          className="absolute inset-0 w-full h-full object-cover short:object-contain z-0"
           autoPlay
           playsInline
           muted
@@ -1545,7 +1179,7 @@ function CameraSection({ stream = 'dji', label = 'กล้องหลัก �
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(200,255,0,0.12)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />
           </svg>
-          <span className="text-sm text-[#c8ff00]/20 font-mono uppercase tracking-widest">{label}</span>
+          <span className="text-sm text-[#c8ff00]/20 font-mono uppercase tracking-widest">{name} — {view}</span>
         </div>
         <div ref={cornersRef}>
           <div className="corner absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
@@ -1557,7 +1191,7 @@ function CameraSection({ stream = 'dji', label = 'กล้องหลัก �
           <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
           <span className="text-white font-semibold">REC</span>
           <span className="text-gray-500">·</span>
-          <span className="text-gray-400">กล้องหลัก</span>
+          <span className="text-gray-400">{name}</span>
         </div>
         <div ref={crossRef} className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
           <div className="relative w-8 h-8">
@@ -1566,16 +1200,77 @@ function CameraSection({ stream = 'dji', label = 'กล้องหลัก �
             <div className="cross-ring absolute inset-1.5 rounded-full border border-dashed border-[#c8ff00]/20" />
           </div>
         </div>
+        <CamLatency pcRef={pcRef} />
         <CamTimestamp />
       </div>
     </div>
   );
 }
 
-function CamTimestamp() {
-  const [time, setTime] = useState('');
+// How far behind the picture is, read from the connection once a second. This
+// is the delay from the camera server to the screen (see lib/webrtc-latency.ts);
+// the camera's own delay before the server cannot be measured from the browser,
+// which is why the label says "stream" and the tooltip spells it out.
+function CamLatency({ pcRef }: { pcRef: React.RefObject<RTCPeerConnection | null> }) {
+  const [reading, setReading] = useState<LatencyReading | null>(null);
+
   useEffect(() => {
-    setTime(nowTime());
+    let watched: RTCPeerConnection | null = null;
+    let sample: LatencySample | null = null;
+    let stopped = false;
+
+    const read = async () => {
+      const pc = pcRef.current;
+      if (pc !== watched) { watched = pc; sample = null; }
+      if (!pc || pc.connectionState === 'closed') { setReading(null); return; }
+      try {
+        const result = readLatency(await pc.getStats(), sample);
+        if (stopped || pcRef.current !== pc) return;
+        sample = result.sample;
+        setReading(result.reading);
+      } catch {
+        if (!stopped) setReading(null);
+      }
+    };
+
+    const timer = setInterval(read, 1000);
+    return () => { stopped = true; clearInterval(timer); };
+  }, [pcRef]);
+
+  if (!reading) return null;
+
+  const chip = 'absolute bottom-2 left-2 z-20 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/70 px-2.5 py-0.5 text-sm select-none';
+
+  if (reading.stalled) {
+    return (
+      <div className={chip} title="ไม่มีภาพใหม่เข้ามาในช่วงวินาทีที่ผ่านมา ภาพที่เห็นอาจค้างอยู่">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+        <span className="text-red-400">ภาพค้าง</span>
+      </div>
+    );
+  }
+
+  const ms = (v: number | null) => (v === null ? 'ไม่ทราบ' : `${Math.round(v)} ms`);
+  const tone = reading.total < 150 ? { dot: 'bg-[#c8ff00]', text: 'text-[#c8ff00]' }
+    : reading.total < 400 ? { dot: 'bg-yellow-400', text: 'text-yellow-400' }
+    : { dot: 'bg-red-500', text: 'text-red-400' };
+
+  return (
+    <div
+      className={chip}
+      title={`ความหน่วงจากเซิร์ฟเวอร์กล้องถึงจอนี้: เครือข่าย ${ms(reading.network)} + บัฟเฟอร์ ${ms(reading.buffer)} + ถอดรหัส ${ms(reading.decode)} ยังไม่รวมความหน่วงของตัวกล้องและช่วงกล้องถึงเซิร์ฟเวอร์ ซึ่งวัดจากเบราว์เซอร์ไม่ได้`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+      <span className="text-gray-400">หน่วงสตรีม</span>
+      <span className={`font-mono font-semibold tabular-nums ${tone.text}`}>{Math.round(reading.total)}</span>
+      <span className="text-gray-500">ms</span>
+    </div>
+  );
+}
+
+function CamTimestamp() {
+  const [time, setTime] = useState(() => nowTime());
+  useEffect(() => {
     const t = setInterval(() => setTime(nowTime()), 1000);
     return () => clearInterval(t);
   }, []);
@@ -1633,18 +1328,22 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
       <button
         onClick={() => { if (!disabled) setOpen(v => !v); }}
         disabled={disabled}
-        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border bg-gray-900/50 text-left transition-colors
+        className={`w-full flex items-center gap-2.5 px-3 py-2.5 short:py-1.5 rounded-xl border bg-gray-900/50 text-left transition-colors
           ${disabled ? 'opacity-60 cursor-not-allowed border-white/10' : 'cursor-pointer hover:border-white/20'}
           ${open ? 'border-[#c8ff00]/40' : 'border-white/10'}
         `}
       >
-        <div className={disabled ? 'text-gray-600' : 'text-[#c8ff00]'}>{activeInst.icon}</div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider leading-none mb-0.5">อุปกรณ์วัด</p>
-          <p className="text-sm font-semibold text-white leading-none truncate">{activeInst.name}</p>
-          <p className="text-sm text-gray-500 mt-0.5 truncate">{activeInst.sub}</p>
+        <div className={`shrink-0 ${disabled ? 'text-gray-600' : 'text-[#c8ff00]'}`}>{activeInst.icon}</div>
+        {/* leading-tight, not leading-none: Thai vowel and tone marks need the
+            extra line height or adjacent lines overlap. */}
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider leading-tight short:hidden">อุปกรณ์วัด</p>
+          <p className="text-sm font-semibold text-white leading-tight truncate">{activeInst.name}</p>
+          <p className="text-xs text-gray-500 leading-tight truncate">{activeInst.sub}</p>
         </div>
-        <div className="flex items-center gap-1 text-sm font-semibold text-[#c8ff00] shrink-0 ml-1">
+        {/* The desktop column is too narrow for the badge next to the full
+            instrument name; the open list still marks the active one as ON. */}
+        <div className="flex lg:hidden items-center gap-1 text-sm font-semibold text-[#c8ff00] shrink-0">
           <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse" />
           <span>ON</span>
         </div>
@@ -1677,7 +1376,7 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
                     <button
                       key={inst.id}
                       onClick={() => handleSelect(i)}
-                      className={`inst-item relative w-full rounded-lg border p-2.5 text-left transition-colors overflow-hidden
+                      className={`inst-item relative w-full rounded-lg border p-2.5 short:py-1.5 text-left transition-colors overflow-hidden
                         ${isCur
                           ? 'bg-[#c8ff00]/8 border-[#c8ff00]/40 text-[#c8ff00]'
                           : 'bg-transparent border-transparent text-gray-400 hover:bg-white/5 hover:text-gray-200'}
@@ -1720,24 +1419,27 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z }: {
 }) {
   return (
     <div className="flex-1 flex flex-col rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden min-h-0">
-      <div className="shrink-0 px-4 py-2 border-b border-white/5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 text-sm lg:text-base font-semibold uppercase tracking-wider">
+      {/* Wraps onto a second line in a narrow column instead of breaking words.
+          Not `uppercase`: that would render the unit mT as MT. */}
+      <div className="shrink-0 px-3 xl:px-4 py-2 short:py-1.5 border-b border-white/5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm 2xl:text-base font-semibold tracking-wide whitespace-nowrap">
           <span className="flex items-center gap-1.5" style={{ color: '#c8ff00' }}>
-            <span className="h-2 w-2 rounded-full inline-block" style={{ backgroundColor: '#c8ff00' }} />
+            <span className="h-2 w-2 shrink-0 rounded-full inline-block" style={{ backgroundColor: '#c8ff00' }} />
             ทฤษฎี · {bTheory.toFixed(3)} mT
           </span>
-          <span className="text-gray-600 font-normal">vs</span>
+          <span className="text-gray-600 font-normal">VS</span>
           <span className="flex items-center gap-1.5" style={{ color: '#22d3ee' }}>
-            <span className="h-2 w-2 rounded-full inline-block" style={{ backgroundColor: '#22d3ee' }} />
+            <span className="h-2 w-2 shrink-0 rounded-full inline-block" style={{ backgroundColor: '#22d3ee' }} />
             วัดจริง · {bMeasured.toFixed(3)} mT
           </span>
         </div>
-        <div className="flex items-center gap-3 text-sm font-mono shrink-0">
+        {/* I₀ and I are already in the readings panel; they only join this bar when it is wide. */}
+        <div className="flex items-center gap-3 text-sm font-mono whitespace-nowrap">
           {instType === 'solenoid' && (
             <span className="text-gray-500">Z = <span style={{ color: '#a78bfa' }}>{(z * 100).toFixed(0)} cm</span></span>
           )}
-          <span className="text-gray-600">I₀ = {I0.toFixed(2)} A</span>
-          <span className="text-gray-500">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(3)} A</span></span>
+          <span className="lg:hidden 2xl:inline text-gray-600">I₀ = {I0.toFixed(2)} A</span>
+          <span className="lg:hidden xl:inline text-gray-500">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(3)} A</span></span>
         </div>
       </div>
 
@@ -1777,7 +1479,7 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
       { label: 'กระแสที่วัดได้ (I)', value: I.toFixed(4), unit: 'A', color: '#22d3ee' },
       { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
       { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
-      { label: 'ΔB (วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
+      { label: 'ΔB', hint: '(วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
     ]
     : [
       { label: 'ตำแหน่ง Z', value: (z * 100).toFixed(0), unit: 'cm', color: '#a78bfa' },
@@ -1785,13 +1487,15 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
       { label: 'กระแสที่วัดได้ (I)', value: I.toFixed(4), unit: 'A', color: '#22d3ee' },
       { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
       { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
-      { label: 'ΔB (วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
+      { label: 'ΔB', hint: '(วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
     ];
 
   return (
-    <div ref={panelRef} className="flex-1 rounded-xl border border-white/10 bg-gray-900/50 p-3">
-      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2.5">ค่าที่วัดได้</h2>
-      <div className="space-y-1.5">
+    <div ref={panelRef} className="flex-1 min-h-0 flex flex-col rounded-xl border border-white/10 bg-gray-900/50 p-3 short:p-2.5">
+      <h2 className="shrink-0 text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2.5 short:mb-1.5">ค่าที่วัดได้</h2>
+      {/* Rows prefer 42px and squeeze down to 34px when the panel is short, so
+          all six readings stay on screen; the scrollbar is only a fallback. */}
+      <div className="flex-1 min-h-0 flex flex-col gap-1.5 short:gap-1 overflow-y-auto">
         {rows.map(r => (
           <SensorRow key={r.label} {...r} />
         ))}
@@ -1800,7 +1504,7 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
   );
 }
 
-function SensorRow({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
+function SensorRow({ label, hint, value, unit, color }: { label: string; hint?: string; value: string; unit: string; color: string }) {
   const valRef = useRef<HTMLSpanElement>(null);
   const prevRef = useRef(value);
   useEffect(() => {
@@ -1810,10 +1514,14 @@ function SensorRow({ label, value, unit, color }: { label: string; value: string
     prevRef.current = value;
   }, [value]);
   return (
-    <div className="s-card flex items-center justify-between rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5 py-2">
-      <span className="text-sm text-gray-400">{label}</span>
-      <div className="flex items-baseline gap-1">
-        <span ref={valRef} className="text-sm lg:text-base font-mono font-bold tabular-nums" style={{ color }}>{value}</span>
+    <div className="s-card grow-0 shrink basis-[42px] min-h-[34px] flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5">
+      <span title={hint ? `${label} ${hint}` : undefined} className="min-w-0 text-sm lg:text-[13px] xl:text-sm leading-tight text-gray-400 line-clamp-2">
+        {label}
+        {/* No room beside the value in the narrow lg column; the tooltip carries it there. */}
+        {hint && <span className="ml-1 text-[11px] text-gray-500 whitespace-nowrap lg:hidden xl:inline">{hint}</span>}
+      </span>
+      <div className="shrink-0 flex items-baseline gap-1">
+        <span ref={valRef} className="text-sm xl:text-base font-mono font-bold tabular-nums" style={{ color }}>{value}</span>
         <span className="text-sm text-gray-500">{unit}</span>
       </div>
     </div>
@@ -1822,10 +1530,24 @@ function SensorRow({ label, value, unit, color }: { label: string; value: string
 
 // ── Chat Panel ────────────────────────────────────────────────────────────────
 
-// ── Markdown + LaTeX renderer (lightweight, no library) ───────────────────────
+// ── Markdown renderer (hand-written; formulas are typeset by KaTeX) ───────────
+
+// A formula from the assistant, typeset by KaTeX. Every formula in a reply goes
+// through this one component. Its LaTeX source is shown in its place until
+// KaTeX has loaded, and stays if KaTeX cannot parse it.
+function MathText({ tex, display = false }: { tex: string; display?: boolean }) {
+  return (
+    <Suspense fallback={<MathSource tex={tex} display={display} />}>
+      <KatexMath tex={tex} display={display} />
+    </Suspense>
+  );
+}
+
+// The model writes math either way: $…$ and $$…$$, or \(…\) and \[…\].
+const INLINE_PARTS = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$[^$\n]+?\$)/g;
 
 function parseInline(text: string, key?: string | number): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g);
+  const parts = text.split(INLINE_PARTS);
   return (
     <span key={key}>
       {parts.map((p, i) => {
@@ -1835,10 +1557,12 @@ function parseInline(text: string, key?: string | number): React.ReactNode {
           return <em key={i} className="italic text-gray-200">{p.slice(1, -1)}</em>;
         if (p.startsWith('`') && p.endsWith('`'))
           return <code key={i} className="font-mono text-sm bg-gray-950/90 text-[#c8ff00]/80 px-1 py-0.5 rounded">{p.slice(1, -1)}</code>;
-        if (p.startsWith('$$') && p.endsWith('$$'))
-          return <span key={i} className="block overflow-x-auto font-mono text-sm text-violet-300 bg-violet-950/30 border border-violet-500/20 px-2 py-1 rounded my-1 text-center">{p.slice(2, -2).trim()}</span>;
-        if (p.startsWith('$') && p.endsWith('$'))
-          return <span key={i} className="font-mono text-sm text-violet-300 bg-violet-950/20 px-0.5 rounded">{p.slice(1, -1)}</span>;
+        if ((p.startsWith('$$') && p.endsWith('$$') && p.length > 4) || (p.startsWith('\\[') && p.endsWith('\\]')))
+          return <MathText key={i} tex={p.slice(2, -2)} display />;
+        if (p.startsWith('\\(') && p.endsWith('\\)'))
+          return <MathText key={i} tex={p.slice(2, -2)} />;
+        if (p.startsWith('$') && p.endsWith('$') && p.length > 2)
+          return <MathText key={i} tex={p.slice(1, -1)} />;
         return p;
       })}
     </span>
@@ -1868,26 +1592,74 @@ function MarkdownMessage({ content, streaming = false }: { content: string; stre
       i++; continue;
     }
 
-    // Display math $$
-    if (line.startsWith('$$') && !line.endsWith('$$')) {
-      const mathLines: string[] = [];
+    // Display math: "$$" (or "\[") opens a block that runs to the next "$$"
+    // (or "\]"). The usual form puts each delimiter on a line of its own; a
+    // formula opened and closed on one line is left to parseInline. A block
+    // that is not closed yet (still streaming) runs to the end.
+    const trimmed = line.trim();
+    const close = trimmed.startsWith('$$') ? '$$' : trimmed.startsWith('\\[') ? '\\]' : null;
+    if (close && (trimmed.length === 2 || !trimmed.endsWith(close))) {
+      const mathLines: string[] = trimmed.length > 2 ? [trimmed.slice(2)] : [];
       i++;
-      while (i < lines.length && !lines[i].startsWith('$$')) { mathLines.push(lines[i]); i++; }
-      nodes.push(
-        <div key={`dm-${i}`} className="my-1.5 overflow-x-auto rounded-lg bg-violet-950/20 border border-violet-500/20 px-3 py-2 text-center">
-          <span className="font-mono text-sm text-violet-300">{mathLines.join(' ')}</span>
-        </div>
-      );
+      while (i < lines.length && !lines[i].includes(close)) { mathLines.push(lines[i]); i++; }
+      const closed = i < lines.length;
+      if (closed) {
+        const closing = lines[i].slice(0, lines[i].indexOf(close)).trim();
+        if (closing) mathLines.push(closing);
+      }
+      // A block still being streamed stays as source: half a formula either
+      // fails to parse or typesets as something else, and would flicker.
+      nodes.push(closed
+        ? <MathText key={`dm-${i}`} tex={mathLines.join(' ')} display />
+        : <MathSource key={`dm-${i}`} tex={mathLines.join(' ')} display />);
       i++; continue;
     }
 
+    // Table: consecutive lines that start with "|". The |---|---| row only
+    // marks the header and is not shown.
+    if (trimmed.startsWith('|')) {
+      const rows: string[][] = [];
+      let header = false;
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        const cells = lines[i].trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        if (cells.every(c => /^:?-{2,}:?$/.test(c))) header = rows.length === 1;
+        else rows.push(cells);
+        i++;
+      }
+      nodes.push(
+        <div key={`tb-${i}`} className="my-1.5 overflow-x-auto rounded-lg border border-white/10">
+          <table className="w-full text-left text-xs">
+            <tbody className="divide-y divide-white/[0.06]">
+              {rows.map((cells, r) => (
+                <tr key={r} className={header && r === 0 ? 'bg-white/[0.04] font-semibold text-white' : ''}>
+                  {cells.map((cell, c) => <td key={c} className="px-2 py-1.5 align-top leading-relaxed">{parseInline(cell)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
     // Heading
-    const h3 = line.match(/^###\s+(.+)/);
-    const h2 = line.match(/^##\s+(.+)/);
-    const h1 = line.match(/^#\s+(.+)/);
-    if (h1) { nodes.push(<p key={i} className="font-bold text-white text-sm mt-2 mb-1">{parseInline(h1[1])}</p>); i++; continue; }
-    if (h2) { nodes.push(<p key={i} className="font-semibold text-[#c8ff00]/90 mt-1.5 mb-0.5">{parseInline(h2[1])}</p>); i++; continue; }
-    if (h3) { nodes.push(<p key={i} className="font-semibold text-gray-200 mt-1 mb-0.5">{parseInline(h3[1])}</p>); i++; continue; }
+    const heading = line.match(/^(#{1,6})\s+(.+)/);
+    if (heading) {
+      const style = heading[1].length === 1 ? 'font-bold text-white text-sm mt-2 mb-1'
+        : heading[1].length === 2 ? 'font-semibold text-[#c8ff00]/90 mt-1.5 mb-0.5'
+        : 'font-semibold text-gray-200 mt-1 mb-0.5';
+      nodes.push(<p key={i} className={style}>{parseInline(heading[2])}</p>);
+      i++; continue;
+    }
+
+    // Quote
+    const quote = line.match(/^>\s?(.*)/);
+    if (quote) {
+      nodes.push(
+        <div key={i} className="border-l-2 border-white/15 pl-2 leading-relaxed text-gray-400">{parseInline(quote[1])}</div>
+      );
+      i++; continue;
+    }
 
     // Unordered list
     const ul = line.match(/^[*\-]\s+(.+)/);
@@ -1950,41 +1722,38 @@ const SUGGESTIONS: Record<'coil' | 'solenoid', string[]> = {
   ],
 };
 
-function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
+// What the assistant is told about the experiment at the moment of asking.
+type ChatReadings = {
   inst: Inst;
   I: number; I0: number;
   bTheory: number; bMeasured: number;
   z: number;
-}) {
+};
+
+// The conversation with the AI assistant. It lives in the page, above the two
+// layouts, so the desktop panel and the compact "ผู้ช่วย" tab show the same
+// chat and neither loses it when it is hidden or unmounted.
+function useChat() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    if (!listRef.current || messages.length === 0) return;
-    const bubbles = listRef.current.querySelectorAll('.chat-bubble');
-    const last = bubbles[bubbles.length - 1] as HTMLElement | undefined;
-    if (last) animate(last, { opacity: [0, 1], translateY: [10, 0], duration: 250, ease: 'outCubic' });
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
-
-  async function send(text: string) {
+  async function send(text: string, { inst, I, I0, bTheory, bMeasured, z }: ChatReadings) {
     if (!text.trim() || streaming) return;
-    setInput('');
     const userMsg: ChatMsg = { id: ++_cid, role: 'user', content: text.trim() };
     const nextMsgs = [...messages, userMsg];
     setMessages(nextMsgs);
     setStreaming(true);
+
+    const fail = (content: string) =>
+      setMessages(prev => [...prev.filter(m => m.content), { id: ++_cid, role: 'assistant', content, error: true }]);
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: nextMsgs.map(m => ({ role: m.role, content: m.content })),
+          // Notices about failed requests are for the student, not the model.
+          messages: nextMsgs.filter(m => !m.error && m.content).map(m => ({ role: m.role, content: m.content })),
           context: {
             instrumentName: inst.name,
             instSub: inst.sub,
@@ -1996,53 +1765,108 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'เกิดข้อผิดพลาด' }));
-        setMessages(prev => [...prev, { id: ++_cid, role: 'assistant', content: err.error ?? 'เกิดข้อผิดพลาด' }]);
+        const err = await res.json().catch(() => null);
+        fail(err?.error ?? 'ผู้ช่วยสอนตอบไม่ได้ในขณะนี้ ลองใหม่อีกครั้ง');
         return;
       }
 
       setMessages(prev => [...prev, { id: ++_cid, role: 'assistant', content: '' }]);
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
-      let accText = '';
+      let answer = '';
+      let cutShort = false;
+      // A "data: …" line can arrive split across two reads; the unfinished
+      // tail waits here for the rest of it.
+      let pending = '';
+      // The reply is put on screen at most every 50 ms rather than once per
+      // token: a long one arrives in well over a thousand pieces, and each
+      // redraw lays the whole reply out again.
+      let shownAt = 0;
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        let updated = false;
-        for (const line of chunk.split('\n')) {
+        pending += decoder.decode(value, { stream: !done });
+        const lines = pending.split('\n');
+        pending = done ? '' : lines.pop() ?? '';
+
+        let grew = false;
+        for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           try {
-            const ev = JSON.parse(line.slice(6));
-            const chunk = ev.choices?.[0]?.delta?.content;
-            if (chunk) {
-              accText += chunk;
-              updated = true;
-            }
-          } catch { /* skip */ }
+            const choice = JSON.parse(line.slice(6)).choices?.[0];
+            if (choice?.delta?.content) { answer += choice.delta.content; grew = true; }
+            if (choice?.finish_reason === 'length') cutShort = true;
+          } catch { /* "[DONE]" and keep-alive lines are not JSON */ }
         }
-        if (updated) {
+
+        const now = performance.now();
+        if (answer && (done || (grew && now - shownAt >= 50))) {
+          shownAt = now;
+          const content = answer;
+          const cut = done && cutShort;
           setMessages(prev => {
             const next = [...prev];
-            next[next.length - 1] = { ...next[next.length - 1], content: accText };
+            next[next.length - 1] = { ...next[next.length - 1], content, cutShort: cut };
             return next;
           });
         }
+        if (done) break;
       }
+
+      if (!answer) fail('ผู้ช่วยสอนไม่ได้ตอบกลับมา ลองถามใหม่อีกครั้ง');
     } catch {
-      setMessages(prev => [...prev, { id: ++_cid, role: 'assistant', content: 'เชื่อมต่อไม่ได้ กรุณาลองใหม่' }]);
+      fail('เชื่อมต่อไม่ได้ กรุณาลองใหม่');
     } finally {
       setStreaming(false);
-      inputRef.current?.focus();
     }
+  }
+
+  return { messages, streaming, send };
+}
+
+function ChatPanel({ chat, readings }: { chat: ReturnType<typeof useChat>; readings: ChatReadings }) {
+  const { messages, streaming } = chat;
+  const [input, setInput] = useState('');
+  const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Whether the list is at its end. While it is, new text keeps it there; once
+  // the student scrolls up to reread, the answer stops pulling them back down.
+  const following = useRef(true);
+
+  // The newest bubble rises in. Only that one starts hidden, and only for the
+  // length of the animation: this panel can be mounted with a conversation
+  // already in progress (the compact tab), and those bubbles must just be there.
+  useLayoutEffect(() => {
+    if (!listRef.current || messages.length === 0) return;
+    const bubbles = listRef.current.querySelectorAll('.chat-bubble');
+    const last = bubbles[bubbles.length - 1] as HTMLElement | undefined;
+    if (last) animate(last, { opacity: [0, 1], translateY: [10, 0], duration: 250, ease: 'outCubic' });
+  }, [messages.length]);
+
+  // Runs on every streamed piece of text, not only when a bubble is added.
+  useEffect(() => {
+    const list = listRef.current;
+    if (list && following.current) list.scrollTop = list.scrollHeight;
+  }, [messages]);
+
+  async function send(text: string) {
+    if (!text.trim() || streaming) return;
+    setInput('');
+    following.current = true;
+    await chat.send(text, readings);
+    inputRef.current?.focus();
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
   }
 
-  const suggestions = SUGGESTIONS[inst.type];
+  function handleScroll() {
+    const list = listRef.current;
+    if (list) following.current = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+  }
+
+  const suggestions = SUGGESTIONS[readings.inst.type];
 
   return (
     <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex flex-col overflow-hidden">
@@ -2056,7 +1880,7 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
         {streaming && <span className="ml-auto text-sm text-[#c8ff00] animate-pulse">กำลังคิด…</span>}
       </div>
 
-      <div ref={listRef} className="flex-1 overflow-y-auto p-2.5 space-y-2">
+      <div ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-2.5 space-y-2">
         {messages.length === 0 && (
           <div className="flex flex-col gap-1.5 pt-1">
             <p className="text-sm text-gray-600 text-center mb-1">ถามเกี่ยวกับ Lab 8 ได้เลย</p>
@@ -2068,9 +1892,13 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
           </div>
         )}
         {messages.map(msg => (
-          <div key={msg.id} className={`chat-bubble flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`} style={{ opacity: 0 }}>
+          <div key={msg.id} className={`chat-bubble flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {msg.role === 'user' ? (
               <div className="max-w-[90%] rounded-xl px-2.5 py-1.5 text-sm leading-5 bg-[#c8ff00]/10 border border-[#c8ff00]/25 text-[#c8ff00]/90 whitespace-pre-wrap">
+                {msg.content}
+              </div>
+            ) : msg.error ? (
+              <div role="alert" className="max-w-[95%] rounded-xl px-2.5 py-2 text-sm leading-5 bg-red-500/10 border border-red-500/25 text-red-300">
                 {msg.content}
               </div>
             ) : (
@@ -2079,11 +1907,15 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
                   content={msg.content}
                   streaming={streaming && msg === messages[messages.length - 1]}
                 />
+                {msg.cutShort && (
+                  <p className="mt-2 border-t border-white/10 pt-2 text-xs leading-5 text-yellow-400/90">
+                    คำตอบยาวเกินกำหนดจึงถูกตัดตรงนี้ พิมพ์ &quot;ต่อ&quot; เพื่อให้อธิบายต่อ
+                  </p>
+                )}
               </div>
             )}
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
 
       <div className="shrink-0 p-2 border-t border-white/5 flex gap-2 items-end">
@@ -2108,51 +1940,59 @@ function ChatPanel({ inst, I, I0, bTheory, bMeasured, z }: {
 
 // ── Formula Card ─────────────────────────────────────────────────────────────
 
+// Full size in the single-column compact tree; one step smaller in the narrow
+// desktop column so a line like "cosα₁ + cosα₂ = 1.9741" fits without wrapping.
+const FORMULA_TEXT = 'text-sm lg:text-xs xl:text-[13px]';
+
 function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
   if (inst.type === 'coil') {
     const { turns: n, R } = inst;
     const result = calcBCoil(n, I, R);
     return (
-      <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5">
-        <div className="text-sm font-semibold text-gray-600 uppercase tracking-wider shrink-0">
+      <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5 short:py-2">
+        <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider leading-tight shrink-0">
           Biot–Savart · ขดลวดเดี่ยว
         </div>
 
-        <div className="flex-1 flex flex-col justify-evenly min-h-0 font-mono">
-          {/* Algebraic form */}
-          <div className="text-sm">
-            <span style={{ color: '#c8ff00' }}>B₀</span>
-            <span className="text-gray-400"> = μ₀ · n · I / (2R)</span>
-          </div>
+        {/* The derivation scrolls inside the card when the card is short; the
+            inner min-h-full keeps it evenly spread when there is room. */}
+        <div className="flex-1 min-h-0 overflow-y-auto font-mono">
+          <div className={`min-h-full flex flex-col justify-evenly gap-1.5 py-1 ${FORMULA_TEXT}`}>
+            {/* Algebraic form */}
+            <div>
+              <span style={{ color: '#c8ff00' }}>B₀</span>
+              <span className="text-gray-400"> = μ₀ · n · I / (2R)</span>
+            </div>
 
-          {/* Substituted fraction */}
-          <div className="text-sm text-gray-400 pl-3 space-y-0.5">
-            <div className="text-gray-500">=</div>
-            <div className="text-gray-300">4π×10⁻⁷ × {n} × {I.toFixed(3)}</div>
-            <div className="h-px bg-gray-700" />
-            <div className="text-gray-300">2 × {(R * 1000).toFixed(0)}×10⁻³</div>
-          </div>
+            {/* Substituted fraction */}
+            <div className="text-gray-400 pl-3 space-y-0.5">
+              <div className="text-gray-500">=</div>
+              <div className="text-gray-300">4π×10⁻⁷ × {n} × {I.toFixed(3)}</div>
+              <div className="h-px bg-gray-700" />
+              <div className="text-gray-300">2 × {(R * 1000).toFixed(0)}×10⁻³</div>
+            </div>
 
-          {/* Parameters */}
-          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-sm">
-            {([
-              { k: 'n', v: `${n} รอบ`, c: '#a3e635' },
-              { k: 'R', v: `${(R * 1000).toFixed(0)} มม.` },
-              { k: 'μ₀', v: '4π×10⁻⁷ H/m' },
-              { k: 'I', v: `${I.toFixed(3)} A`, c: '#22d3ee' },
-            ] as { k: string; v: string; c?: string }[]).map(p => (
-              <div key={p.k} className="flex gap-1">
-                <span className="text-gray-600">{p.k} =</span>
-                <span style={{ color: p.c }} className={p.c ? '' : 'text-gray-400'}>{p.v}</span>
-              </div>
-            ))}
+            {/* Parameters */}
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+              {([
+                { k: 'n', v: `${n} รอบ`, c: '#a3e635' },
+                { k: 'R', v: `${(R * 1000).toFixed(0)} มม.` },
+                { k: 'I', v: `${I.toFixed(3)} A`, c: '#22d3ee' },
+                { k: 'μ₀', v: '4π×10⁻⁷ H/m' },
+              ] as { k: string; v: string; c?: string }[]).map(p => (
+                <div key={p.k} className="flex gap-1 whitespace-nowrap">
+                  <span className="text-gray-600">{p.k} =</span>
+                  <span style={{ color: p.c }} className={p.c ? '' : 'text-gray-400'}>{p.v}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Result */}
-        <div className="shrink-0 pt-2 mt-1 border-t border-white/[0.07] flex items-baseline gap-2">
+        <div className="shrink-0 pt-2 mt-1 short:pt-1.5 border-t border-white/[0.07] flex items-baseline gap-2">
           <span className="font-mono text-sm text-gray-500">B₀ =</span>
-          <span className="font-mono text-2xl font-bold tabular-nums"
+          <span className="font-mono text-2xl short:text-xl font-bold tabular-nums"
             style={{ color: '#c8ff00', textShadow: '0 0 18px rgba(200,255,0,0.45)' }}>
             {result.toFixed(3)}
           </span>
@@ -2173,49 +2013,51 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
   const zCm = (z * 100).toFixed(0);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5">
-      <div className="text-sm font-semibold text-gray-600 uppercase tracking-wider shrink-0">
+    <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5 short:py-2">
+      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider leading-tight shrink-0">
         โซลีนอยด์จำกัดความยาว
       </div>
 
-      <div className="flex-1 flex flex-col justify-evenly min-h-0 font-mono">
-        {/* Formula */}
-        <div className="text-sm space-y-0.5">
-          <div><span style={{ color: '#c8ff00' }}>B_z</span><span className="text-gray-400"> = (μ₀NI / 2L)</span></div>
-          <div className="text-gray-400 pl-4">× [cosα₁ + cosα₂]</div>
-          <div className="text-sm text-gray-600 pl-4">cosα = x / √(R² + x²)</div>
-        </div>
-
-        {/* a and b */}
-        <div className="text-sm space-y-0.5">
-          <div className="text-gray-600">
-            a = {halfLcm} + {zCm} = <span style={{ color: '#a78bfa' }}>{(a * 100).toFixed(0)} cm</span>
+      <div className="flex-1 min-h-0 overflow-y-auto font-mono">
+        <div className={`min-h-full flex flex-col justify-evenly gap-1.5 py-1 ${FORMULA_TEXT}`}>
+          {/* Formula */}
+          <div className="space-y-0.5">
+            <div><span style={{ color: '#c8ff00' }}>B_z</span><span className="text-gray-400"> = (μ₀NI / 2L)</span></div>
+            <div className="text-gray-400 pl-4">× [cosα₁ + cosα₂]</div>
+            <div className="text-gray-600 pl-4 short:hidden">cosα = x / √(R² + x²)</div>
           </div>
-          <div className="text-gray-600">
-            b = {halfLcm} − {zCm} = <span style={{ color: '#a78bfa' }}>{(b * 100).toFixed(0)} cm</span>
+
+          {/* a and b */}
+          <div className="space-y-0.5">
+            <div className="text-gray-600">
+              a = {halfLcm} + {zCm} = <span style={{ color: '#a78bfa' }}>{(a * 100).toFixed(0)} cm</span>
+            </div>
+            <div className="text-gray-600">
+              b = {halfLcm} − {zCm} = <span style={{ color: '#a78bfa' }}>{(b * 100).toFixed(0)} cm</span>
+            </div>
           </div>
-        </div>
 
-        {/* cosα values */}
-        <div className="text-sm space-y-0.5">
-          <div className="text-gray-600">cosα₁ = <span className="text-gray-300">{cosA1.toFixed(4)}</span></div>
-          <div className="text-gray-600">cosα₂ = <span className="text-gray-300">{cosA2.toFixed(4)}</span></div>
-          <div className="text-gray-600">cosα₁ + cosα₂ = <span className="text-gray-200">{(cosA1 + cosA2).toFixed(4)}</span></div>
-        </div>
+          {/* cosα values */}
+          <div className="space-y-0.5">
+            <div className="text-gray-600">cosα₁ = <span className="text-gray-300">{cosA1.toFixed(4)}</span></div>
+            <div className="text-gray-600">cosα₂ = <span className="text-gray-300">{cosA2.toFixed(4)}</span></div>
+            <div className="text-gray-600">cosα₁ + cosα₂ = <span className="text-gray-200">{(cosA1 + cosA2).toFixed(4)}</span></div>
+          </div>
 
-        {/* Parameters */}
-        <div className="grid grid-cols-3 gap-x-2 gap-y-0.5 text-sm">
-          <span className="text-gray-600">N=<span style={{ color: '#a3e635' }}>{N}</span></span>
-          <span className="text-gray-600">L=<span className="text-gray-400">{(L * 1000).toFixed(0)}mm</span></span>
-          <span className="text-gray-600">R=<span className="text-gray-400">{(R * 1000).toFixed(0)}mm</span></span>
-          <span className="col-span-3 text-gray-600">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(3)} A</span></span>
+          {/* Parameters */}
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 whitespace-nowrap">
+            <span className="text-gray-600">N=<span style={{ color: '#a3e635' }}>{N}</span></span>
+            <span className="text-gray-600">L=<span className="text-gray-400">{(L * 1000).toFixed(0)}mm</span></span>
+            <span className="text-gray-600">R=<span className="text-gray-400">{(R * 1000).toFixed(0)}mm</span></span>
+            <span className="text-gray-600">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(3)} A</span></span>
+          </div>
         </div>
       </div>
 
       {/* Result */}
-      <div className="shrink-0 pt-2 mt-1 border-t border-white/[0.07] flex items-baseline gap-2">
+      <div className="shrink-0 pt-2 mt-1 short:pt-1.5 border-t border-white/[0.07] flex items-baseline gap-2">
         <span className="font-mono text-sm text-gray-500">B_z =</span>
-        <span className="font-mono text-2xl font-bold tabular-nums"
+        <span className="font-mono text-2xl short:text-xl font-bold tabular-nums"
           style={{ color: '#c8ff00', textShadow: '0 0 18px rgba(200,255,0,0.45)' }}>
           {result.toFixed(3)}
         </span>
@@ -2229,8 +2071,8 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 
 function FormulaPanel({ inst, I, z, widthClassName = 'w-[200px]' }: { inst: Inst; I: number; z: number; widthClassName?: string }) {
   return (
-    <div className={`shrink-0 ${widthClassName} rounded-xl border border-white/10 bg-gray-900/50 p-3 flex flex-col`}>
-      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2 shrink-0">สูตรการคำนวณ</h2>
+    <div className={`shrink-0 min-h-0 ${widthClassName} rounded-xl border border-white/10 bg-gray-900/50 p-3 short:p-2.5 flex flex-col`}>
+      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2 short:mb-1.5 shrink-0">สูตรการคำนวณ</h2>
       <FormulaCard inst={inst} I={I} z={z} />
     </div>
   );
@@ -2377,7 +2219,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
         {/* Sticky row-label column */}
         <div className="shrink-0 flex flex-col border-r border-white/[0.06]" style={{ width: LABEL_W }}>
           {/* Z-header cell */}
-          <div className="shrink-0 h-[30px] px-2 flex items-center text-sm font-semibold text-gray-600 uppercase tracking-wider border-b border-white/5 select-none">
+          <div className="shrink-0 h-[30px] px-2 flex items-center text-sm font-semibold text-gray-600 tracking-wider border-b border-white/5 select-none">
             Z (cm)
           </div>
           {dataRows.map(r => (
@@ -2445,21 +2287,16 @@ const typeLabel: Record<LogType, string> = { info: 'INFO', warn: 'WARN', data: '
 function LogPanel({ instrument, I, bMeasured, z, instType }: {
   instrument: number; I: number; bMeasured: number; z: number; instType: 'coil' | 'solenoid';
 }) {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>(() => [
+    mkLog('info', 'เชื่อมต่ออุปกรณ์ LAB-8 สำเร็จ'),
+    mkLog('cmd', `เริ่ม: ${instruments[instrument].name}`),
+    mkLog('data', `I₀ = ${instruments[instrument].I0.toFixed(2)} A`),
+  ]);
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevInst = useRef(instrument);
   const tick = useRef(0);
   const zTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setLogs([
-      mkLog('info', 'เชื่อมต่ออุปกรณ์ LAB-8 สำเร็จ'),
-      mkLog('cmd', `เริ่ม: ${instruments[instrument].name}`),
-      mkLog('data', `I₀ = ${instruments[instrument].I0.toFixed(2)} A`),
-    ]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (prevInst.current === instrument) return;

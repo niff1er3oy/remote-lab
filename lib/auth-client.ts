@@ -1,4 +1,4 @@
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, type User } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider, type User } from 'firebase/auth';
 import { auth } from '@/lib/firebase-client';
 
 async function postSession(idToken: string): Promise<{ ok: boolean; needsRefresh?: boolean }> {
@@ -12,19 +12,14 @@ async function postSession(idToken: string): Promise<{ ok: boolean; needsRefresh
 }
 
 // Exchanges the signed-in user's ID token for an httpOnly session cookie.
-// First-time sign-ins via a provider that skipped /api/auth/signup (e.g.
-// Google) get a default 'student' role assigned server-side, which requires
-// one forced token refresh before the session cookie can carry it.
+// A first-time sign-in has no role yet, so the server assigns the default
+// 'student' role, which requires one forced token refresh before the session
+// cookie can carry it.
 async function establishSessionFromUser(user: User): Promise<void> {
   const first = await postSession(await user.getIdToken());
   if (first.needsRefresh) {
     await postSession(await user.getIdToken(true));
   }
-}
-
-export async function establishSession(email: string, password: string): Promise<void> {
-  const cred = await signInWithEmailAndPassword(auth, email, password);
-  await establishSessionFromUser(cred.user);
 }
 
 export async function establishGoogleSession(): Promise<void> {
@@ -33,8 +28,6 @@ export async function establishGoogleSession(): Promise<void> {
 }
 
 const FIREBASE_ERROR_MESSAGES: Record<string, string> = {
-  'auth/invalid-credential': 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
-  'auth/invalid-email': 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
   'auth/too-many-requests': 'พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่ภายหลัง',
   'auth/popup-closed-by-user': 'ปิดหน้าต่างเข้าสู่ระบบก่อนดำเนินการเสร็จสิ้น',
   'auth/cancelled-popup-request': 'ปิดหน้าต่างเข้าสู่ระบบก่อนดำเนินการเสร็จสิ้น',

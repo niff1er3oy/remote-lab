@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebase-admin';
 import { getSessionUser } from '@/lib/session';
@@ -31,7 +31,7 @@ export async function GET() {
 }
 
 // PATCH — อ่านทั้งหมด
-export async function PATCH(_req: NextRequest) {
+export async function PATCH() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ ok: false }, { status: 401 });
 

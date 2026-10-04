@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { animate, onScroll, stagger } from 'animejs';
 import Link from 'next/link';
+import SlideIn from './SlideIn';
+import { prefersReducedMotion, press } from '@/lib/motion';
 
 export type SlotStatus = 'free' | 'mine' | 'taken';
 
@@ -60,8 +62,12 @@ function slotCls(status: SlotStatus, held: boolean, past: boolean, isToday: bool
   }
 }
 
-export default function BookingCalendar({ scrollAnimate = true, onBookingCreated, onBookingCancelled }: {
+export default function BookingCalendar({ scrollAnimate = true, embedded = false, refreshKey = 0, onBookingCreated, onBookingCancelled }: {
   scrollAnimate?: boolean;
+  /** Render as a plain panel (no section heading or spacing), for use inside another page. */
+  embedded?: boolean;
+  /** Change this to make the calendar reload, e.g. after a booking is cancelled elsewhere. */
+  refreshKey?: number;
   onBookingCreated?: () => void;
   onBookingCancelled?: () => void;
 }) {
@@ -78,6 +84,13 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
   const [confirming,   setConfirming]   = useState(false);
   const [cancelling,   setCancelling]   = useState(false);
   const [bookingMsg,   setBookingMsg]   = useState<{ ok: boolean; text: string } | null>(null);
+  const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
+  if (selectedId !== prevSelectedId) {
+    setPrevSelectedId(selectedId);
+    setHeld(null);
+    setCancelTarget(null);
+    setBookingMsg(null);
+  }
   // mine_booking_ids: { room_id: { "ti-di": booking_id } }
   const [mineBookingIds, setMineBookingIds] = useState<Record<string, Record<string, string>>>({});
 
@@ -98,7 +111,7 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
     }
   }, []);
 
-  useEffect(() => { loadAvailability(); }, [loadAvailability]);
+  useEffect(() => { loadAvailability(); }, [loadAvailability, refreshKey]);
 
   const currentSlots: SlotStatus[][] =
     selectedId && slotsByRoom[selectedId] ? slotsByRoom[selectedId] : FALLBACK;
@@ -120,7 +133,18 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
     return () => { observer.revert(); };
   }, [loading, scrollAnimate]);
 
-  useEffect(() => { setHeld(null); setCancelTarget(null); setBookingMsg(null); }, [selectedId]);
+  // Inside the dashboard the slots ripple in from the first one as the panel
+  // appears. It runs before the first paint, so nothing flashes at full size.
+  useLayoutEffect(() => {
+    if (!embedded || !sectionRef.current || prefersReducedMotion()) return;
+    const ripple = animate(sectionRef.current.querySelectorAll('[data-slot]'), {
+      scale: [0, 1],
+      duration: 420,
+      delay: stagger(24, { grid: [7, TIME_SLOTS.length], from: 'first', start: 380 }),
+      ease: 'outBack(1.4)',
+    });
+    return () => { ripple.pause(); };
+  }, [embedded]);
 
   async function handleConfirm() {
     if (!held || !selectedId) return;
@@ -140,6 +164,8 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
           next[held.ti][held.di] = 'mine';
           return { ...prev, [selectedId]: next };
         });
+        const booked = sectionRef.current?.querySelector<HTMLElement>(`[data-slot="${held.ti}-${held.di}"]`);
+        if (booked) press(booked, 1.22);
         setHeld(null);
         setBookingMsg({ ok: true, text: 'จองสำเร็จ!' });
         setTimeout(() => setBookingMsg(null), 3000);
@@ -189,22 +215,228 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
     }
   }
 
-  function handleSlotClick(ti: number, di: number) {
+  function handleSlotClick(ti: number, di: number, cell: HTMLElement) {
     if (!loggedIn) return;
     if (isPast(di, ti)) return;
     const status = currentSlots[ti][di];
     setBookingMsg(null);
     if (status === 'free') {
+      press(cell);
       setCancelTarget(null);
       setHeld(prev => prev?.ti === ti && prev?.di === di ? null : { ti, di });
     } else if (status === 'mine') {
       const booking_id = mineBookingIds[selectedId]?.[`${ti}-${di}`];
       if (!booking_id) return;
+      press(cell);
       setHeld(null);
       setCancelTarget(prev =>
         prev?.ti === ti && prev?.di === di ? null : { ti, di, booking_id }
       );
     }
+  }
+
+  const panel = (
+    <>
+      {/* Room selector */}
+      {rooms.length > 0 && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {rooms.map(r => (
+            <button
+              key={r.room_id}
+              onClick={() => setSelectedId(r.room_id)}
+              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all flex items-center gap-1.5 ${
+                selectedId === r.room_id
+                  ? 'bg-[#c8ff00] text-gray-950'
+                  : 'border border-white/10 text-gray-400 hover:border-[#c8ff00]/30 hover:text-white'
+              }`}
+            >
+              <span className={`font-mono font-bold ${selectedId === r.room_id ? 'text-gray-950' : 'text-[#c8ff00]/70'}`}>
+                {r.code}
+              </span>
+              <span className="hidden sm:inline">— {r.name_th}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Room description */}
+      {selectedRoom && !embedded && (
+        <p className="mb-5 text-xs text-gray-500">
+          <span className="text-gray-400 font-medium">{selectedRoom.code}</span>
+          {' '}— {selectedRoom.name_th}
+        </p>
+      )}
+
+      <div className="overflow-x-auto overflow-y-hidden">
+        <div className="min-w-[520px]">
+          {/* Date header */}
+          <div className="grid grid-cols-[52px_repeat(7,1fr)] gap-1.5 mb-3">
+            <div />
+            {dates.map((date, i) => (
+              <div key={date} className="flex flex-col items-center gap-1">
+                {i === 0
+                  ? <span className="text-[9px] font-bold text-[#c8ff00] uppercase tracking-widest">วันนี้</span>
+                  : <span className="text-[9px] invisible">-</span>}
+                <span className={`text-[11px] font-semibold ${i === 0 ? 'text-white' : 'text-gray-500'}`}>{date}</span>
+                {i === 0 && <div className="h-0.5 w-6 rounded-full bg-[#c8ff00]" />}
+              </div>
+            ))}
+          </div>
+
+          {/* Slots */}
+          <div className="space-y-1.5">
+            {TIME_SLOTS.map((time, ti) => (
+              <div key={time} className="slot-row grid grid-cols-[52px_repeat(7,1fr)] gap-1.5 items-center">
+                <span className="text-[11px] text-gray-600 font-mono text-right pr-2 leading-none">{time}</span>
+                {currentSlots[ti].map((status, di) => {
+                  const isHeld    = held?.ti === ti && held?.di === di;
+                  const pastSlot  = isPast(di, ti);
+                  return (
+                    <div
+                      key={di}
+                      data-slot={`${ti}-${di}`}
+                      onClick={e => handleSlotClick(ti, di, e.currentTarget)}
+                      title={
+                        pastSlot && status === 'free' ? 'เวลาผ่านไปแล้ว'
+                        : status === 'mine'  ? 'จองแล้ว (ของคุณ)'
+                        : status === 'taken' ? 'จองแล้ว (คนอื่น)'
+                        : isHeld ? 'กำลังเลือก — กดยืนยัน'
+                        : loggedIn ? 'คลิกเพื่อเลือก' : ''
+                      }
+                      className={`h-8 rounded-lg transition-[background-color,box-shadow] duration-150 ${slotCls(status, isHeld, pastSlot, di === 0, loggedIn)}`}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="mt-6 pt-5 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
+            <div className="flex flex-wrap items-center gap-4 text-[11px] text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-3 w-4 rounded-sm bg-gray-800/70" /> ว่าง
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-3 w-4 rounded-sm bg-[#c8ff00]/18" /> คนอื่น
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-3 w-4 rounded-sm bg-cyan-500/40 ring-1 ring-inset ring-cyan-400/50" /> ของฉัน
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-3 w-4 rounded-sm bg-[#c8ff00]" /> กำลังเลือก
+              </span>
+            </div>
+            {!loggedIn && (
+              <Link href="/login"
+                className="rounded-full bg-[#c8ff00] px-5 py-2 text-xs font-semibold text-gray-950 hover:bg-white transition-colors">
+                เข้าสู่ระบบเพื่อจอง →
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Confirmation panel */}
+      {held && loggedIn && (
+        <SlideIn key={`${held.ti}-${held.di}`} className="mt-5 rounded-xl border border-[#c8ff00]/25 bg-[#c8ff00]/5 px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-white">
+              ห้อง {selectedRoom?.code} — {selectedRoom?.name_th}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {dates[held.di]} · {TIME_SLOTS[held.ti]} – {String((held.ti * 2 + 2) % 24).padStart(2, '0')}:00
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setHeld(null)}
+              className="rounded-full border border-white/15 px-4 py-1.5 text-xs text-gray-400 hover:text-white hover:border-white/30 transition-colors"
+            >
+              ยกเลิก
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={confirming}
+              className="rounded-full bg-[#c8ff00] px-5 py-1.5 text-xs font-semibold text-gray-950 hover:bg-white transition-colors disabled:opacity-60 flex items-center gap-1.5"
+              style={{ boxShadow: '0 0 16px rgba(200,255,0,0.3)' }}
+            >
+              {confirming && (
+                <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                </svg>
+              )}
+              ยืนยันการจอง
+            </button>
+          </div>
+        </SlideIn>
+      )}
+
+      {/* Cancel confirmation panel */}
+      {cancelTarget && loggedIn && (
+        <SlideIn key={cancelTarget.booking_id} className="mt-5 rounded-xl border border-red-500/25 bg-red-500/5 px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-white">
+              ยกเลิกการจอง — ห้อง {selectedRoom?.code}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {dates[cancelTarget.di]} · {TIME_SLOTS[cancelTarget.ti]} – {String((cancelTarget.ti * 2 + 2) % 24).padStart(2, '0')}:00
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setCancelTarget(null)}
+              className="rounded-full border border-white/15 px-4 py-1.5 text-xs text-gray-400 hover:text-white hover:border-white/30 transition-colors"
+            >
+              ปิด
+            </button>
+            <button
+              onClick={handleCancelConfirm}
+              disabled={cancelling}
+              className="rounded-full bg-red-500 px-5 py-1.5 text-xs font-semibold text-white hover:bg-red-400 transition-colors disabled:opacity-60 flex items-center gap-1.5"
+            >
+              {cancelling && (
+                <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                </svg>
+              )}
+              ยืนยันยกเลิก
+            </button>
+          </div>
+        </SlideIn>
+      )}
+
+      {/* Result message */}
+      {bookingMsg && (
+        <SlideIn key={bookingMsg.text} role="status" className={`mt-3 rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${
+          bookingMsg.ok
+            ? 'bg-[#c8ff00]/10 border border-[#c8ff00]/20 text-[#c8ff00]'
+            : 'bg-red-500/10 border border-red-500/20 text-red-400'
+        }`}>
+          {bookingMsg.ok
+            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+            : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
+          }
+          {bookingMsg.text}
+        </SlideIn>
+      )}
+    </>
+  );
+
+  // Inside the dashboard the calendar is one panel among others: no marketing
+  // heading, no section spacing.
+  if (embedded) {
+    return (
+      <section ref={sectionRef} id="booking" className="scroll-mt-20 rounded-2xl border border-white/10 bg-gray-900/50 p-5 sm:p-6">
+        <div className="mb-5">
+          <h2 className="text-base font-semibold text-white">จองช่วงเวลา</h2>
+          <p className="mt-1 text-xs leading-5 text-gray-400">
+            คลิกช่องที่ว่างแล้วกดยืนยัน ถ้าจะยกเลิกให้คลิกช่องของคุณ รอบละ 2 ชั่วโมง จองล่วงหน้าได้ 7 วัน
+          </p>
+        </div>
+        {panel}
+      </section>
+    );
   }
 
   return (
@@ -217,188 +449,7 @@ export default function BookingCalendar({ scrollAnimate = true, onBookingCreated
         </div>
 
         <div className="mx-auto max-w-4xl rounded-2xl border border-white/10 bg-gray-900/50 p-6 sm:p-8">
-          {/* Room selector */}
-          {rooms.length > 0 && (
-            <div className="mb-6 flex flex-wrap gap-2">
-              {rooms.map(r => (
-                <button
-                  key={r.room_id}
-                  onClick={() => setSelectedId(r.room_id)}
-                  className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all flex items-center gap-1.5 ${
-                    selectedId === r.room_id
-                      ? 'bg-[#c8ff00] text-gray-950'
-                      : 'border border-white/10 text-gray-400 hover:border-[#c8ff00]/30 hover:text-white'
-                  }`}
-                >
-                  <span className={`font-mono font-bold ${selectedId === r.room_id ? 'text-gray-950' : 'text-[#c8ff00]/70'}`}>
-                    {r.code}
-                  </span>
-                  <span className="hidden sm:inline">— {r.name_th}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Room description */}
-          {selectedRoom && (
-            <p className="mb-5 text-xs text-gray-500">
-              <span className="text-gray-400 font-medium">{selectedRoom.code}</span>
-              {' '}— {selectedRoom.name_th}
-            </p>
-          )}
-
-          <div className="overflow-x-auto overflow-y-hidden">
-            <div className="min-w-[520px]">
-              {/* Date header */}
-              <div className="grid grid-cols-[52px_repeat(7,1fr)] gap-1.5 mb-3">
-                <div />
-                {dates.map((date, i) => (
-                  <div key={date} className="flex flex-col items-center gap-1">
-                    {i === 0
-                      ? <span className="text-[9px] font-bold text-[#c8ff00] uppercase tracking-widest">วันนี้</span>
-                      : <span className="text-[9px] invisible">-</span>}
-                    <span className={`text-[11px] font-semibold ${i === 0 ? 'text-white' : 'text-gray-500'}`}>{date}</span>
-                    {i === 0 && <div className="h-0.5 w-6 rounded-full bg-[#c8ff00]" />}
-                  </div>
-                ))}
-              </div>
-
-              {/* Slots */}
-              <div className="space-y-1.5">
-                {TIME_SLOTS.map((time, ti) => (
-                  <div key={time} className="slot-row grid grid-cols-[52px_repeat(7,1fr)] gap-1.5 items-center">
-                    <span className="text-[11px] text-gray-600 font-mono text-right pr-2 leading-none">{time}</span>
-                    {currentSlots[ti].map((status, di) => {
-                      const isHeld    = held?.ti === ti && held?.di === di;
-                      const pastSlot  = isPast(di, ti);
-                      return (
-                        <div
-                          key={di}
-                          onClick={() => handleSlotClick(ti, di)}
-                          title={
-                            pastSlot && status === 'free' ? 'เวลาผ่านไปแล้ว'
-                            : status === 'mine'  ? 'จองแล้ว (ของคุณ)'
-                            : status === 'taken' ? 'จองแล้ว (คนอื่น)'
-                            : isHeld ? 'กำลังเลือก — กดยืนยัน'
-                            : loggedIn ? 'คลิกเพื่อเลือก' : ''
-                          }
-                          className={`h-8 rounded-lg transition-all duration-150 ${slotCls(status, isHeld, pastSlot, di === 0, loggedIn)}`}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-
-              {/* Legend */}
-              <div className="mt-6 pt-5 border-t border-white/5 flex items-center justify-between flex-wrap gap-4">
-                <div className="flex flex-wrap items-center gap-4 text-[11px] text-gray-500">
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-3 w-4 rounded-sm bg-gray-800/70" /> ว่าง
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-3 w-4 rounded-sm bg-[#c8ff00]/18" /> คนอื่น
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-3 w-4 rounded-sm bg-cyan-500/40 ring-1 ring-inset ring-cyan-400/50" /> ของฉัน
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block h-3 w-4 rounded-sm bg-[#c8ff00]" /> กำลังเลือก
-                  </span>
-                </div>
-                {!loggedIn && (
-                  <Link href="/login"
-                    className="rounded-full bg-[#c8ff00] px-5 py-2 text-xs font-semibold text-gray-950 hover:bg-white transition-colors">
-                    เข้าสู่ระบบเพื่อจอง →
-                  </Link>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Confirmation panel */}
-          {held && loggedIn && (
-            <div className="mt-5 rounded-xl border border-[#c8ff00]/25 bg-[#c8ff00]/5 px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white">
-                  ห้อง {selectedRoom?.code} — {selectedRoom?.name_th}
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {dates[held.di]} · {TIME_SLOTS[held.ti]} – {String((held.ti * 2 + 2) % 24).padStart(2, '0')}:00
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => setHeld(null)}
-                  className="rounded-full border border-white/15 px-4 py-1.5 text-xs text-gray-400 hover:text-white hover:border-white/30 transition-colors"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  onClick={handleConfirm}
-                  disabled={confirming}
-                  className="rounded-full bg-[#c8ff00] px-5 py-1.5 text-xs font-semibold text-gray-950 hover:bg-white transition-colors disabled:opacity-60 flex items-center gap-1.5"
-                  style={{ boxShadow: '0 0 16px rgba(200,255,0,0.3)' }}
-                >
-                  {confirming && (
-                    <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                    </svg>
-                  )}
-                  ยืนยันการจอง
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Cancel confirmation panel */}
-          {cancelTarget && loggedIn && (
-            <div className="mt-5 rounded-xl border border-red-500/25 bg-red-500/5 px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white">
-                  ยกเลิกการจอง — ห้อง {selectedRoom?.code}
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {dates[cancelTarget.di]} · {TIME_SLOTS[cancelTarget.ti]} – {String((cancelTarget.ti * 2 + 2) % 24).padStart(2, '0')}:00
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => setCancelTarget(null)}
-                  className="rounded-full border border-white/15 px-4 py-1.5 text-xs text-gray-400 hover:text-white hover:border-white/30 transition-colors"
-                >
-                  ปิด
-                </button>
-                <button
-                  onClick={handleCancelConfirm}
-                  disabled={cancelling}
-                  className="rounded-full bg-red-500 px-5 py-1.5 text-xs font-semibold text-white hover:bg-red-400 transition-colors disabled:opacity-60 flex items-center gap-1.5"
-                >
-                  {cancelling && (
-                    <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                    </svg>
-                  )}
-                  ยืนยันยกเลิก
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Result message */}
-          {bookingMsg && (
-            <div className={`mt-3 rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${
-              bookingMsg.ok
-                ? 'bg-[#c8ff00]/10 border border-[#c8ff00]/20 text-[#c8ff00]'
-                : 'bg-red-500/10 border border-red-500/20 text-red-400'
-            }`}>
-              {bookingMsg.ok
-                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
-              }
-              {bookingMsg.text}
-            </div>
-          )}
+          {panel}
         </div>
       </div>
     </section>

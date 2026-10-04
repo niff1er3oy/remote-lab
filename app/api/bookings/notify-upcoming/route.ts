@@ -25,7 +25,7 @@ export async function POST() {
         notified_can_enter_at?: Timestamp;
       };
       if (b.end_time.toMillis() < now) continue;
-      if (b.notified_can_enter_at && now - b.notified_can_enter_at.toMillis() < 55_000) continue;
+      if (b.notified_can_enter_at) continue;
 
       const lab = (await adminDb.collection('labs').doc(b.lab_id).get()).data();
       const startStr = b.start_time.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });

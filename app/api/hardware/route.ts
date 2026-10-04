@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid script name format' }, { status: 400 });
     }
 
-    // Args: allow alphanumeric, spaces, dashes, underscores (e.g. "--name 150 --position -15")
+    // Args: allow alphanumeric, spaces, dashes, underscores (e.g. "--name 75 --position -15")
     if (args && !/^[\w\s\-]+$/.test(args)) {
       return NextResponse.json({ error: 'Invalid args format' }, { status: 400 });
     }
@@ -48,10 +48,11 @@ export async function POST(request: Request) {
       if (stderr) console.error(`[Hardware API] Stderr: ${stderr}`);
       const finished = stdout.includes('Path finished.');
       return NextResponse.json({ success: finished, output: stdout });
-    } catch (execError: any) {
+    } catch (execError) {
       console.error(`[Hardware API] Execution failed:`, execError);
+      const message = execError instanceof Error ? execError.message : String(execError);
       return NextResponse.json(
-        { error: 'Failed to execute hardware script', details: execError.message },
+        { error: 'Failed to execute hardware script', details: message },
         { status: 500 }
       );
     } finally {

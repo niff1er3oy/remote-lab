@@ -62,7 +62,10 @@
       "Bash(node -e \"require.resolve\\('google-auth-library'\\); console.log\\('found'\\)\")",
       "Bash(node /d/GitHub/remote-lab/create-indexes.js)",
       "Bash(node --check server.js)",
-      "Bash(node -e \"console.log\\(Object.keys\\(require\\('firebase-admin/app'\\)\\)\\); console.log\\(Object.keys\\(require\\('firebase-admin/auth'\\)\\)\\)\")"
+      "Bash(node -e \"console.log\\(Object.keys\\(require\\('firebase-admin/app'\\)\\)\\); console.log\\(Object.keys\\(require\\('firebase-admin/auth'\\)\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/ --max-time 3)",
+      "Bash(netstat -ano)",
+      "mcp__claude-in-chrome__tabs_context_mcp"
     ],
     "additionalDirectories": [
       "d:\\GitHub\\remote-lab"
