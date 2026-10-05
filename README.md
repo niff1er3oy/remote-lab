@@ -12,3 +12,13 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). The dev server (`server.js`) boots Next.js — see `AGENTS.md` for the color theme and `DESIGN.md` for everything else.
+
+## Tests
+
+```bash
+npm test               # run once
+npm run test:watch     # re-run on change
+npm run test:coverage  # run once and report coverage
+```
+
+Unit tests live in `__tests__/` and run on Jest with React Testing Library. They never touch the real Firebase project, the LLM or the rig: the credentials from `.env` are replaced before any test loads, and anything a test does not mock throws.

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { animate, stagger } from 'animejs';
 import { useNotifications, formatRelative, TYPE_ICON, type Notification } from './useNotifications';
@@ -14,10 +14,14 @@ function Toast({ notif, onDismiss }: { notif: Notification; onDismiss: () => voi
   const s    = TYPE_ICON[notif.type] ?? TYPE_ICON.info;
   const isSuccess = notif.type === 'success';
 
+  // One countdown per toast. `onDismiss` is a new function on every render of
+  // the parent, and every poll renders it; depending on it here would start
+  // the countdown again each time, so it is only read when the time is up.
+  const dismiss = useEffectEvent(onDismiss);
   useEffect(() => {
-    const t = setTimeout(onDismiss, notif.action_url ? 60_000 : 20_000);
+    const t = setTimeout(() => dismiss(), notif.action_url ? 60_000 : 20_000);
     return () => clearTimeout(t);
-  }, [notif.action_url, onDismiss]);
+  }, [notif.action_url]);
 
   // Slide in from left on mount
   useEffect(() => {

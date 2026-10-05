@@ -4,21 +4,26 @@ export const dynamic = 'force-dynamic';
 
 // Each cam key (cam1/cam2/cam3) maps to a full stream URL set via env, e.g.
 // cam1=http://34.87.165.238:8889/camera1
-const CAM_URLS: Record<string, string> = {
-  cam1: process.env.cam1 ?? '',
-  cam2: process.env.cam2 ?? '',
-  cam3: process.env.cam3 ?? '',
-};
+const CAM_URLS = new Map([
+  ['cam1', process.env.cam1 ?? ''],
+  ['cam2', process.env.cam2 ?? ''],
+  ['cam3', process.env.cam3 ?? ''],
+]);
 
 const AUTH = 'Basic ' + Buffer.from(
   `${process.env.CAM_USER ?? 'admin'}:${process.env.CAM_PASSWORD ?? ''}`
 ).toString('base64');
 
+// The URL on the camera server that `path` stands for, or null when it names
+// nothing a caller may reach. Segments arrive already decoded, so ".." or an
+// encoded slash would otherwise climb out of the camera's own URL with the
+// camera's credentials attached; those are refused and the rest re-encoded.
 function resolveTarget(path: string[]): string | null {
   const [camKey, ...rest] = path;
-  const base = CAM_URLS[camKey];
+  const base = CAM_URLS.get(camKey);
   if (!base) return null;
-  return [base, ...rest].join('/');
+  if (rest.some(segment => segment === '.' || segment === '..' || /[\\/]/.test(segment))) return null;
+  return [base, ...rest.map(encodeURIComponent)].join('/');
 }
 
 // POST — WHEP signaling (SDP offer → answer)

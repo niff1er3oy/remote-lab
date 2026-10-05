@@ -1,65 +1,87 @@
 import { NextResponse } from 'next/server';
-import { getSessionUser } from '@/lib/session';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import util from 'util';
+import { getSessionUser } from '@/lib/session';
+import { rigAccess } from '@/lib/rig-access';
 
-const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
+
+// Where the rig's control scripts live on the lab machine.
+const SCRIPT_DIR = '/home/admin/Documents';
+const PYTHON = `${SCRIPT_DIR}/venv/bin/python`;
+
+// The rig's whole command set. Nothing else is ever run, and nothing from the
+// request reaches a shell: the script name is matched against these lists and
+// the only argument, the probe position, is a checked integer.
+const COIL_SCRIPTS = ['coil_1.py', 'coil_2.py', 'coil_3.py']; // switch a single coil on
+const BREAK_SCRIPTS = ['coil_b.py', 'sole_b.py'];             // cut a circuit
+const SOLENOID_SCRIPT = 'sole.py';                            // solenoid on, probe to --position
+const POSITION_MIN = -15; // cm along the solenoid's axis
+const POSITION_MAX = 15;
+
+// Switching off stays possible for a short while after a booking ends, so a
+// student who leaves a moment late does not leave a circuit live.
+const BREAK_GRACE_MS = 10 * 60 * 1000;
 
 let armBusy = false;
+
+type Command = { argv: string[]; isBreak: boolean };
+
+function readCommand(body: unknown): Command | null {
+  if (!body || typeof body !== 'object') return null;
+  const { script, position } = body as { script?: unknown; position?: unknown };
+  if (typeof script !== 'string') return null;
+
+  if (COIL_SCRIPTS.includes(script)) return { argv: [script], isBreak: false };
+  if (BREAK_SCRIPTS.includes(script)) return { argv: [script], isBreak: true };
+  if (script === SOLENOID_SCRIPT) {
+    if (typeof position !== 'number' || !Number.isInteger(position)) return null;
+    if (position < POSITION_MIN || position > POSITION_MAX) return null;
+    return { argv: [script, '--position', String(position)], isBreak: false };
+  }
+  return null;
+}
 
 export async function GET() {
   return NextResponse.json({ busy: armBusy });
 }
 
 export async function POST(request: Request) {
-  if (!(await getSessionUser()))
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบก่อน' }, { status: 401 });
 
-  if (armBusy)
-    return NextResponse.json({ error: 'Arm is currently busy' }, { status: 409 });
+  const command = readCommand(await request.json().catch(() => null));
+  if (!command) return NextResponse.json({ error: 'คำสั่งอุปกรณ์ไม่ถูกต้อง' }, { status: 400 });
 
+  // Signing in is open to any Google account; the rig is only for whoever has
+  // it booked at this moment.
+  let access;
   try {
-    const body = await request.json();
-    const scriptName = body.script;
-    const args: string = body.args ?? '';
+    access = await rigAccess(user.uid, BREAK_GRACE_MS);
+  } catch (err) {
+    console.error('[Hardware API] Could not check the booking:', err);
+    return NextResponse.json({ error: 'ตรวจสอบรอบทดลองไม่ได้ ลองใหม่อีกครั้ง' }, { status: 500 });
+  }
+  if (access !== 'active' && !(command.isBreak && access === 'just-ended')) {
+    return NextResponse.json({ error: 'ไม่มีรอบทดลองที่กำลังดำเนินอยู่ จึงสั่งอุปกรณ์ไม่ได้' }, { status: 403 });
+  }
 
-    if (!scriptName || typeof scriptName !== 'string') {
-      return NextResponse.json({ error: 'Missing or invalid script name' }, { status: 400 });
-    }
+  if (armBusy) return NextResponse.json({ error: 'อุปกรณ์กำลังทำงานอยู่ รอสักครู่แล้วลองใหม่' }, { status: 409 });
 
-    // Security check: only allow safe alphanumeric script names with .py extension
-    if (!/^[a-zA-Z0-9_]+\.py$/.test(scriptName)) {
-      return NextResponse.json({ error: 'Invalid script name format' }, { status: 400 });
-    }
+  const shown = `python ${command.argv.join(' ')}`;
+  console.log(`[Hardware API] Executing: ${shown} (user ${user.uid})`);
 
-    // Args: allow alphanumeric, spaces, dashes, underscores (e.g. "--name 75 --position -15")
-    if (args && !/^[\w\s\-]+$/.test(args)) {
-      return NextResponse.json({ error: 'Invalid args format' }, { status: 400 });
-    }
-
-    const command = `cd /home/admin/Documents && ./venv/bin/python ${scriptName}${args ? ' ' + args : ''}`;
-
-    console.log(`[Hardware API] Executing: ${command}`);
-
-    armBusy = true;
-    try {
-      const { stdout, stderr } = await execAsync(command);
-      console.log(`[Hardware API] Success: ${stdout}`);
-      if (stderr) console.error(`[Hardware API] Stderr: ${stderr}`);
-      const finished = stdout.includes('Path finished.');
-      return NextResponse.json({ success: finished, output: stdout });
-    } catch (execError) {
-      console.error(`[Hardware API] Execution failed:`, execError);
-      const message = execError instanceof Error ? execError.message : String(execError);
-      return NextResponse.json(
-        { error: 'Failed to execute hardware script', details: message },
-        { status: 500 }
-      );
-    } finally {
-      armBusy = false;
-    }
-  } catch (error) {
-    console.error(`[Hardware API] Invalid request:`, error);
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  armBusy = true;
+  try {
+    const { stdout, stderr } = await execFileAsync(PYTHON, command.argv, { cwd: SCRIPT_DIR });
+    console.log(`[Hardware API] Success: ${stdout}`);
+    if (stderr) console.error(`[Hardware API] Stderr: ${stderr}`);
+    return NextResponse.json({ success: stdout.includes('Path finished.'), output: stdout });
+  } catch (execError) {
+    // The details (paths, the script's traceback) stay in the server log.
+    console.error(`[Hardware API] Execution failed: ${shown}`, execError);
+    return NextResponse.json({ error: 'สคริปต์ควบคุมอุปกรณ์ทำงานผิดพลาด' }, { status: 500 });
+  } finally {
+    armBusy = false;
   }
 }

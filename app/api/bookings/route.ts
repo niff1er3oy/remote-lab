@@ -7,8 +7,12 @@ const ACTIVE_STATUSES = ['pending', 'confirmed', 'in_progress'];
 
 class OverlapError extends Error {}
 
-function parseUtc(s: string): Date {
-  return new Date(s.replace(' ', 'T') + 'Z');
+// The calendar sends UTC as "YYYY-MM-DD HH:MM:SS". Null for anything else, so
+// a time that is no date is refused here instead of failing further down.
+function parseUtc(s: unknown): Date | null {
+  if (typeof s !== 'string') return null;
+  const date = new Date(s.replace(' ', 'T') + 'Z');
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export async function POST(req: NextRequest) {
@@ -17,11 +21,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const { room_id, start_time, end_time } = await req.json();
-    if (!room_id || !start_time || !end_time)
+    if (typeof room_id !== 'string' || !room_id || !start_time || !end_time)
       return NextResponse.json({ ok: false, error: 'ข้อมูลไม่ครบถ้วน' }, { status: 400 });
 
     const startDate = parseUtc(start_time);
     const endDate = parseUtc(end_time);
+    if (!startDate || !endDate)
+      return NextResponse.json({ ok: false, error: 'ช่วงเวลาที่จองไม่ถูกต้อง' }, { status: 400 });
 
     if (endDate <= new Date())
       return NextResponse.json({ ok: false, error: 'ไม่สามารถจองเวลาที่สิ้นสุดไปแล้วได้' }, { status: 400 });

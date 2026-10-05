@@ -17,8 +17,9 @@ const KatexMath = lazy(() => import('@/app/components/KatexMath'));
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type CoilInst = { id: number; type: 'coil'; name: string; sub: string; I0: number; turns: number; R: number; icon: ReactNode };
-type SolInst = { id: number; type: 'solenoid'; name: string; sub: string; I0: number; N: number; L: number; R: number; icon: ReactNode };
+// `script` is the rig script that switches the instrument on (see "Rig commands").
+type CoilInst = { id: number; type: 'coil'; name: string; sub: string; script: string; I0: number; turns: number; R: number; icon: ReactNode };
+type SolInst = { id: number; type: 'solenoid'; name: string; sub: string; script: string; I0: number; N: number; L: number; R: number; icon: ReactNode };
 type Inst = CoilInst | SolInst;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ const instruments: Inst[] = [
   // ตอนที่ 1 — ขดลวดเดี่ยว  I₀ = 5 A
   {
     id: 0, type: 'coil', name: 'ขดลวดเดี่ยว 1 รอบ', sub: 'n=1 · R=13 มม.',
-    I0: 5, turns: 1, R: 0.013,
+    script: 'coil_1.py', I0: 5, turns: 1, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" />
@@ -55,7 +56,7 @@ const instruments: Inst[] = [
   },
   {
     id: 1, type: 'coil', name: 'ขดลวดเดี่ยว 2 รอบ', sub: 'n=2 · R=13 มม.',
-    I0: 5, turns: 2, R: 0.013,
+    script: 'coil_2.py', I0: 5, turns: 2, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5.5" /><circle cx="12" cy="12" r="2" />
@@ -64,7 +65,7 @@ const instruments: Inst[] = [
   },
   {
     id: 2, type: 'coil', name: 'ขดลวดเดี่ยว 3 รอบ', sub: 'n=3 · R=13 มม.',
-    I0: 5, turns: 3, R: 0.013,
+    script: 'coil_3.py', I0: 5, turns: 3, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="6.5" />
@@ -76,7 +77,7 @@ const instruments: Inst[] = [
   // ชุดทดลองจริงมีโซลีนอยด์อันเดียวคือ 75 รอบ (ใบแลปกล่าวถึง 150 รอบด้วย แต่ไม่มีบนเครื่อง)
   {
     id: 3, type: 'solenoid', name: 'โซลีนอยด์ 75 รอบ', sub: 'N=75 · L=160 มม.',
-    I0: 1, N: 75, L: 0.16, R: 0.013,
+    script: 'sole.py', I0: 1, N: 75, L: 0.16, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <rect x="2" y="9" width="20" height="6" rx="1" />
@@ -85,6 +86,38 @@ const instruments: Inst[] = [
     ),
   },
 ];
+
+// ── Rig commands ──────────────────────────────────────────────────────────────
+// The rig understands six commands and the server runs nothing else
+// (app/api/hardware/route.ts): a script per coil that switches it on, sole.py
+// which switches the solenoid on and takes the probe to a position, and a break
+// script per circuit that switches it off.
+
+type RigCommand = { script: string; position?: number };
+
+// The solenoid always starts with the probe at the centre, which is also where
+// the page's own Z is reset to when an instrument is chosen.
+const startCommand = (inst: Inst): RigCommand =>
+  inst.type === 'solenoid' ? { script: inst.script, position: 0 } : { script: inst.script };
+const breakCommand = (type: Inst['type']): RigCommand =>
+  ({ script: type === 'coil' ? 'coil_b.py' : 'sole_b.py' });
+
+// Resolves to null once the rig has run the command, or to a message for the
+// student when it has not.
+async function sendToRig(command: RigCommand): Promise<string | null> {
+  try {
+    const res = await fetch('/api/hardware', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(command),
+    });
+    if (res.ok) return null;
+    const data = await res.json().catch(() => null);
+    return data?.error ?? 'อุปกรณ์ไม่ตอบรับคำสั่ง';
+  } catch {
+    return 'เชื่อมต่อกับอุปกรณ์ไม่ได้';
+  }
+}
 
 // ── Access Gate ───────────────────────────────────────────────────────────────
 
@@ -434,21 +467,28 @@ export default function RemoteLabPage() {
     setInstrument(i);
   }, []);
 
+  // The instrument type whose layout is on screen, for the entrance of the
+  // second camera when the type changes.
+  const shownType = useRef<Inst['type']>('coil');
+  const rightColRef = useRef<HTMLDivElement>(null);
+
   useLayoutEffect(() => {
     if (prevInstrumentRef.current === instrument) return;
     const inst = instruments[instrument];
-    const typeChanged = inst.type !== prevInstType.current;
+    const typeChanged = inst.type !== shownType.current;
     prevInstrumentRef.current = instrument;
     layoutCtrlRef.current?.animate({ duration: 600, ease: 'outCubic', delay: stagger(30) });
-    if (typeChanged && rightColRef.current) {
-      prevInstType.current = inst.type;
-      animate(rightColRef.current, {
-        opacity: [0, 1],
-        scale: [0.94, 1],
-        translateX: [24, 0],
-        duration: 480,
-        ease: 'outBack(1.2)',
-      });
+    if (typeChanged) {
+      shownType.current = inst.type;
+      if (rightColRef.current) {
+        animate(rightColRef.current, {
+          opacity: [0, 1],
+          scale: [0.94, 1],
+          translateX: [24, 0],
+          duration: 480,
+          ease: 'outBack(1.2)',
+        });
+      }
     }
   }, [instrument]);
 
@@ -462,61 +502,53 @@ export default function RemoteLabPage() {
     setMeasData(new Map());
   }
 
-  const prevInstType = useRef<'coil' | 'solenoid'>('coil');
-  const rightColRef = useRef<HTMLDivElement>(null);
-  const isFirstLoad = useRef(true);
+  // ── Rig control ───────────────────────────────────────────────────────────
+  // Which circuit this page has switched on: set once a start command has gone
+  // through, cleared once its break command has. The break sent on a switch or
+  // on leaving is always the one for this circuit, never for the instrument
+  // being switched to.
+  const powered = useRef<Inst['type'] | null>(null);
+  // A command the rig did not carry out. `canRetry` is for a failed switch,
+  // which can be run again as a whole; a failed probe move is simply repeated
+  // by picking the position again.
+  const [rigError, setRigError] = useState<{ text: string; canRetry: boolean } | null>(null);
+  const [rigAttempt, setRigAttempt] = useState(0);
+  // Nothing is sent to the rig until the booking has been confirmed and the
+  // student has pressed start.
+  const rigReady = access.status === 'allowed' && labStarted;
 
-  const runScript = useCallback(async (script: string) => {
-    try {
-      await fetch('/api/hardware', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script })
-      });
-    } catch (err) {
-      console.error('Failed to execute hardware script', err);
-    }
-  }, []);
-
-  const handleLabExit = useCallback(async () => {
-    const breakScript = prevInstType.current === 'coil' ? 'coil_b.py' : 'sole_b.py';
-    await runScript(breakScript);
-  }, [runScript]);
-
-  // Hardware script execution
   useEffect(() => {
-
+    if (!rigReady) return;
     const inst = instruments[instrument];
-    const targetScript = ['coil_1.py', 'coil_2.py', 'coil_3.py', 'sole_75.py'][instrument] || 'coil_1.py';
 
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
-      setIsRunning(true);
-      runScript(targetScript).finally(() => setIsRunning(false));
-      prevInstType.current = inst.type;
-      return;
-    }
-
-    const executeSwitch = async () => {
+    (async () => {
       setIsRunning(true);
       try {
-        // 1. Run break script for the PREVIOUS instrument type
-        const breakScript = prevInstType.current === 'coil' ? 'coil_b.py' : 'sole_b.py';
-        await runScript(breakScript);
-
-        // Hardware safety delay
-        await new Promise(r => setTimeout(r, 500));
-
-        // 2. Run new target script
-        await runScript(targetScript);
-        prevInstType.current = inst.type;
+        if (powered.current) {
+          const failed = await sendToRig(breakCommand(powered.current));
+          // A circuit that could not be cut stays the only one that is on.
+          if (failed) { setRigError({ text: `ตัดวงจรอุปกรณ์เดิมไม่สำเร็จ: ${failed}`, canRetry: true }); return; }
+          powered.current = null;
+          await new Promise(r => setTimeout(r, 500)); // let the rig settle
+        }
+        const failed = await sendToRig(startCommand(inst));
+        if (failed) { setRigError({ text: `เปิดใช้อุปกรณ์ไม่สำเร็จ: ${failed}`, canRetry: true }); return; }
+        powered.current = inst.type;
+        setRigError(null);
       } finally {
         setIsRunning(false);
       }
-    };
+    })();
+  }, [instrument, rigReady, rigAttempt]);
 
-    executeSwitch();
-  }, [instrument, runScript]);
+  const handleLabExit = useCallback(async () => {
+    if (!powered.current) return;
+    if ((await sendToRig(breakCommand(powered.current))) === null) powered.current = null;
+  }, []);
+
+  const reportMoveError = useCallback((text: string | null) => {
+    setRigError(text === null ? null : { text: `เลื่อนหัววัดไม่สำเร็จ ค่าที่ตำแหน่งนี้จึงไม่ถูกบันทึก: ${text}`, canRetry: false });
+  }, []);
 
   // Current fluctuation ±1.5 % of I₀
   useEffect(() => {
@@ -600,6 +632,28 @@ export default function RemoteLabPage() {
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
       <SessionBar endTime={access.end_time} onComplete={onComplete} onExit={handleLabExit} />
+      {rigError && (
+        <div role="alert" className="shrink-0 flex items-center justify-between gap-3 border-b border-red-500/25 bg-red-500/10 px-4 py-1.5 text-sm text-red-300">
+          <span className="min-w-0 truncate" title={rigError.text}>{rigError.text}</span>
+          <span className="flex shrink-0 items-center gap-2">
+            {rigError.canRetry && (
+              <button
+                onClick={() => { setRigError(null); setRigAttempt(n => n + 1); }}
+                disabled={isBusy}
+                className="rounded-full border border-red-400/40 px-3 py-0.5 text-xs font-semibold text-red-200 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+              >
+                ลองใหม่
+              </button>
+            )}
+            <button
+              onClick={() => setRigError(null)}
+              className="rounded-full border border-white/10 px-3 py-0.5 text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              ปิด
+            </button>
+          </span>
+        </div>
+      )}
       {/* Tablet/desktop tree — ≥1024px, side-by-side columns */}
       <div className="hidden lg:flex flex-1 overflow-hidden p-3 gap-3 short:p-2 short:gap-2">
 
@@ -653,6 +707,7 @@ export default function RemoteLabPage() {
                     measData={measData} setMeasData={setMeasData}
                     N={inst.N}
                     isMoving={isMoving} setIsMoving={setIsMoving}
+                    onMoveError={reportMoveError}
                     disabled={isBusy}
                   />
                 </div>
@@ -733,6 +788,7 @@ export default function RemoteLabPage() {
                     measData={measData} setMeasData={setMeasData}
                     N={inst.N}
                     isMoving={isMoving} setIsMoving={setIsMoving}
+                    onMoveError={reportMoveError}
                     disabled={isBusy}
                   />
                 </div>
@@ -2082,13 +2138,15 @@ function FormulaPanel({ inst, I, z, widthClassName = 'w-[200px]' }: { inst: Inst
 
 type MeasRecord = { bMeasured: number; bTheory: number };
 
-function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData, N, isMoving, setIsMoving, disabled }: {
+function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, disabled }: {
   z: number; setZ: (v: number) => void;
   bMeasured: number; bTheory: number;
   measData: Map<number, MeasRecord>;
   setMeasData: React.Dispatch<React.SetStateAction<Map<number, MeasRecord>>>;
   N: number;
   isMoving: boolean; setIsMoving: (v: boolean) => void;
+  /** Called with a message when the rig did not move the probe, and with null when it did. */
+  onMoveError: (message: string | null) => void;
   disabled?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -2117,21 +2175,20 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
 
   async function moveToPosition(zVal: number) {
     if (disabled || zVal === zCm) return;
+    const from = zCm;
     setIsMoving(true);
     setZ(zVal / 100);
-    try {
-      await fetch('/api/hardware', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script: 'sole_c.py', args: `--name ${N} --position ${zVal}` }),
-      });
+    const failed = await sendToRig({ script: 'sole.py', position: zVal });
+    if (failed) {
+      // Nothing is recorded for a position the probe did not reach, and Z goes
+      // back to the last place it is known to have been.
+      setZ(from / 100);
+    } else {
       const { bMeasured: bM, bTheory: bT } = liveRef.current;
       setMeasData(prev => new Map(prev).set(zVal, { bMeasured: bM, bTheory: bT }));
-    } catch (err) {
-      console.error('Failed to move arm', err);
-    } finally {
-      setIsMoving(false);
     }
+    onMoveError(failed);
+    setIsMoving(false);
   }
 
   function clearAll() { setMeasData(new Map()); }

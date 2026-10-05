@@ -94,6 +94,17 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
   // mine_booking_ids: { room_id: { "ti-di": booking_id } }
   const [mineBookingIds, setMineBookingIds] = useState<Record<string, Record<string, string>>>({});
 
+  // A success message clears itself after three seconds. The timer is kept so
+  // that it is dropped when another message takes its place: left running, it
+  // would wipe that later message too, which may be an error.
+  const msgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function showMsg(msg: { ok: boolean; text: string } | null) {
+    if (msgTimer.current) clearTimeout(msgTimer.current);
+    msgTimer.current = msg?.ok ? setTimeout(() => setBookingMsg(null), 3000) : null;
+    setBookingMsg(msg);
+  }
+  useEffect(() => () => { if (msgTimer.current) clearTimeout(msgTimer.current); }, []);
+
   const loadAvailability = useCallback(async () => {
     try {
       const r = await fetch('/api/bookings/availability');
@@ -149,7 +160,7 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
   async function handleConfirm() {
     if (!held || !selectedId) return;
     setConfirming(true);
-    setBookingMsg(null);
+    showMsg(null);
     const { start, end } = slotTimes(held.di, held.ti);
     try {
       const res = await fetch('/api/bookings', {
@@ -167,16 +178,15 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
         const booked = sectionRef.current?.querySelector<HTMLElement>(`[data-slot="${held.ti}-${held.di}"]`);
         if (booked) press(booked, 1.22);
         setHeld(null);
-        setBookingMsg({ ok: true, text: 'จองสำเร็จ!' });
-        setTimeout(() => setBookingMsg(null), 3000);
+        showMsg({ ok: true, text: 'จองสำเร็จ!' });
         onBookingCreated?.();
         window.dispatchEvent(new CustomEvent('booking-created'));
         loadAvailability();
       } else {
-        setBookingMsg({ ok: false, text: data.error ?? 'เกิดข้อผิดพลาด' });
+        showMsg({ ok: false, text: data.error ?? 'เกิดข้อผิดพลาด' });
       }
     } catch {
-      setBookingMsg({ ok: false, text: 'ไม่สามารถเชื่อมต่อได้' });
+      showMsg({ ok: false, text: 'ไม่สามารถเชื่อมต่อได้' });
     } finally {
       setConfirming(false);
     }
@@ -185,7 +195,7 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
   async function handleCancelConfirm() {
     if (!cancelTarget) return;
     setCancelling(true);
-    setBookingMsg(null);
+    showMsg(null);
     try {
       const res = await fetch(`/api/bookings/${cancelTarget.booking_id}`, { method: 'PATCH' });
       const data = await res.json();
@@ -201,15 +211,14 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
           return { ...prev, [selectedId]: room };
         });
         setCancelTarget(null);
-        setBookingMsg({ ok: true, text: 'ยกเลิกการจองเรียบร้อยแล้ว' });
-        setTimeout(() => setBookingMsg(null), 3000);
+        showMsg({ ok: true, text: 'ยกเลิกการจองเรียบร้อยแล้ว' });
         onBookingCancelled?.();
         loadAvailability();
       } else {
-        setBookingMsg({ ok: false, text: data.error ?? 'เกิดข้อผิดพลาด' });
+        showMsg({ ok: false, text: data.error ?? 'เกิดข้อผิดพลาด' });
       }
     } catch {
-      setBookingMsg({ ok: false, text: 'ไม่สามารถเชื่อมต่อได้' });
+      showMsg({ ok: false, text: 'ไม่สามารถเชื่อมต่อได้' });
     } finally {
       setCancelling(false);
     }
@@ -219,7 +228,7 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
     if (!loggedIn) return;
     if (isPast(di, ti)) return;
     const status = currentSlots[ti][di];
-    setBookingMsg(null);
+    showMsg(null);
     if (status === 'free') {
       press(cell);
       setCancelTarget(null);

@@ -76,7 +76,10 @@ export function useNotifications() {
   }, [loggedIn, checkUpcoming]);
 
   async function markAllRead() {
-    await fetch('/api/notifications', { method: 'PATCH' });
+    const res = await fetch('/api/notifications', { method: 'PATCH' });
+    // Refused (an expired session, a server error): nothing was saved, so
+    // nothing is shown as read.
+    if (!res.ok) return;
     setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
     setUnread(0);
   }

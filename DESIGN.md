@@ -12,6 +12,7 @@ Remote Lab is a web platform that lets students, researchers, and instructors bo
 - **Anime.js** — UI micro-animations throughout
 - **Three.js** — 3D field visualization (`app/lab/FieldViz.tsx`)
 - **KaTeX** — typesets the formulas in the AI assistant's replies; loaded on demand, the first time a reply contains one
+- **Jest + React Testing Library** — unit tests in `__tests__/`, run with `npm test` (configured through `next/jest` in `jest.config.mjs`). They cover `lib/`, every route handler in `app/api/` (called directly, against in-memory stand-ins for Firestore, Firebase Auth, the LLM and the rig), the components in `app/components/` and the sign-in page. The landing page, the dashboard page and the lab room (`app/lab/`) are not under test. `next/jest` loads `.env`, so `jest.env.ts` swaps the real credentials for test values and `jest.setup.ts` makes Firestore, Firebase Auth and `fetch` throw unless a test mocks them: no test can reach a real service
 - **MediaMTX** (external service) — WebRTC (WHEP) camera streaming, proxied through the Next server
 - **Typhoon API** (OpenAI-compatible LLM) — the in-lab AI teaching assistant
 
@@ -49,6 +50,8 @@ lib/
 ├── webrtc-latency.ts               — reads a camera feed's delay (network + jitter buffer
 │                                     + decode) from RTCPeerConnection.getStats(); used by
 │                                     the latency readout on the lab room's camera panes
+├── rig-access.ts                   — whether a user's booking is running now (or just
+│                                     ended); the check behind every hardware command
 ├── field-lines.ts                  — generated: field-line paths for FieldDiagram
 ├── motion.ts                       — shared anime.js helpers (reduced-motion check,
 │                                     reveal-on-scroll, press feedback) for the landing
@@ -71,7 +74,7 @@ server.js                           — custom server: loads env and boots Next.
 | `bookings`, `bookings/[id]`, `bookings/availability`, `bookings/active-session`, `bookings/notify-upcoming` | Booking CRUD, the 7-day availability grid, "do I have an active session right now" check, and reminder notifications |
 | `dashboard/history`, `dashboard/stats` | Dashboard data |
 | `notifications` | Notification feed |
-| `hardware` | Executes a local Python script to drive the physical coil/solenoid rig (session-gated, no DB access) |
+| `hardware` | Runs one of the rig's six control scripts on the lab machine. Only for the user whose booking is running right now (`lib/rig-access.ts`); break scripts stay allowed for 10 minutes after it ends. Body: `{ script }` for `coil_1.py`, `coil_2.py`, `coil_3.py` (switch a coil on), `coil_b.py`, `sole_b.py` (cut a circuit), or `{ script: "sole.py", position }` with a whole number of cm from −15 to 15, run as `sole.py --position <n>`. Nothing else is accepted and nothing goes through a shell |
 | `cam/[...path]` | Reverse proxy for WHEP camera signaling — see "Camera streaming" below |
 | `chat` | Proxies to the Typhoon LLM API for the AI teaching assistant. Signed-in users only; accepts user/assistant turns (last 20, 4,000 characters each) plus the current readings, and streams the answer back as SSE |
 | `db-test` | Trivial Firestore connectivity health-check |
@@ -113,7 +116,7 @@ Notifications are polled, not pushed — `useNotifications()` calls `/api/notifi
 
 ## Camera streaming
 
-Two physical cameras (`cam1`, `cam2`, `cam3` per experiment type — main + secondary depending on whether the selected instrument is a coil or solenoid) run on MediaMTX at a separate machine (`http://34.87.165.238:8889`), configured via env vars of the same names (`cam1=http://.../camera1`, etc.). The browser never talks to MediaMTX directly — it POSTs its WHEP SDP offer to `/api/cam/{camKey}/whep`, a same-origin proxy in `app/api/cam/[...path]/route.ts` that forwards to the right MediaMTX URL server-side. This keeps the camera host configurable without rebuilding the client bundle and works regardless of what public domain the Next app itself is served behind.
+Two physical cameras (`cam1`, `cam2`, `cam3` per experiment type — main + secondary depending on whether the selected instrument is a coil or solenoid) run on MediaMTX at a separate machine (`http://34.87.165.238:8889`), configured via env vars of the same names (`cam1=http://.../camera1`, etc.). The browser never talks to MediaMTX directly — it POSTs its WHEP SDP offer to `/api/cam/{camKey}/whep`, a same-origin proxy in `app/api/cam/[...path]/route.ts` that forwards to the right MediaMTX URL server-side. The proxy attaches the camera's credentials, so it only forwards paths that stay under that camera's own URL: a `..` segment, or one carrying a slash (which arrives when a caller encodes it), is answered with 404. This keeps the camera host configurable without rebuilding the client bundle and works regardless of what public domain the Next app itself is served behind.
 
 ## Deployment
 
@@ -123,6 +126,6 @@ Two physical cameras (`cam1`, `cam2`, `cam3` per experiment type — main + seco
 
 ## Notable non-obvious behavior
 
-- **No pagination via offset/limit anywhere** — Firestore doesn't support it efficiently. `dashboard/history` uses a cursor (`start_time` of the last item returned) instead of a page number.
+- **No pagination via offset/limit anywhere** — Firestore doesn't support it efficiently. `dashboard/history` uses a cursor (`start_time` of the last item returned) instead of a page number. Two bookings can share a start time (a slot cancelled and booked again), so a page never ends between them and can hold more than ten.
 - **`labId` is a human-readable string, not a UUID** — `labs/LAB8` — chosen deliberately since Firestore doesn't need surrogate keys, and it keeps `lab_id` fields readable in the console.
 - **The lab room adapts to viewport height, not only width** — the page never scrolls as a whole, so the desktop tree (≥1024px) has to fit whatever height it gets. The camera row is sized from the 16:9 shape of the feeds; the bottom row (selector, readings, formula, field view, Z table) takes the rest but has a minimum height, so on an 11–12" screen (roughly 1024–1366 × 600–760 once browser chrome is subtracted) the cameras give up height first and the left column scrolls only as a last resort. The `short:` Tailwind variant (`max-height: 760px`, declared in `app/globals.css`) only tightens spacing on top of that. Below 1024px wide the tabbed compact tree is used instead. Both trees stay mounted and are switched with CSS.

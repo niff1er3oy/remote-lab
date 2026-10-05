@@ -27,14 +27,14 @@ export async function establishGoogleSession(): Promise<void> {
   await establishSessionFromUser(cred.user);
 }
 
-const FIREBASE_ERROR_MESSAGES: Record<string, string> = {
-  'auth/too-many-requests': 'พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่ภายหลัง',
-  'auth/popup-closed-by-user': 'ปิดหน้าต่างเข้าสู่ระบบก่อนดำเนินการเสร็จสิ้น',
-  'auth/cancelled-popup-request': 'ปิดหน้าต่างเข้าสู่ระบบก่อนดำเนินการเสร็จสิ้น',
-  'auth/popup-blocked': 'เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตแล้วลองใหม่',
-};
+const FIREBASE_ERROR_MESSAGES = new Map([
+  ['auth/too-many-requests', 'พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่ภายหลัง'],
+  ['auth/popup-closed-by-user', 'ปิดหน้าต่างเข้าสู่ระบบก่อนดำเนินการเสร็จสิ้น'],
+  ['auth/cancelled-popup-request', 'ปิดหน้าต่างเข้าสู่ระบบก่อนดำเนินการเสร็จสิ้น'],
+  ['auth/popup-blocked', 'เบราว์เซอร์บล็อกป๊อปอัป กรุณาอนุญาตแล้วลองใหม่'],
+]);
 
 export function authErrorMessage(err: unknown): string {
   const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
-  return FIREBASE_ERROR_MESSAGES[code] ?? 'ไม่สามารถเชื่อมต่อได้ กรุณาลองใหม่';
+  return FIREBASE_ERROR_MESSAGES.get(code) ?? 'ไม่สามารถเชื่อมต่อได้ กรุณาลองใหม่';
 }
