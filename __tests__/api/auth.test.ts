@@ -152,7 +152,7 @@ describe('GET /api/auth/me', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: true,
-      user: { name: 'Student One', email: 'student@example.com', role: 'student' },
+      user: { name: 'Student One', email: 'student@example.com', role: 'student', is_admin: false },
     });
   });
 

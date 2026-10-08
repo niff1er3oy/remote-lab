@@ -1,5 +1,6 @@
 /** @jest-environment node */
 import { GET, POST } from '@/app/api/hardware/route';
+import { resetRigState } from '@/lib/rig';
 import { breakDb, resetDb, seedBooking } from '../helpers/server/firestore';
 import { signInAs, signOut } from '../helpers/server/session';
 import { freezeTime, restoreTime, HOUR, MINUTE } from '../helpers/server/time';
@@ -121,7 +122,13 @@ describe('POST /api/hardware — who may command the rig', () => {
     expect(runScript).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['coil_b.py', 'sole_b.py'])('still runs %s for a round that ended five minutes ago', async (script) => {
+  it('does not switch the power supply on for a round that ended five minutes ago', async () => {
+    endedRound(5 * MINUTE);
+    expect((await send({ script: 'psu_on.py' })).status).toBe(403);
+    expect(runScript).not.toHaveBeenCalled();
+  });
+
+  it.each(['coil_b.py', 'sole_b.py', 'psu_off.py'])('still runs %s for a round that ended five minutes ago', async (script) => {
     endedRound(5 * MINUTE);
     const res = await send({ script });
     expect(res.status).toBe(200);
@@ -169,7 +176,16 @@ describe('POST /api/hardware — who may command the rig', () => {
 describe('POST /api/hardware — the accepted commands', () => {
   beforeEach(() => runningRound());
 
-  it.each(['coil_1.py', 'coil_2.py', 'coil_3.py', 'coil_b.py', 'sole_b.py'])(
+  it('reports whether the power supply was last switched on or off', async () => {
+    resetRigState();
+    expect(await (await GET()).json()).toEqual({ busy: false, supply: null });
+    await send({ script: 'psu_on.py' });
+    expect(await (await GET()).json()).toEqual({ busy: false, supply: true });
+    await send({ script: 'psu_off.py' });
+    expect(await (await GET()).json()).toEqual({ busy: false, supply: false });
+  });
+
+  it.each(['coil_1.py', 'coil_2.py', 'coil_3.py', 'coil_b.py', 'sole_b.py', 'psu_on.py', 'psu_off.py'])(
     'runs %s with the rig\'s Python, the script name as the only argument, in the script folder',
     async (script) => {
       const res = await send({ script });

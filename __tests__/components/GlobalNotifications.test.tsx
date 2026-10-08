@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import GlobalNotifications, { BellIcon, NotifPanel, UnreadBadge, type Notification } from '@/app/components/GlobalNotifications';
 import type { AnimeMock } from '../helpers/client/anime';
 import { advance, mockFetch } from '../helpers/client/fetch';
+import { installMatchMedia, type MediaControl } from '../helpers/client/matchMedia';
 
 jest.mock('animejs', () => jest.requireActual<typeof import('../helpers/client/anime')>('../helpers/client/anime').animeMock());
 jest.mock('next/navigation', () => ({ usePathname: jest.fn() }));
@@ -52,8 +53,10 @@ async function show(server: Server, pathname = '/dashboard') {
 
 const bell = () => screen.getByRole('button', { name: BELL });
 
-// A toast has no role of its own; it is the box around its title.
-const toast = (id: string) => screen.getByText(`title ${id}`).parentElement?.parentElement as HTMLElement;
+// Only one toast is on screen at a time.
+const toast = () => screen.getByRole('status');
+const REDUCED = '(prefers-reduced-motion: reduce)';
+let media: MediaControl;
 
 const bellWiggles = () => anime.animate.mock.calls.filter(call => 'rotate' in ((call as unknown[])[1] as object)).length;
 
@@ -61,6 +64,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers();
   jest.setSystemTime(NOW);
+  media = installMatchMedia();
 });
 
 afterEach(() => {
@@ -168,38 +172,76 @@ describe('GlobalNotifications', () => {
     });
   });
 
+  describe('the panel, continued', () => {
+    it('closes on Escape', async () => {
+      await show({ signedIn: true, feed: [note('a', { is_read: 1 })] });
+      fireEvent.click(bell());
+      expect(bell()).toHaveAttribute('aria-expanded', 'true');
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+
+      expect(screen.queryByText('title a')).not.toBeInTheDocument();
+      expect(bell()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('ignores other keys', async () => {
+      await show({ signedIn: true, feed: [note('a', { is_read: 1 })] });
+      fireEvent.click(bell());
+      fireEvent.keyDown(window, { key: 'Enter' });
+      expect(screen.getByText('title a')).toBeInTheDocument();
+    });
+  });
+
   describe('toasts', () => {
-    it('pops up an unread notification without the bell being clicked', async () => {
+    it('pops up an unread notification without the bell being clicked, and announces it', async () => {
       await show({ signedIn: true, feed: [note('a')] });
 
-      expect(screen.getByText('title a')).toBeInTheDocument();
-      expect(screen.getByText('message a')).toBeInTheDocument();
+      expect(toast()).toHaveTextContent('title a');
+      expect(toast()).toHaveTextContent('message a');
     });
 
     it('does not pop up notifications that are already read', async () => {
       await show({ signedIn: true, feed: [note('a', { is_read: 1 })] });
-      expect(screen.queryByText('title a')).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('shows one at a time, newest first, and says how many are waiting', async () => {
+      await show({ signedIn: true, feed: [note('a'), note('b'), note('c')] });
+
+      expect(screen.getAllByRole('status')).toHaveLength(1);
+      expect(toast()).toHaveTextContent('title a');
+      expect(toast()).toHaveTextContent('และอีก 2 รายการ');
+    });
+
+    it('says nothing about waiting ones when it is the only one', async () => {
+      await show({ signedIn: true, feed: [note('a')] });
+      expect(toast()).not.toHaveTextContent('และอีก');
     });
 
     it('links to the lab when the notification carries a link, and has no link otherwise', async () => {
-      await show({ signedIn: true, feed: [note('a', { action_url: '/lab?booking=bk-1' }), note('b')] });
+      const { unmount } = await show({ signedIn: true, feed: [note('a', { action_url: '/lab?booking=bk-1' })] });
+      expect(within(toast()).getByRole('link', { name: LAB_LINK })).toHaveAttribute('href', '/lab?booking=bk-1');
+      unmount();
 
-      expect(within(toast('a')).getByRole('link', { name: LAB_LINK })).toHaveAttribute('href', '/lab?booking=bk-1');
-      expect(within(toast('b')).queryByRole('link')).not.toBeInTheDocument();
+      await show({ signedIn: true, feed: [note('b')] });
+      expect(within(toast()).queryByRole('link')).not.toBeInTheDocument();
     });
 
-    it('goes away when its close button is clicked, leaving the others', async () => {
+    it('gives way to the next one when its close button is clicked', async () => {
       await show({ signedIn: true, feed: [note('a'), note('b')] });
 
-      // The close button holds only an icon and has no accessible name.
-      fireEvent.click(within(toast('a')).getByRole('button'));
+      fireEvent.click(within(toast()).getByRole('button', { name: 'ปิดการแจ้งเตือนนี้' }));
 
       expect(screen.queryByText('title a')).not.toBeInTheDocument();
-      expect(screen.getByText('title b')).toBeInTheDocument();
+      expect(toast()).toHaveTextContent('title b');
+      expect(toast()).not.toHaveTextContent('และอีก');
     });
 
-    it('goes away by itself after 20 seconds', async () => {
-      await show({ signedIn: true, feed: [note('a')] });
+    it.each([
+      ['a plain one', {}],
+      ['one with a link to the lab', { action_url: '/lab' }],
+    ])('goes away by itself after 20 seconds: %s', async (_label, extra) => {
+      await show({ signedIn: true, feed: [note('a', extra)] });
 
       await advance(19_999);
       expect(screen.getByText('title a')).toBeInTheDocument();
@@ -207,34 +249,68 @@ describe('GlobalNotifications', () => {
       expect(screen.queryByText('title a')).not.toBeInTheDocument();
     });
 
-    it('stays for longer than 20 seconds when it carries a link to the lab', async () => {
-      await show({ signedIn: true, feed: [note('a', { action_url: '/lab' })] });
+    it('gives each waiting toast its own 20 seconds', async () => {
+      await show({ signedIn: true, feed: [note('a'), note('b')] });
 
-      await advance(29_000);
-      expect(screen.getByText('title a')).toBeInTheDocument();
-    });
-
-    // The 30-second poll re-renders the toasts twice within these 60 seconds;
-    // the countdown must not start again each time.
-    it('goes away after 60 seconds when it carries a link to the lab', async () => {
-      await show({ signedIn: true, feed: [note('a', { action_url: '/lab' })] });
-
-      await advance(59_999);
-      expect(screen.getByText('title a')).toBeInTheDocument();
+      await advance(20_000);
+      expect(toast()).toHaveTextContent('title b');
+      await advance(19_999);
+      expect(toast()).toHaveTextContent('title b');
       await advance(1);
-      expect(screen.queryByText('title a')).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    // Opening the panel re-renders the toasts too.
-    it('still goes away 20 seconds after it appeared when the panel is opened meanwhile', async () => {
+    // A refresh re-renders the toast; the countdown must not start again.
+    it('still goes away 20 seconds after it appeared when the feed is refreshed meanwhile', async () => {
       await show({ signedIn: true, feed: [note('a')] });
 
       await advance(15_000);
-      fireEvent.click(bell());
-      fireEvent.click(bell());
+      window.dispatchEvent(new Event('booking-created'));
       await advance(5_000);
 
-      expect(screen.queryByText('title a')).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('is cleared, with any waiting behind it, when the panel is opened', async () => {
+      await show({ signedIn: true, feed: [note('a'), note('b')] });
+
+      fireEvent.click(bell());
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+      fireEvent.click(bell());
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('motion', () => {
+    const moved = (prop: string) => anime.animate.mock.calls.filter(call => prop in ((call as unknown[])[1] as object)).length;
+
+    it('slides the toast and the panel in', async () => {
+      await show({ signedIn: true, feed: [note('a')] });
+      expect(moved('translateX')).toBe(1);
+
+      fireEvent.click(bell());
+      expect(moved('translateY')).toBe(1);
+    });
+
+    it('animates nothing when the visitor asked for reduced motion', async () => {
+      media.set(REDUCED, true);
+      await show({ signedIn: true, feed: [note('a')] });
+      fireEvent.click(bell());
+
+      expect(anime.animate).not.toHaveBeenCalled();
+    });
+
+    // anime.js is not running in these tests, so anything that waited on it to
+    // become visible would still be hidden here.
+    it('leaves the toast, the panel and its items visible without the animation', async () => {
+      await show({ signedIn: true, feed: [note('a')] });
+      expect(toast().style.opacity).toBe('');
+
+      fireEvent.click(bell());
+      const item = screen.getByRole('listitem');
+      expect(item.style.opacity).toBe('');
+      expect((item.closest('.rounded-2xl') as HTMLElement).style.opacity).toBe('');
     });
   });
 });

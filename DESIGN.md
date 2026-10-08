@@ -24,6 +24,8 @@ app/
 │                                     solenoid's theoretical B(Z), booking calendar,
 │                                     experiment overview, steps), root layout
 ├── login/page.tsx                  — sign-in page (Google popup via the Firebase client SDK)
+├── admin/page.tsx                  — admin page: who is in the lab room, emergency stop, open or
+│                                     close a lab, block out time, every booking with cancel
 ├── dashboard/page.tsx               — session hero (live countdown / next round), booking
 │                                     calendar beside the booked rounds, handouts, history
 ├── lab/
@@ -31,7 +33,9 @@ app/
 │   │                                 selector, sensor/formula panels, field viz,
 │   │                                 AI chat, activity log (~2200 lines, all client
 │   │                                 components co-located in one file)
-│   └── FieldViz.tsx                — Three.js magnetic field visualization
+│   ├── FieldViz.tsx                — Three.js magnetic field visualization
+│   └── LabSummary.tsx              — shown in place of the lab room when a visit ends (finish
+│                                     button or time up): what was done, the values, CSV download
 ├── components/                     — BookingCalendar, DashboardNav, GlobalNotifications,
 │                                     PortraitGuard, useNotifications (poll-based hook),
 │                                     FieldDiagram (to-scale field-line drawings of the
@@ -50,6 +54,11 @@ lib/
 ├── webrtc-latency.ts               — reads a camera feed's delay (network + jitter buffer
 │                                     + decode) from RTCPeerConnection.getStats(); used by
 │                                     the latency readout on the lab room's camera panes
+├── lab-activity.ts                 — the record of one visit to the lab room (commands, probe
+│                                     moves, readings, questions); feeds the log tab, the
+│                                     summary and its CSV. Kept in the page only, never stored
+├── admin.ts                        — who is an admin: the emails in the ADMIN_EMAILS variable
+├── rig.ts                          — runs the rig's scripts (no shell) and cuts both circuits
 ├── rig-access.ts                   — whether a user's booking is running now (or just
 │                                     ended); the check behind every hardware command
 ├── field-lines.ts                  — generated: field-line paths for FieldDiagram
@@ -74,9 +83,10 @@ server.js                           — custom server: loads env and boots Next.
 | `bookings`, `bookings/[id]`, `bookings/availability`, `bookings/active-session`, `bookings/notify-upcoming` | Booking CRUD, the 7-day availability grid, "do I have an active session right now" check, and reminder notifications |
 | `dashboard/history`, `dashboard/stats` | Dashboard data |
 | `notifications` | Notification feed |
-| `hardware` | Runs one of the rig's six control scripts on the lab machine. Only for the user whose booking is running right now (`lib/rig-access.ts`); break scripts stay allowed for 10 minutes after it ends. Body: `{ script }` for `coil_1.py`, `coil_2.py`, `coil_3.py` (switch a coil on), `coil_b.py`, `sole_b.py` (cut a circuit), or `{ script: "sole.py", position }` with a whole number of cm from −15 to 15, run as `sole.py --position <n>`. Nothing else is accepted and nothing goes through a shell |
+| `hardware` | Runs one of the rig's six control scripts on the lab machine. Only for the user whose booking is running right now (`lib/rig-access.ts`); break scripts stay allowed for 10 minutes after it ends. Body: `{ script }` for `coil_1.py`, `coil_2.py`, `coil_3.py` (switch a coil on), `coil_b.py`, `sole_b.py` (cut a circuit), `psu_on.py`, `psu_off.py` (the power supply that feeds them; off is allowed for as long as cutting a circuit is), or `{ script: "sole.py", position }` with a whole number of cm from −15 to 15, run as `sole.py --position <n>`. Nothing else is accepted and nothing goes through a shell |
 | `cam/[...path]` | Reverse proxy for WHEP camera signaling — see "Camera streaming" below |
 | `chat` | Proxies to the Typhoon LLM API for the AI teaching assistant. Signed-in users only; accepts user/assistant turns (last 20, 4,000 characters each) plus the current readings, and streams the answer back as SSE |
+| `admin/overview`, `admin/bookings/[id]`, `admin/blocks`, `admin/labs/[id]`, `admin/rig/stop` | The admin page's API, for the people named in `ADMIN_EMAILS` only (403 for everyone else). `overview` lists the labs, the round running now and every booking in a range of days, with names from Firebase Auth. `bookings/[id]` cancels a round that has not started or ends the one running now (which also cuts the rig's circuits); its owner gets a notification. `blocks` closes a stretch of time to booking. `labs/[id]` opens or closes a lab to booking. `rig/stop` cuts both circuits and switches the power supply off at once, whoever has the rig. `rig/power` switches the supply on or off. `status` (also listed under `admin/`) reports the equipment: what the rig was last told to do (a record kept in memory by `lib/rig.ts`, not a reading from the rig), and whether each camera and the sensor service answer (`lib/lab-status.ts`) |
 | `db-test` | Trivial Firestore connectivity health-check |
 
 ## Data model (Firestore)
@@ -97,7 +107,9 @@ User profile data (`name`, `role`) is **not** stored in Firestore — it lives o
 - **Google is the only sign-in method.** There is no signup flow and no email/password login — a user's Firebase Auth record is created automatically by their first Google sign-in.
 - **Login** happens **client-side** via the Firebase Auth SDK (a Google popup). The client then POSTs the resulting ID token to `POST /api/auth/session`, which mints an **httpOnly session cookie** via `adminAuth.createSessionCookie()`.
 - `/api/auth/session` rejects (403) any ID token whose `firebase.sign_in_provider` is not `google.com`. The login page offers nothing else, but the project's public web API key would otherwise let a caller obtain an ID token from another provider straight from the Firebase Auth REST API — so the Email/Password provider should also be disabled in the Firebase console.
-- First-time sign-ins have no `role` claim yet; `/api/auth/session` defaults it to `'student'` and asks the client to force-refresh its ID token once before retrying, since a session cookie's claims are a snapshot of whatever ID token minted it — not the live user record. Nothing in the app assigns any other role.
+- First-time sign-ins have no `role` claim yet; `/api/auth/session` defaults it to `'student'` and asks the client to force-refresh its ID token once before retrying, since a session cookie's claims are a snapshot of whatever ID token minted it — not the live user record. Nothing in the app assigns any other role, and no route decides anything by it.
+- **Admins are named in configuration, not in data.** `ADMIN_EMAILS` (comma separated, in `.env`) lists the Google accounts that may open `/admin` and call `/api/admin/*`; `lib/admin.ts` compares the session's email with it on every request. Changing the list takes a restart.
+- **A blocked stretch of time is a booking.** It is held in the admin's own name with `blocked: true` and an optional `note`, so the calendar and the overlap check need no special case; cancelling it lifts the block. While it runs, the admin who made it has the rig, as with any booking of theirs.
 - Server-side routes that need a user verify the `session` cookie through `getSessionUser()` in `lib/session.ts`, i.e. `adminAuth.verifySessionCookie(cookie, /* checkRevoked */ false)` — a local JWT check against Firebase's cached public keys, no network round-trip and no database read.
 
 ## Booking overlap prevention
@@ -121,7 +133,7 @@ Two physical cameras (`cam1`, `cam2`, `cam3` per experiment type — main + seco
 ## Deployment
 
 - `Dockerfile` builds the Next app into a single image (`remote-lab:latest`).
-- `docker-compose.yml` runs that image plus a `cloudflared` tunnel container for public ingress — there is no database container; all server-side env vars (Firebase Admin credentials, camera URLs, Typhoon key, tunnel token) are supplied via `.env` (`env_file: .env`).
+- `docker-compose.yml` runs that image plus a `cloudflared` tunnel container for public ingress — there is no database container; all server-side env vars (Firebase Admin credentials, camera URLs, Typhoon key, admin emails, the rig's script folder, tunnel token) are supplied via `.env` (`env_file: .env`). `.env.example` lists every variable with a note on each.
 - Firestore composite indexes are not defined in a `firestore.indexes.json` — they were created ad hoc through the Firebase Console as each query's `FAILED_PRECONDITION` error surfaced during development. If Firestore is ever reset, the composite indexes needed are: `labs(is_active, code)`, `bookings(lab_id, status, start_time)`, `bookings(status, start_time)`, `bookings(user_id, status, start_time)`, `bookings(user_id, start_time desc)`, `notifications(user_id, created_at desc)`.
 
 ## Notable non-obvious behavior

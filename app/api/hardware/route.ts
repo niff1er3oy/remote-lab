@@ -1,20 +1,12 @@
 import { NextResponse } from 'next/server';
-import { execFile } from 'child_process';
-import util from 'util';
 import { getSessionUser } from '@/lib/session';
 import { rigAccess } from '@/lib/rig-access';
-
-const execFileAsync = util.promisify(execFile);
-
-// Where the rig's control scripts live on the lab machine.
-const SCRIPT_DIR = '/home/admin/Documents';
-const PYTHON = `${SCRIPT_DIR}/venv/bin/python`;
+import { BREAK_SCRIPTS, rigState, runRigScript, SUPPLY_OFF, SUPPLY_ON } from '@/lib/rig';
 
 // The rig's whole command set. Nothing else is ever run, and nothing from the
 // request reaches a shell: the script name is matched against these lists and
 // the only argument, the probe position, is a checked integer.
 const COIL_SCRIPTS = ['coil_1.py', 'coil_2.py', 'coil_3.py']; // switch a single coil on
-const BREAK_SCRIPTS = ['coil_b.py', 'sole_b.py'];             // cut a circuit
 const SOLENOID_SCRIPT = 'sole.py';                            // solenoid on, probe to --position
 const POSITION_MIN = -15; // cm along the solenoid's axis
 const POSITION_MAX = 15;
@@ -34,6 +26,9 @@ function readCommand(body: unknown): Command | null {
 
   if (COIL_SCRIPTS.includes(script)) return { argv: [script], isBreak: false };
   if (BREAK_SCRIPTS.includes(script)) return { argv: [script], isBreak: true };
+  // Switching the supply off is allowed whenever cutting a circuit is.
+  if (script === SUPPLY_ON) return { argv: [script], isBreak: false };
+  if (script === SUPPLY_OFF) return { argv: [script], isBreak: true };
   if (script === SOLENOID_SCRIPT) {
     if (typeof position !== 'number' || !Number.isInteger(position)) return null;
     if (position < POSITION_MIN || position > POSITION_MAX) return null;
@@ -43,7 +38,7 @@ function readCommand(body: unknown): Command | null {
 }
 
 export async function GET() {
-  return NextResponse.json({ busy: armBusy });
+  return NextResponse.json({ busy: armBusy, supply: rigState().supply });
 }
 
 export async function POST(request: Request) {
@@ -73,7 +68,7 @@ export async function POST(request: Request) {
 
   armBusy = true;
   try {
-    const { stdout, stderr } = await execFileAsync(PYTHON, command.argv, { cwd: SCRIPT_DIR });
+    const { stdout, stderr } = await runRigScript(command.argv);
     console.log(`[Hardware API] Success: ${stdout}`);
     if (stderr) console.error(`[Hardware API] Stderr: ${stderr}`);
     return NextResponse.json({ success: stdout.includes('Path finished.'), output: stdout });

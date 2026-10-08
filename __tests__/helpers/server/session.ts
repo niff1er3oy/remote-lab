@@ -10,6 +10,13 @@ export const STUDENT: SessionUser = {
   role: 'student',
 };
 
+export const ADMIN: SessionUser = {
+  uid: 'admin-1',
+  email: 'admin@example.com',
+  name: 'Admin One',
+  role: 'student',
+};
+
 export function signInAs(user: SessionUser = STUDENT): void {
   jest.mocked(getSessionUser).mockResolvedValue(user);
 }

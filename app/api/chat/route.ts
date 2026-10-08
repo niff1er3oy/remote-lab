@@ -17,7 +17,6 @@ interface ChatContext {
   instSub: string;
   instType: 'coil' | 'solenoid';
   I: number;
-  I0: number;
   bTheory: number;
   bMeasured: number;
   z?: number;
@@ -77,15 +76,15 @@ function readContext(raw: unknown): ChatContext | null {
   const label = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 60) : '');
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-  const I = num(c.I), I0 = num(c.I0), bTheory = num(c.bTheory), bMeasured = num(c.bMeasured);
-  if (I === null || I0 === null || bTheory === null || bMeasured === null) return null;
+  const I = num(c.I), bTheory = num(c.bTheory), bMeasured = num(c.bMeasured);
+  if (I === null || bTheory === null || bMeasured === null) return null;
   if (c.instType !== 'coil' && c.instType !== 'solenoid') return null;
 
   return {
     instrumentName: label(c.instrumentName),
     instSub: label(c.instSub),
     instType: c.instType,
-    I, I0, bTheory, bMeasured,
+    I, bTheory, bMeasured,
     z: num(c.z) ?? undefined,
   };
 }
@@ -117,8 +116,7 @@ export async function POST(req: NextRequest) {
 
   const contextBlock = `\n\n**บริบทการทดลองปัจจุบัน:**
 - อุปกรณ์: ${context.instrumentName} (${context.instSub})
-- กระแสออกแบบ I₀ = ${context.I0.toFixed(2)} A
-- กระแสที่วัดได้ I = ${context.I.toFixed(4)} A${zLine}
+- กระแสที่จ่าย I = ${context.I.toFixed(2)} A (ค่าที่ตั้งไว้ ชุดทดลองไม่ได้วัดกระแส)${zLine}
 - สนามแม่เหล็กทฤษฎี B_theory = ${context.bTheory.toFixed(3)} mT
 - สนามแม่เหล็กวัดจริง B_measured = ${context.bMeasured.toFixed(3)} mT
 - ΔB = ${delta >= 0 ? '+' : ''}${delta.toFixed(3)} mT${percent}`;

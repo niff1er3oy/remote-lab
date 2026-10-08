@@ -1,5 +1,5 @@
 'use client';
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { animate, stagger, scrambleText, createLayout } from 'animejs';
 import Image from 'next/image';
@@ -8,8 +8,11 @@ import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 import MathSource from '@/app/components/MathSource';
 import { calcBCoil, calcBSolenoid } from '@/lib/physics';
+import { prefersReducedMotion } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
+import { clockTime, describeEvent, type LabEvent } from '@/lib/lab-activity';
 import { FieldViz3D } from './FieldViz';
+import LabSummary from './LabSummary';
 
 // KaTeX is only needed once the assistant writes a formula, so it is fetched
 // then rather than with the page.
@@ -26,20 +29,11 @@ type Inst = CoilInst | SolInst;
 
 function pad(n: number) { return String(Math.floor(n)).padStart(2, '0'); }
 function hhmmss(s: number) { return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`; }
-function nowTime() { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
-function clamp(v: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, v)); }
 
 // `error` marks a notice about a failed request (shown, never sent back to the
 // model); `cutShort` marks an answer that ran into the length limit.
 interface ChatMsg { id: number; role: 'user' | 'assistant'; content: string; error?: boolean; cutShort?: boolean }
 let _cid = 0;
-
-type LogType = 'info' | 'warn' | 'data' | 'cmd';
-interface LogEntry { id: number; ts: string; type: LogType; msg: string }
-let _lid = 0;
-function mkLog(type: LogType, msg: string): LogEntry {
-  return { id: ++_lid, ts: nowTime(), type, msg };
-}
 
 // ── Instruments (อ้างอิงใบแลป 04203102) ──────────────────────────────────────
 
@@ -438,7 +432,6 @@ export default function RemoteLabPage() {
   const { access, onComplete } = useAccessGate();
   const [labStarted, setLabStarted] = useState(false);
   const [instrument, setInstrument] = useState(0);
-  const [I, setI] = useState(5.0);
   const [z, setZ] = useState(0); // Z position in metres (solenoid only, ±0.15 m)
   const [measData, setMeasData] = useState<Map<number, { bMeasured: number; bTheory: number }>>(new Map());
   const [realSensorValue, setRealSensorValue] = useState<number | null>(null);
@@ -447,7 +440,19 @@ export default function RemoteLabPage() {
   const isBusy = isRunning || isMoving;
   const [compactTab, setCompactTab] = useState<'camera' | 'setup' | 'viz' | 'assist'>('camera');
   const [compactCam, setCompactCam] = useState<'main' | 'secondary'>('main');
-  const chat = useChat();
+  const router = useRouter();
+  // Everything the student does in this visit (lib/lab-activity.ts): the log
+  // tab shows it as it grows, and the summary on leaving is built from it.
+  const [events, setEvents] = useState<LabEvent[]>([]);
+  const record = useCallback((e: Omit<LabEvent, 'at'>) => {
+    setEvents(prev => [...prev, { ...e, at: Date.now() }]);
+  }, []);
+  const [ended, setEnded] = useState(false);
+  const ending = useRef(false);
+  // The sensor's latest value, for records made outside rendering. Null until
+  // the sensor has sent something: there is then no measurement to record.
+  const sensorNow = useRef<number | null>(null);
+  const chat = useChat(useCallback((question: string) => record({ kind: 'question', detail: question }), [record]));
   const topRowRef = useRef<HTMLDivElement>(null);
   const btmRowRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -492,12 +497,10 @@ export default function RemoteLabPage() {
     }
   }, [instrument]);
 
-  // Reset I, Z, and measurement data when instrument changes
+  // Reset Z and measurement data when instrument changes
   const [prevInstrumentForReset, setPrevInstrumentForReset] = useState(instrument);
   if (instrument !== prevInstrumentForReset) {
     setPrevInstrumentForReset(instrument);
-    const inst = instruments[instrument];
-    setI(inst.I0);
     setZ(0);
     setMeasData(new Map());
   }
@@ -507,7 +510,7 @@ export default function RemoteLabPage() {
   // through, cleared once its break command has. The break sent on a switch or
   // on leaving is always the one for this circuit, never for the instrument
   // being switched to.
-  const powered = useRef<Inst['type'] | null>(null);
+  const powered = useRef<Inst | null>(null);
   // A command the rig did not carry out. `canRetry` is for a failed switch,
   // which can be run again as a whole; a failed probe move is simply repeated
   // by picking the position again.
@@ -517,6 +520,30 @@ export default function RemoteLabPage() {
   // student has pressed start.
   const rigReady = access.status === 'allowed' && labStarted;
 
+  // The power supply that feeds the coils and the solenoid. Null until the
+  // server says, or the student sets, whether it is on.
+  const [supplyOn, setSupplyOn] = useState<boolean | null>(null);
+  const [supplyBusy, setSupplyBusy] = useState(false);
+  useEffect(() => {
+    if (!rigReady) return;
+    fetch('/api/hardware').then(r => r.json()).then(d => { if (typeof d?.supply === 'boolean') setSupplyOn(d.supply); }).catch(() => {});
+  }, [rigReady]);
+  const switchSupply = useCallback(async (on: boolean) => {
+    setSupplyBusy(true);
+    const failed = await sendToRig({ script: on ? 'psu_on.py' : 'psu_off.py' });
+    record({ kind: 'supply', ok: !failed, detail: on ? 'on' : 'off' });
+    if (failed) setRigError({ text: `${on ? 'เปิด' : 'ปิด'}แหล่งจ่ายไฟไม่สำเร็จ: ${failed}`, canRetry: false });
+    else { setSupplyOn(on); setRigError(null); }
+    setSupplyBusy(false);
+  }, [record]);
+
+  // A coil has no "record" step of its own, so what it read is noted when the
+  // coil is left. The solenoid's values are noted at each probe position.
+  const recordReading = useCallback((inst: Inst) => {
+    if (inst.type !== 'coil') return;
+    record({ kind: 'reading', instrument: inst.name, I: inst.I0, bTheory: calcBCoil(inst.turns, inst.I0, inst.R), bMeasured: sensorNow.current });
+  }, [record]);
+
   useEffect(() => {
     if (!rigReady) return;
     const inst = instruments[instrument];
@@ -524,42 +551,53 @@ export default function RemoteLabPage() {
     (async () => {
       setIsRunning(true);
       try {
-        if (powered.current) {
-          const failed = await sendToRig(breakCommand(powered.current));
+        const previous = powered.current;
+        if (previous) {
+          recordReading(previous);
+          const failed = await sendToRig(breakCommand(previous.type));
+          record({ kind: 'power-off', instrument: previous.name, ok: !failed, detail: failed ?? undefined });
           // A circuit that could not be cut stays the only one that is on.
           if (failed) { setRigError({ text: `ตัดวงจรอุปกรณ์เดิมไม่สำเร็จ: ${failed}`, canRetry: true }); return; }
           powered.current = null;
           await new Promise(r => setTimeout(r, 500)); // let the rig settle
         }
         const failed = await sendToRig(startCommand(inst));
+        record({ kind: 'power-on', instrument: inst.name, ok: !failed, detail: failed ?? undefined });
         if (failed) { setRigError({ text: `เปิดใช้อุปกรณ์ไม่สำเร็จ: ${failed}`, canRetry: true }); return; }
-        powered.current = inst.type;
+        powered.current = inst;
         setRigError(null);
       } finally {
         setIsRunning(false);
       }
     })();
-  }, [instrument, rigReady, rigAttempt]);
+  }, [instrument, rigReady, rigAttempt, record, recordReading]);
 
-  const handleLabExit = useCallback(async () => {
-    if (!powered.current) return;
-    if ((await sendToRig(breakCommand(powered.current))) === null) powered.current = null;
-  }, []);
+  // The visit is over, by the finish button or by the clock: cut whatever is
+  // live, close the record and show the summary in place of the lab room.
+  const endVisit = useCallback(async (how: 'finished' | 'time-up') => {
+    if (ending.current) return;
+    ending.current = true;
+    const live = powered.current;
+    if (live) {
+      recordReading(live);
+      const failed = await sendToRig(breakCommand(live.type));
+      record({ kind: 'power-off', instrument: live.name, ok: !failed, detail: failed ?? undefined });
+      if (!failed) powered.current = null;
+    }
+    // The supply is switched off whatever the page believes its state to be.
+    const supplyFailed = await sendToRig({ script: 'psu_off.py' });
+    record({ kind: 'supply', ok: !supplyFailed, detail: 'off' });
+    record({ kind: 'end', detail: how });
+    setEnded(true);
+  }, [record, recordReading]);
 
-  const reportMoveError = useCallback((text: string | null) => {
+  const reportMove = useCallback((text: string | null, zCm: number, bTheory: number) => {
     setRigError(text === null ? null : { text: `เลื่อนหัววัดไม่สำเร็จ ค่าที่ตำแหน่งนี้จึงไม่ถูกบันทึก: ${text}`, canRetry: false });
-  }, []);
-
-  // Current fluctuation ±1.5 % of I₀
-  useEffect(() => {
-    const { I0 } = instruments[instrument];
-    const amp = I0 * 0.015;
-    const lo = I0 * 0.985, hi = I0 * 1.015;
-    const t = setInterval(() => {
-      setI(v => +clamp(v + (Math.random() - 0.5) * amp * 2, lo, hi).toFixed(4));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [instrument]);
+    const inst = instruments[instrument];
+    record(text === null
+      ? { kind: 'move', instrument: inst.name, ok: true, zCm, I: inst.I0, bTheory, bMeasured: sensorNow.current }
+      : { kind: 'move', instrument: inst.name, ok: false, zCm, detail: text });
+  }, [instrument, record]);
 
   // Read real sensor data via WebSocket
   useEffect(() => {
@@ -576,6 +614,7 @@ export default function RemoteLabPage() {
         try {
           const data = JSON.parse(event.data);
           if (data && typeof data.value === 'number') {
+            sensorNow.current = data.value;
             setRealSensorValue(data.value);
           }
         } catch { }
@@ -605,6 +644,13 @@ export default function RemoteLabPage() {
     if (rightRef.current) animate(rightRef.current, { opacity: [0, 1], translateX: [24, 0], duration: 650, delay: 80, ease: 'outCubic' });
   }, [access.status, labStarted]);
 
+  const [labName, setLabName] = useState('การทดลองที่ 8 สนามแม่เหล็กและกฎของไบโอต-ซาวัต');
+  if (access.status === 'allowed' && access.experiment_name && access.experiment_name !== labName) setLabName(access.experiment_name);
+
+  // Before the access gate: the booking is marked complete as the visit ends,
+  // and the gate would otherwise replace the summary with "no booking".
+  if (ended) return <LabSummary events={events} experimentName={labName} onLeave={() => router.push('/dashboard')} />;
+
   // ── Access gate ───────────────────────────────────────────────────────────
   if (access.status === 'loading') {
     return (
@@ -616,22 +662,23 @@ export default function RemoteLabPage() {
     );
   }
   if (access.status === 'denied') return <AccessDeniedScreen access={access} />;
-  if (!labStarted) return <LabIntroScreen endTime={access.end_time} onStart={() => setLabStarted(true)} />;
+  if (!labStarted) return <LabIntroScreen endTime={access.end_time} onStart={() => { setLabStarted(true); record({ kind: 'start' }); }} />;
 
   const inst = instruments[instrument];
-  const I0 = inst.I0;
+  // The rig does not measure current: I is the value each circuit is set to.
+  const I = inst.I0;
   const bTheory = inst.type === 'coil'
-    ? calcBCoil(inst.turns, I0, inst.R)
-    : calcBSolenoid(inst.N, I0, inst.L, inst.R, z);
-  const bMeasured = realSensorValue !== null
-    ? realSensorValue
-    : (inst.type === 'coil'
-      ? calcBCoil(inst.turns, I, inst.R)
-      : calcBSolenoid(inst.N, I, inst.L, inst.R, z));
+    ? calcBCoil(inst.turns, I, inst.R)
+    : calcBSolenoid(inst.N, I, inst.L, inst.R, z);
+  const bMeasured = realSensorValue ?? bTheory;
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
-      <SessionBar endTime={access.end_time} onComplete={onComplete} onExit={handleLabExit} />
+      <SessionBar
+        endTime={access.end_time}
+        onFinish={() => { onComplete(); endVisit('finished'); }}
+        onTimeUp={() => { onComplete(); endVisit('time-up'); }}
+      />
       {rigError && (
         <div role="alert" className="shrink-0 flex items-center justify-between gap-3 border-b border-red-500/25 bg-red-500/10 px-4 py-1.5 text-sm text-red-300">
           <span className="min-w-0 truncate" title={rigError.text}>{rigError.text}</span>
@@ -668,11 +715,11 @@ export default function RemoteLabPage() {
             className="min-h-[180px] aspect-[32/9] grid grid-cols-2 gap-3 short:gap-2"
             style={{ opacity: 0 }}
           >
-            <CameraSection stream="cam1" name="กล้องหลัก" view="ด้านหน้า" />
+            <CameraSection stream="cam1" name="กล้องหลัก" />
             <div ref={rightColRef} className="flex flex-col gap-3 h-full min-h-0">
               <CameraSection
                 stream={inst.type === 'solenoid' ? 'cam2' : 'cam3'}
-                name="กล้องเสริม" view="ด้านข้าง"
+                name="กล้องเสริม"
               />
             </div>
           </div>
@@ -684,8 +731,9 @@ export default function RemoteLabPage() {
             {/* Left column — selector stacked above sensor values */}
             <div className="shrink-0 min-h-0 flex flex-col gap-3 short:gap-2 w-[200px] xl:w-[230px]">
               <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} />
+              <SupplySwitch on={supplyOn} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
               <SensorPanel
-                inst={inst} I={I} I0={I0}
+                inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured}
                 z={z}
               />
@@ -696,7 +744,7 @@ export default function RemoteLabPage() {
                 <SplitFieldPanel
                   instType={inst.type}
                   bTheory={bTheory} bMeasured={bMeasured}
-                  I={I} I0={I0} z={z}
+                  I={I} z={z}
                 />
               </div>
               {inst.type === 'solenoid' && (
@@ -707,7 +755,7 @@ export default function RemoteLabPage() {
                     measData={measData} setMeasData={setMeasData}
                     N={inst.N}
                     isMoving={isMoving} setIsMoving={setIsMoving}
-                    onMoveError={reportMoveError}
+                    onMoveError={reportMove}
                     disabled={isBusy}
                   />
                 </div>
@@ -724,8 +772,8 @@ export default function RemoteLabPage() {
         >
           <RightTabs
             chat={chat}
-            readings={{ inst, I, I0, bTheory, bMeasured, z }}
-            logProps={{ instrument, I, bMeasured, z, instType: inst.type }}
+            readings={{ inst, I, bTheory, bMeasured, z }}
+            events={events}
           />
         </div>
 
@@ -748,11 +796,11 @@ export default function RemoteLabPage() {
               </div>
               <div className="flex-1 min-h-0">
                 {compactCam === 'main' ? (
-                  <CameraSection stream="cam1" name="กล้องหลัก" view="ด้านหน้า" />
+                  <CameraSection stream="cam1" name="กล้องหลัก" />
                 ) : (
                   <CameraSection
                     stream={inst.type === 'solenoid' ? 'cam2' : 'cam3'}
-                    name="กล้องเสริม" view="ด้านข้าง"
+                    name="กล้องเสริม"
                   />
                 )}
               </div>
@@ -762,8 +810,9 @@ export default function RemoteLabPage() {
           {compactTab === 'setup' && (
             <div className="flex flex-col gap-3">
               <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} />
+              <SupplySwitch on={supplyOn} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
               <SensorPanel
-                inst={inst} I={I} I0={I0}
+                inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured}
                 z={z}
               />
@@ -777,7 +826,7 @@ export default function RemoteLabPage() {
                 <SplitFieldPanel
                   instType={inst.type}
                   bTheory={bTheory} bMeasured={bMeasured}
-                  I={I} I0={I0} z={z}
+                  I={I} z={z}
                 />
               </div>
               {inst.type === 'solenoid' && (
@@ -788,7 +837,7 @@ export default function RemoteLabPage() {
                     measData={measData} setMeasData={setMeasData}
                     N={inst.N}
                     isMoving={isMoving} setIsMoving={setIsMoving}
-                    onMoveError={reportMoveError}
+                    onMoveError={reportMove}
                     disabled={isBusy}
                   />
                 </div>
@@ -800,8 +849,8 @@ export default function RemoteLabPage() {
             <div className="h-full flex flex-col">
               <RightTabs
                 chat={chat}
-            readings={{ inst, I, I0, bTheory, bMeasured, z }}
-                logProps={{ instrument, I, bMeasured, z, instType: inst.type }}
+            readings={{ inst, I, bTheory, bMeasured, z }}
+                events={events}
               />
             </div>
           )}
@@ -874,10 +923,10 @@ function CompactTabBar({ active, onSelect }: {
 
 type RightTabId = 'ai' | 'log';
 
-function RightTabs({ chat, readings, logProps }: {
+function RightTabs({ chat, readings, events }: {
   chat: ReturnType<typeof useChat>;
   readings: ChatReadings;
-  logProps: { instrument: number; I: number; bMeasured: number; z: number; instType: 'coil' | 'solenoid' };
+  events: LabEvent[];
 }) {
   const [tab, setTab] = useState<RightTabId>('ai');
 
@@ -909,7 +958,7 @@ function RightTabs({ chat, readings, logProps }: {
         <ChatPanel chat={chat} readings={readings} />
       </div>
       <div className={`flex-1 min-h-0 flex flex-col ${tab !== 'log' ? 'hidden' : ''}`}>
-        <LogPanel {...logProps} />
+        <LogPanel events={events} />
       </div>
     </div>
   );
@@ -928,7 +977,7 @@ function fmtCountdown(secs: number) {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function SessionBar({ endTime, onComplete, onExit }: { endTime: string; onComplete: () => void; onExit?: () => Promise<void> }) {
+function SessionBar({ endTime, onFinish, onTimeUp }: { endTime: string; onFinish: () => void; onTimeUp: () => void }) {
   const router = useRouter();
   const [secs, setSecs] = useState(0);
   const [remaining, setRemaining] = useState(() => getRemaining(endTime));
@@ -941,19 +990,22 @@ function SessionBar({ endTime, onComplete, onExit }: { endTime: string; onComple
   const autoCompleted = useRef(false);
   const { notifications, unread, markAllRead } = useNotifications();
 
-  // เวลาหมด → mark complete อัตโนมัติ (ทันทีที่ countdown ถึง 0)
+  const overlayOpen = panelOpen || docsOpen;
+  useEffect(() => {
+    if (!overlayOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setPanelOpen(false); setDocsOpen(false); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [overlayOpen]);
+
+  // เวลาหมด → จบการทดลองอัตโนมัติ (ทันทีที่ countdown ถึง 0)
+  const timeUp = useEffectEvent(onTimeUp);
   useEffect(() => {
     if (remaining <= 0 && !autoCompleted.current) {
       autoCompleted.current = true;
-      onComplete();
+      timeUp();
     }
-  }, [remaining, onComplete]);
-
-  async function handleLeave() {
-    await onExit?.();
-    onComplete();
-    router.push('/dashboard');
-  }
+  }, [remaining]);
 
   useEffect(() => {
     if (barRef.current) animate(barRef.current, { opacity: [0, 1], translateY: [-20, 0], duration: 600, ease: 'outCubic' });
@@ -1083,7 +1135,7 @@ function SessionBar({ endTime, onComplete, onExit }: { endTime: string; onComple
           กลับ
         </button>
         <button
-          onClick={handleLeave}
+          onClick={onFinish}
           className="text-sm px-3 py-1.5 rounded-md bg-[#c8ff00]/10 border border-[#c8ff00]/30 text-[#c8ff00] hover:bg-[#c8ff00]/20 font-semibold transition-colors flex items-center gap-1.5"
           style={{ boxShadow: '0 0 12px rgba(200,255,0,0.15)' }}
         >
@@ -1101,23 +1153,54 @@ function SessionBar({ endTime, onComplete, onExit }: { endTime: string; onComple
 
 // `name` is which camera this is (shown on the badge over the feed); `view` is
 // the angle it looks from, shown with the name while there is no picture.
-function CameraSection({ stream = 'dji', name = 'กล้องหลัก', view = 'ด้านหน้า' }: { stream?: string; name?: string; view?: string }) {
-  const crossRef = useRef<HTMLDivElement>(null);
-  const cornersRef = useRef<HTMLDivElement>(null);
+// What a camera pane is showing. Only 'live' has a picture; the other three
+// cover the pane with a notice.
+type CamStatus = 'connecting' | 'lost' | 'failed' | 'live';
+
+const CAM_NOTICE: Record<Exclude<CamStatus, 'live'>, { text: string; hint?: string }> = {
+  connecting: { text: 'กำลังเชื่อมต่อกล้อง' },
+  lost: { text: 'สัญญาณขาดหาย กำลังเชื่อมต่อใหม่' },
+  failed: { text: 'เชื่อมต่อกล้องไม่ได้', hint: 'ระบบจะลองใหม่อัตโนมัติ' },
+};
+
+function CameraSection({ stream = 'dji', name = 'กล้องหลัก' }: { stream?: string; name?: string }) {
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   // The connection in use, for the latency readout to take its statistics from.
   const pcRef = useRef<RTCPeerConnection | null>(null);
-  const [streamError, setStreamError] = useState<string | null>(null);
+  const [status, setStatus] = useState<CamStatus>('connecting');
+  const live = status === 'live';
 
   useEffect(() => {
-    const ring = crossRef.current?.querySelector('.cross-ring') as HTMLElement | null;
-    if (ring) animate(ring, { rotate: [0, 360], duration: 12000, ease: 'linear', loop: true });
-    if (cornersRef.current) {
-      animate(cornersRef.current.querySelectorAll('.corner'), {
-        opacity: [0, 1], scale: [0.4, 1], duration: 500, delay: stagger(80, { start: 300 }), ease: 'outBack',
-      });
-    }
+    if (!noticeRef.current || prefersReducedMotion()) return;
+    animate(noticeRef.current.querySelectorAll('.corner'), {
+      opacity: [0, 1], scale: [0.4, 1], duration: 500, delay: stagger(80, { start: 300 }), ease: 'outBack',
+    });
   }, []);
+
+  // The notice gives way to the picture when it arrives and comes back when it
+  // goes. Nothing is drawn over a live picture: the rig has to be seen clearly.
+  useLayoutEffect(() => {
+    const notice = noticeRef.current;
+    const video = videoRef.current;
+    if (!notice || !video) return;
+    if (!live) {
+      notice.style.visibility = 'visible';
+      notice.style.opacity = '1';
+      return;
+    }
+    if (prefersReducedMotion()) {
+      notice.style.visibility = 'hidden';
+      return;
+    }
+    const fades = [
+      animate(notice, { opacity: [1, 0], duration: 320, ease: 'outQuad', onComplete: () => { notice.style.visibility = 'hidden'; } }),
+      animate(video, { opacity: [0, 1], duration: 420, ease: 'outQuad' }),
+    ];
+    if (badgeRef.current) fades.push(animate(badgeRef.current, { scale: [0.82, 1], duration: 420, ease: 'outBack(1.6)' }));
+    return () => { fades.forEach(fade => fade.pause()); video.style.opacity = '1'; };
+  }, [live]);
 
   // WebRTC (WHEP) stream connection
   useEffect(() => {
@@ -1126,10 +1209,13 @@ function CameraSection({ stream = 'dji', name = 'กล้องหลัก', v
 
     let pc: RTCPeerConnection | null = null;
     let stopped = false;
+    let attempts = 0;
 
     async function connect() {
       if (stopped || !video) return;
-      setStreamError('กำลังเชื่อมต่อ WebRTC...');
+      // A retry keeps the notice it had: "cannot connect" should not flick back
+      // to "connecting" every three seconds.
+      if (attempts++ === 0) setStatus('connecting');
 
       pc = new RTCPeerConnection();
       pcRef.current = pc;
@@ -1140,13 +1226,13 @@ function CameraSection({ stream = 'dji', name = 'กล้องหลัก', v
         if (!video) return;
         video.srcObject = event.streams[0] ?? null;
         video.play().catch(console.error);
-        setStreamError(null);
+        setStatus('live');
       };
 
       pc.oniceconnectionstatechange = () => {
         if (!pc) return;
         if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-          setStreamError('การเชื่อมต่อขาดหาย กำลังลองใหม่...');
+          setStatus('lost');
           pc.close();
           if (!stopped) setTimeout(connect, 3000);
         }
@@ -1177,7 +1263,7 @@ function CameraSection({ stream = 'dji', name = 'กล้องหลัก', v
       });
 
       if (!resp.ok) {
-        setStreamError('ไม่สามารถเชื่อมต่อกล้องได้');
+        setStatus('failed');
         pc.close();
         if (!stopped) setTimeout(connect, 3000);
         return;
@@ -1188,7 +1274,7 @@ function CameraSection({ stream = 'dji', name = 'กล้องหลัก', v
     }
 
     connect().catch(() => {
-      setStreamError('ไม่สามารถเชื่อมต่อกล้องได้');
+      setStatus('failed');
       if (!stopped) setTimeout(connect, 3000);
     });
 
@@ -1200,64 +1286,57 @@ function CameraSection({ stream = 'dji', name = 'กล้องหลัก', v
     };
   }, [stream]);
 
+  const notice = CAM_NOTICE[live ? 'connecting' : status];
+
   return (
     <div className="rounded-xl border border-white/10 bg-gray-900/50 overflow-hidden h-full">
-      <div className="relative h-full bg-[#050810] overflow-hidden flex items-center justify-center">
-        {/* Video stream */}
-        {/* On a short screen the box is wider than the feed; show the whole
-            frame there instead of cropping the top and bottom of the rig. */}
+      <div className="relative h-full bg-[#050810] overflow-hidden">
+        {/* The whole frame, never cropped: an edge of the rig cut off is worse
+            than a dark band beside the picture. */}
         <video
           ref={videoRef}
-          className="absolute inset-0 w-full h-full object-cover short:object-contain z-0"
+          className="absolute inset-0 w-full h-full object-contain"
           autoPlay
           playsInline
           muted
         />
 
-        {/* Reconnect UI */}
-        {streamError && (
-          <div className="absolute inset-0 flex items-center justify-center z-10 bg-[#050810]/80 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-3">
-              <svg className="animate-spin text-[#c8ff00]" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div ref={noticeRef} role="status" className="absolute inset-0 z-10 flex items-center justify-center bg-[#050810]/90 backdrop-blur-sm">
+          <div className="absolute inset-0 opacity-10" style={{
+            backgroundImage: 'linear-gradient(rgba(200,255,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.5) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+          }} />
+          <div className="corner absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#c8ff00]/40" />
+          <div className="corner absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-[#c8ff00]/40" />
+          <div className="corner absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-[#c8ff00]/40" />
+          <div className="corner absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#c8ff00]/40" />
+
+          <div className="relative flex flex-col items-center gap-2 px-4 text-center">
+            {status === 'failed' ? (
+              <svg className="text-gray-500" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /><path d="M3 3l18 18" />
+              </svg>
+            ) : (
+              <svg className="animate-spin motion-reduce:animate-none text-[#c8ff00]" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M21 12a9 9 0 11-6.219-8.56" />
               </svg>
-              <span className="text-sm text-[#c8ff00] font-mono tracking-widest uppercase">{streamError}</span>
-            </div>
+            )}
+            <span className={`text-sm ${status === 'failed' ? 'text-gray-300' : 'text-[#c8ff00]'}`}>{notice.text}</span>
+            {notice.hint && <span className="text-xs text-gray-500">{notice.hint}</span>}
           </div>
-        )}
+        </div>
 
-        <div className="absolute inset-0 pointer-events-none z-10" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' }} />
-        <div className="absolute inset-0 pointer-events-none opacity-10" style={{
-          backgroundImage: 'linear-gradient(rgba(200,255,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,0,0.5) 1px, transparent 1px)',
-          backgroundSize: '48px 48px',
-        }} />
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 select-none pointer-events-none">
-          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(200,255,0,0.12)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />
-          </svg>
-          <span className="text-sm text-[#c8ff00]/20 font-mono uppercase tracking-widest">{name} — {view}</span>
-        </div>
-        <div ref={cornersRef}>
-          <div className="corner absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
-          <div className="corner absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
-          <div className="corner absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
-          <div className="corner absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#c8ff00]/40" style={{ opacity: 0 }} />
-        </div>
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-black/70 border border-white/10 px-2.5 py-0.5 text-sm z-20">
-          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
-          <span className="text-white font-semibold">REC</span>
-          <span className="text-gray-500">·</span>
+        <div ref={badgeRef} className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-black/70 border border-white/10 px-2.5 py-0.5 text-sm z-20">
+          {live && (
+            <>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#c8ff00] animate-pulse motion-reduce:animate-none inline-block" />
+              <span className="text-white font-semibold">สด</span>
+              <span className="text-gray-500">·</span>
+            </>
+          )}
           <span className="text-gray-400">{name}</span>
         </div>
-        <div ref={crossRef} className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="relative w-8 h-8">
-            <div className="absolute top-1/2 left-0 right-0 h-px bg-[#c8ff00]/25" />
-            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-[#c8ff00]/25" />
-            <div className="cross-ring absolute inset-1.5 rounded-full border border-dashed border-[#c8ff00]/20" />
-          </div>
-        </div>
         <CamLatency pcRef={pcRef} />
-        <CamTimestamp />
       </div>
     </div>
   );
@@ -1266,7 +1345,7 @@ function CameraSection({ stream = 'dji', name = 'กล้องหลัก', v
 // How far behind the picture is, read from the connection once a second. This
 // is the delay from the camera server to the screen (see lib/webrtc-latency.ts);
 // the camera's own delay before the server cannot be measured from the browser,
-// which is why the label says "stream" and the tooltip spells it out.
+// which the tooltip spells out. The chip itself shows only a dot and the figure.
 function CamLatency({ pcRef }: { pcRef: React.RefObject<RTCPeerConnection | null> }) {
   const [reading, setReading] = useState<LatencyReading | null>(null);
 
@@ -1314,23 +1393,52 @@ function CamLatency({ pcRef }: { pcRef: React.RefObject<RTCPeerConnection | null
   return (
     <div
       className={chip}
+      aria-label={`ความหน่วงของสตรีม ${Math.round(reading.total)} มิลลิวินาที`}
       title={`ความหน่วงจากเซิร์ฟเวอร์กล้องถึงจอนี้: เครือข่าย ${ms(reading.network)} + บัฟเฟอร์ ${ms(reading.buffer)} + ถอดรหัส ${ms(reading.decode)} ยังไม่รวมความหน่วงของตัวกล้องและช่วงกล้องถึงเซิร์ฟเวอร์ ซึ่งวัดจากเบราว์เซอร์ไม่ได้`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
-      <span className="text-gray-400">หน่วงสตรีม</span>
       <span className={`font-mono font-semibold tabular-nums ${tone.text}`}>{Math.round(reading.total)}</span>
       <span className="text-gray-500">ms</span>
     </div>
   );
 }
 
-function CamTimestamp() {
-  const [time, setTime] = useState(() => nowTime());
-  useEffect(() => {
-    const t = setInterval(() => setTime(nowTime()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return <div className="absolute bottom-2 right-2 text-sm font-mono text-[#c8ff00]/40 z-20 select-none">{time}</div>;
+// ── Power supply ──────────────────────────────────────────────────────────────
+
+// The switch for the supply that feeds the coils and the solenoid. `on` is
+// null while its state is not known; the switch then reads as off.
+function SupplySwitch({ on, busy, onSwitch }: { on: boolean | null; busy: boolean; onSwitch: (on: boolean) => void }) {
+  const knobRef = useRef<HTMLSpanElement>(null);
+  const settled = useRef<boolean | null>(on);
+
+  // The knob springs when the supply actually changes state.
+  useLayoutEffect(() => {
+    const changed = settled.current !== null && on !== null && settled.current !== on;
+    settled.current = on;
+    if (changed && knobRef.current && !prefersReducedMotion())
+      animate(knobRef.current, { scale: [0.6, 1], duration: 420, ease: 'outBack(2.2)' });
+  }, [on]);
+
+  return (
+    <div className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 px-3 py-2 short:py-1 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-white">แหล่งจ่ายไฟ</p>
+        {/* On a short screen the switch itself says it; the line would push the readings out of view. */}
+        <p className={`text-xs short:hidden ${on ? 'text-[#c8ff00]' : 'text-gray-500'}`}>
+          {busy ? 'รอสักครู่' : on === null ? 'ยังไม่ทราบสถานะ' : on ? 'เปิดอยู่' : 'ปิดอยู่'}
+        </p>
+      </div>
+      <button
+        role="switch" aria-checked={on === true} aria-label="แหล่งจ่ายไฟ"
+        disabled={busy}
+        onClick={() => onSwitch(on !== true)}
+        className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${on ? 'border-[#c8ff00]/50 bg-[#c8ff00]/25' : 'border-white/10 bg-gray-800'}`}
+        style={on ? { boxShadow: '0 0 12px rgba(200,255,0,0.25)' } : undefined}
+      >
+        <span ref={knobRef} className={`absolute top-[3px] h-5 w-5 rounded-full transition-[left] duration-200 ${on ? 'left-[23px] bg-[#c8ff00]' : 'left-[3px] bg-gray-500'}`} />
+      </button>
+    </div>
+  );
 }
 
 // ── Instrument Selector ───────────────────────────────────────────────────────
@@ -1467,10 +1575,10 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
 
 // ── Split Field Panel ─────────────────────────────────────────────────────────
 
-function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z }: {
+function SplitFieldPanel({ instType, bTheory, bMeasured, I, z }: {
   instType: 'solenoid' | 'coil';
   bTheory: number; bMeasured: number;
-  I: number; I0: number;
+  I: number;
   z: number;
 }) {
   return (
@@ -1489,13 +1597,12 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z }: {
             วัดจริง · {bMeasured.toFixed(3)} mT
           </span>
         </div>
-        {/* I₀ and I are already in the readings panel; they only join this bar when it is wide. */}
+        {/* I is already in the readings panel; it only joins this bar when it is wide. */}
         <div className="flex items-center gap-3 text-sm font-mono whitespace-nowrap">
           {instType === 'solenoid' && (
             <span className="text-gray-500">Z = <span style={{ color: '#a78bfa' }}>{(z * 100).toFixed(0)} cm</span></span>
           )}
-          <span className="lg:hidden 2xl:inline text-gray-600">I₀ = {I0.toFixed(2)} A</span>
-          <span className="lg:hidden xl:inline text-gray-500">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(3)} A</span></span>
+          <span className="lg:hidden xl:inline text-gray-500">I = <span style={{ color: '#c8ff00' }}>{I.toFixed(2)} A</span></span>
         </div>
       </div>
 
@@ -1508,9 +1615,9 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, I0, z }: {
 
 // ── Sensor Panel ──────────────────────────────────────────────────────────────
 
-function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
+function SensorPanel({ inst, I, bTheory, bMeasured, z }: {
   inst: Inst;
-  I: number; I0: number;
+  I: number;
   bTheory: number; bMeasured: number;
   z: number;
 }) {
@@ -1531,16 +1638,14 @@ function SensorPanel({ inst, I, I0, bTheory, bMeasured, z }: {
   const rows = inst.type === 'coil'
     ? [
       { label: `จำนวนรอบ (n)`, value: String(inst.turns), unit: 'รอบ', color: '#a3e635' },
-      { label: 'กระแสออกแบบ (I₀)', value: I0.toFixed(2), unit: 'A', color: '#c8ff00' },
-      { label: 'กระแสที่วัดได้ (I)', value: I.toFixed(4), unit: 'A', color: '#22d3ee' },
+      { label: 'กระแส (I)', value: I.toFixed(2), unit: 'A', color: '#c8ff00' },
       { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
       { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
       { label: 'ΔB', hint: '(วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
     ]
     : [
       { label: 'ตำแหน่ง Z', value: (z * 100).toFixed(0), unit: 'cm', color: '#a78bfa' },
-      { label: 'กระแสออกแบบ (I₀)', value: I0.toFixed(2), unit: 'A', color: '#c8ff00' },
-      { label: 'กระแสที่วัดได้ (I)', value: I.toFixed(4), unit: 'A', color: '#22d3ee' },
+      { label: 'กระแส (I)', value: I.toFixed(2), unit: 'A', color: '#c8ff00' },
       { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
       { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
       { label: 'ΔB', hint: '(วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
@@ -1781,7 +1886,7 @@ const SUGGESTIONS: Record<'coil' | 'solenoid', string[]> = {
 // What the assistant is told about the experiment at the moment of asking.
 type ChatReadings = {
   inst: Inst;
-  I: number; I0: number;
+  I: number;
   bTheory: number; bMeasured: number;
   z: number;
 };
@@ -1789,12 +1894,13 @@ type ChatReadings = {
 // The conversation with the AI assistant. It lives in the page, above the two
 // layouts, so the desktop panel and the compact "ผู้ช่วย" tab show the same
 // chat and neither loses it when it is hidden or unmounted.
-function useChat() {
+function useChat(onAsk: (question: string) => void) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [streaming, setStreaming] = useState(false);
 
-  async function send(text: string, { inst, I, I0, bTheory, bMeasured, z }: ChatReadings) {
+  async function send(text: string, { inst, I, bTheory, bMeasured, z }: ChatReadings) {
     if (!text.trim() || streaming) return;
+    onAsk(text.trim());
     const userMsg: ChatMsg = { id: ++_cid, role: 'user', content: text.trim() };
     const nextMsgs = [...messages, userMsg];
     setMessages(nextMsgs);
@@ -1814,7 +1920,7 @@ function useChat() {
             instrumentName: inst.name,
             instSub: inst.sub,
             instType: inst.type,
-            I, I0, bTheory, bMeasured,
+            I, bTheory, bMeasured,
             z: inst.type === 'solenoid' ? z : undefined,
           },
         }),
@@ -2023,7 +2129,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
             {/* Substituted fraction */}
             <div className="text-gray-400 pl-3 space-y-0.5">
               <div className="text-gray-500">=</div>
-              <div className="text-gray-300">4π×10⁻⁷ × {n} × {I.toFixed(3)}</div>
+              <div className="text-gray-300">4π×10⁻⁷ × {n} × {I.toFixed(2)}</div>
               <div className="h-px bg-gray-700" />
               <div className="text-gray-300">2 × {(R * 1000).toFixed(0)}×10⁻³</div>
             </div>
@@ -2033,7 +2139,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
               {([
                 { k: 'n', v: `${n} รอบ`, c: '#a3e635' },
                 { k: 'R', v: `${(R * 1000).toFixed(0)} มม.` },
-                { k: 'I', v: `${I.toFixed(3)} A`, c: '#22d3ee' },
+                { k: 'I', v: `${I.toFixed(2)} A`, c: '#22d3ee' },
                 { k: 'μ₀', v: '4π×10⁻⁷ H/m' },
               ] as { k: string; v: string; c?: string }[]).map(p => (
                 <div key={p.k} className="flex gap-1 whitespace-nowrap">
@@ -2105,7 +2211,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
             <span className="text-gray-600">N=<span style={{ color: '#a3e635' }}>{N}</span></span>
             <span className="text-gray-600">L=<span className="text-gray-400">{(L * 1000).toFixed(0)}mm</span></span>
             <span className="text-gray-600">R=<span className="text-gray-400">{(R * 1000).toFixed(0)}mm</span></span>
-            <span className="text-gray-600">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(3)} A</span></span>
+            <span className="text-gray-600">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(2)} A</span></span>
           </div>
         </div>
       </div>
@@ -2146,7 +2252,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   N: number;
   isMoving: boolean; setIsMoving: (v: boolean) => void;
   /** Called with a message when the rig did not move the probe, and with null when it did. */
-  onMoveError: (message: string | null) => void;
+  onMoveError: (message: string | null, zCm: number, bTheory: number) => void;
   disabled?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -2187,7 +2293,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
       const { bMeasured: bM, bTheory: bT } = liveRef.current;
       setMeasData(prev => new Map(prev).set(zVal, { bMeasured: bM, bTheory: bT }));
     }
-    onMoveError(failed);
+    onMoveError(failed, zVal, liveRef.current.bTheory);
     setIsMoving(false);
   }
 
@@ -2338,74 +2444,34 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
 
 // ── Log Panel ─────────────────────────────────────────────────────────────────
 
-const typeStyle: Record<LogType, string> = { info: 'text-gray-500', warn: 'text-yellow-400', data: 'text-cyan-400', cmd: 'text-[#c8ff00]' };
-const typeLabel: Record<LogType, string> = { info: 'INFO', warn: 'WARN', data: 'DATA', cmd: 'CMD ' };
 
-function LogPanel({ instrument, I, bMeasured, z, instType }: {
-  instrument: number; I: number; bMeasured: number; z: number; instType: 'coil' | 'solenoid';
-}) {
-  const [logs, setLogs] = useState<LogEntry[]>(() => [
-    mkLog('info', 'เชื่อมต่ออุปกรณ์ LAB-8 สำเร็จ'),
-    mkLog('cmd', `เริ่ม: ${instruments[instrument].name}`),
-    mkLog('data', `I₀ = ${instruments[instrument].I0.toFixed(2)} A`),
-  ]);
+
+// What has happened in this visit so far, as it happens. The same list becomes
+// the summary and the CSV when the visit ends.
+function LogPanel({ events }: { events: LabEvent[] }) {
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const prevInst = useRef(instrument);
-  const tick = useRef(0);
-  const zTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (prevInst.current === instrument) return;
-    prevInst.current = instrument;
-    setLogs(l => [...l, mkLog('cmd', `เปลี่ยน → ${instruments[instrument].name}`)]);
-  }, [instrument]);
-
-  // Debounced Z logging
-  useEffect(() => {
-    if (instType !== 'solenoid') return;
-    if (zTimer.current) clearTimeout(zTimer.current);
-    zTimer.current = setTimeout(() => {
-      setLogs(l => [...l.slice(-60), mkLog('cmd', `Z → ${(z * 100).toFixed(0)} cm`)]);
-    }, 400);
-  }, [z, instType]);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      const i = tick.current % 4;
-      tick.current++;
-      const templates: Array<[LogType, string]> = [
-        ['data', `I = ${I.toFixed(4)} A`],
-        ['data', `B = ${bMeasured.toFixed(3)} mT`],
-        ['info', 'บันทึกข้อมูลอัตโนมัติ…'],
-        ['info', 'ระบบทำงานปกติ'],
-      ];
-      const [type, msg] = templates[i];
-      setLogs(l => [...l.slice(-60), mkLog(type, msg)]);
-    }, 2500);
-    return () => clearInterval(t);
-  }, [instrument, I, bMeasured]);
 
   useEffect(() => {
     if (!listRef.current) return;
     const rows = listRef.current.querySelectorAll('.log-row');
     const last = rows[rows.length - 1] as HTMLElement | undefined;
-    if (last) animate(last, { opacity: [0, 1], translateX: [-8, 0], duration: 280, ease: 'outCubic' });
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+    if (last && !prefersReducedMotion()) animate(last, { opacity: [0, 1], translateX: [-8, 0], duration: 280, ease: 'outCubic' });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [events.length]);
 
   return (
     <div className="flex-1 min-h-0 rounded-xl border border-white/10 bg-gray-900/50 flex flex-col overflow-hidden">
       <div className="shrink-0 px-3 py-1.5 border-b border-white/5 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">บันทึก</h2>
-        <span className="text-sm text-gray-600 font-mono">{logs.length}</span>
+        <h2 className="text-sm font-semibold text-gray-400">บันทึกการทดลอง</h2>
+        <span className="text-sm text-gray-600 font-mono">{events.length}</span>
       </div>
       <div ref={listRef} className="overflow-y-auto p-2 space-y-0.5 font-mono text-sm">
-        {logs.map(log => (
-          <div key={log.id} className="log-row flex items-start gap-1.5 leading-4">
-            <span className="text-gray-700 shrink-0 tabular-nums">{log.ts}</span>
-            <span className={`shrink-0 font-semibold ${typeStyle[log.type]}`}>[{typeLabel[log.type]}]</span>
-            <span className="text-gray-400 break-words">{log.msg}</span>
+        {events.length === 0 && <p className="px-1 py-2 font-sans text-gray-600">ยังไม่มีรายการ</p>}
+        {events.map((e, i) => (
+          <div key={i} className="log-row flex items-start gap-1.5 leading-5">
+            <span className="text-gray-700 shrink-0 tabular-nums">{clockTime(e.at)}</span>
+            <span className={`break-words font-sans ${e.ok === false ? 'text-red-300' : e.kind === 'move' || e.kind === 'reading' ? 'text-cyan-300' : 'text-gray-300'}`}>{describeEvent(e)}</span>
           </div>
         ))}
         <div ref={bottomRef} />

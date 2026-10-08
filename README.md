@@ -8,6 +8,7 @@ See [DESIGN.md](./DESIGN.md) for the architecture, tech stack, directory layout,
 
 ```bash
 npm install
+cp .env.example .env   # then fill in the values
 npm run dev
 ```
 

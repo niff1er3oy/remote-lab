@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 
-type User = { name: string; email: string; role: string };
+type User = { name: string; email: string; role: string; is_admin?: boolean };
 
 const ROLE_LABELS: Record<string, string> = {
   student: 'นักศึกษา', researcher: 'นักวิจัย', instructor: 'อาจารย์', other: 'ผู้ใช้ทั่วไป',
@@ -56,6 +56,12 @@ export default function DashboardNav({ user }: { user: User }) {
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
                   <GridIcon /> แดชบอร์ด
                 </Link>
+                {user.is_admin && (
+                  <Link href="/admin" onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
+                    <ShieldIcon /> ผู้ดูแลระบบ
+                  </Link>
+                )}
                 <div className="border-t border-white/[0.06]" />
                 <button onClick={handleLogout}
                   className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors">
@@ -75,6 +81,13 @@ function GridIcon() {
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
       <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+    </svg>
+  );
+}
+function ShieldIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l8 3v6c0 4.5-3.2 8.2-8 9-4.8-.8-8-4.5-8-9V6l8-3z"/>
     </svg>
   );
 }

@@ -16,6 +16,7 @@ export type Claims = {
 const idTokens = new Map<string, Claims>();
 const sessionCookies = new Map<string, Claims>();
 const customClaims = new Map<string, Record<string, unknown>>();
+const accounts = new Map<string, { uid: string; displayName?: string; email?: string }>();
 const minted: Array<{ idToken: string; expiresIn: number }> = [];
 const revocationChecks: unknown[] = [];
 let mintingFails = false;
@@ -44,6 +45,12 @@ export const auth = {
     return cookie;
   },
 
+  // Like Firebase, unknown uids are simply left out of `users`.
+  async getUsers(identifiers: Array<{ uid: string }>) {
+    const users = identifiers.flatMap(({ uid }) => (accounts.has(uid) ? [accounts.get(uid)!] : []));
+    return { users, notFound: identifiers.filter(({ uid }) => !accounts.has(uid)) };
+  },
+
   async setCustomUserClaims(uid: string, claims: Record<string, unknown>): Promise<void> {
     customClaims.set(uid, claims);
   },
@@ -53,6 +60,7 @@ export function resetAuth(): void {
   idTokens.clear();
   sessionCookies.clear();
   customClaims.clear();
+  accounts.clear();
   minted.length = 0;
   revocationChecks.length = 0;
   mintingFails = false;
@@ -61,6 +69,7 @@ export function resetAuth(): void {
 
 export const knownIdToken = (idToken: string, claims: Claims) => void idTokens.set(idToken, claims);
 export const knownSessionCookie = (cookie: string, claims: Claims) => void sessionCookies.set(cookie, claims);
+export const knownAccount = (uid: string, displayName?: string, email?: string) => void accounts.set(uid, { uid, displayName, email });
 export const failMinting = () => void (mintingFails = true);
 export const customClaimsOf = (uid: string) => customClaims.get(uid);
 export const mintedCookies = () => [...minted];

@@ -11,4 +11,7 @@ Object.assign(process.env, {
   cam3: 'http://camera.invalid/camera3',
   CAM_USER: 'test-user',
   CAM_PASSWORD: 'test-password',
+  ADMIN_EMAILS: 'admin@example.com, Second.Admin@Example.com',
+  RIG_SCRIPT_DIR: '/home/admin/Documents',
+  RIG_PYTHON: '',
 });
