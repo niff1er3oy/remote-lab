@@ -10,7 +10,8 @@
 
 import { writeFileSync } from 'node:fs';
 
-const R = 1.3; // cm, winding radius of both the single coil and the solenoid
+const COIL_R = 1.3; // cm, winding radius of the single coil
+const R = 2.1; // cm, winding radius of the solenoid (42 mm across)
 const L = 8; // cm, solenoid length
 
 // Complete elliptic integrals K(m) and E(m), m = k², by the arithmetic-geometric mean.
@@ -44,7 +45,7 @@ function loopB(a, rho, z) {
   return [brho, bz];
 }
 
-const coilB = (rho, z) => loopB(R, rho, z);
+const coilB = (rho, z) => loopB(COIL_R, rho, z);
 
 // The solenoid as a stack of loops. More loops than real turns, so the winding
 // behaves like the continuous current sheet it nearly is.
@@ -126,12 +127,12 @@ function toPath({ pts, closed }, scale) {
   return closed ? `${d}Z` : d;
 }
 
-function build(field, starts, scale, view) {
+function build(field, radius, starts, scale, view) {
   const frame = { z: view.w / 2 / scale + 0.2, rho: view.h / 2 / scale + 0.2 };
   return starts.map(f => {
-    const line = trace(field, f * R, frame);
+    const line = trace(field, f * radius, frame);
     const end = line.pts[line.pts.length - 1];
-    const inner = +(f * R * scale).toFixed(1);
+    const inner = +(f * radius * scale).toFixed(1);
     const outer = line.closed ? +(end[1] * scale).toFixed(1) : null;
     return `    { inner: ${inner}, outer: ${outer}, d: '${toPath(line, scale)}' },`;
   }).join('\n');
@@ -165,9 +166,9 @@ export const FIELD_VIEW = { w: ${VIEW.w}, h: ${VIEW.h} };
 
 export const COIL_FIELD = {
   pxPerCm: ${COIL_SCALE},
-  radius: ${+(R * COIL_SCALE).toFixed(1)},
+  radius: ${+(COIL_R * COIL_SCALE).toFixed(1)},
   lines: [
-${build(coilB, [0.3, 0.52, 0.7, 0.85], COIL_SCALE, VIEW)}
+${build(coilB, COIL_R, [0.3, 0.52, 0.7, 0.85], COIL_SCALE, VIEW)}
   ] as FieldLine[],
 };
 
@@ -176,7 +177,7 @@ export const SOLENOID_FIELD = {
   radius: ${+(R * SOLENOID_SCALE).toFixed(1)},
   halfLength: ${+((L / 2) * SOLENOID_SCALE).toFixed(1)},
   lines: [
-${build(solenoidB, [0.28, 0.52, 0.72, 0.86, 0.92], SOLENOID_SCALE, VIEW)}
+${build(solenoidB, R, [0.28, 0.52, 0.72, 0.86, 0.92], SOLENOID_SCALE, VIEW)}
   ] as FieldLine[],
 };
 `;

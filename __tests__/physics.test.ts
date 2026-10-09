@@ -64,33 +64,38 @@ describe('calcBSolenoid — field on the axis of the finite solenoid', () => {
 describe('the solenoid on the rig and its probe positions', () => {
   const at = (position: number) => calcBSolenoid(RIG_SOLENOID.N, RIG_SOLENOID.I, RIG_SOLENOID.L, RIG_SOLENOID.R, probeZ(position));
 
-  it('is 8 cm long with 75 turns of 1.3 cm radius, at 1 A', () => {
-    expect(RIG_SOLENOID).toEqual({ N: 75, L: 0.08, R: 0.013, I: 1 });
+  it('is 8 cm long with 100 turns, 42 mm across, at 1 A', () => {
+    expect(RIG_SOLENOID).toEqual({ N: 100, L: 0.08, R: 0.021, I: 1 });
   });
 
-  it('has 13 positions, from -6 to 6', () => {
-    expect(PROBE_POSITIONS).toEqual([-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6]);
-    expect([PROBE_MIN, PROBE_MAX]).toEqual([-6, 6]);
+  it('has 21 positions, from -10 to 10', () => {
+    expect(PROBE_POSITIONS).toEqual([-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect([PROBE_MIN, PROBE_MAX]).toEqual([-10, 10]);
   });
 
-  it('spreads them over the 115 mm the arm covers, so the ends are at 5.75 cm', () => {
-    expect(PROBE_STEP_M * 12).toBeCloseTo(0.115, 12);
-    expect(probeZ(6)).toBeCloseTo(0.0575, 12);
-    expect(probeZ(-6)).toBeCloseTo(-0.0575, 12);
+  it('steps 1 cm at a time from the middle of the solenoid, so the ends are at 10 cm', () => {
+    expect(PROBE_STEP_M).toBe(0.01);
+    expect(probeZ(4)).toBeCloseTo(0.04, 12);
+    expect(probeZ(10)).toBeCloseTo(0.1, 12);
+    expect(probeZ(-10)).toBeCloseTo(-0.1, 12);
     expect(probeZ(0)).toBe(0);
   });
 
   it('gives the field worked by hand at the centre and at the last position', () => {
-    // mu0*N*I/2L = 5.89049e-4 T. Centre: 2 x 4/sqrt(1.3^2 + 4^2) = 1.901996.
-    expect(at(0)).toBeCloseTo(1.12037, 4);
-    // Z = 5.75 cm: 9.75/sqrt(1.3^2 + 9.75^2) - 1.75/sqrt(1.3^2 + 1.75^2) = 0.991228 - 0.802743.
-    expect(at(6)).toBeCloseTo(0.11103, 4);
-    expect(at(-6)).toBeCloseTo(at(6), 12);
+    // mu0*N*I/2L = 7.85398e-4 T. Centre: 2 x 4/sqrt(2.1^2 + 4^2) = 1.770796.
+    expect(at(0)).toBeCloseTo(1.39078, 4);
+    // Z = 4 cm, the end of the winding: 8/sqrt(2.1^2 + 8^2) + 0 = 0.967231.
+    expect(at(4)).toBeCloseTo(0.75966, 4);
+    expect(at(-4)).toBeCloseTo(at(4), 12);
+    // Z = 10 cm: 14/sqrt(2.1^2 + 14^2) - 6/sqrt(2.1^2 + 6^2) = 0.988936 - 0.943858.
+    expect(at(10)).toBeCloseTo(0.03540, 4);
+    expect(at(-10)).toBeCloseTo(at(10), 12);
   });
 
   it('writes a length in centimetres with at most two decimals', () => {
-    expect(cmText(probeZ(3))).toBe('2.88');
-    expect(cmText(probeZ(-6))).toBe('-5.75');
+    expect(cmText(probeZ(3))).toBe('3');
+    expect(cmText(0.02875)).toBe('2.88');
+    expect(cmText(probeZ(-6))).toBe('-6');
     expect(cmText(0)).toBe('0');
     expect(cmText(0.04)).toBe('4');
   });

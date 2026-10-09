@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { GET, POST } from '@/app/api/hardware/route';
-import { resetRigState } from '@/lib/rig';
+import { resetRigState, runRigScript } from '@/lib/rig';
 import { breakDb, resetDb, seedBooking } from '../helpers/server/firestore';
 import { signInAs, signOut } from '../helpers/server/session';
 import { freezeTime, restoreTime, HOUR, MINUTE } from '../helpers/server/time';
@@ -122,23 +122,11 @@ describe('POST /api/hardware — who may command the rig', () => {
     expect(runScript).toHaveBeenCalledTimes(1);
   });
 
-  it('does not switch the power supply on for a round that ended five minutes ago', async () => {
-    endedRound(5 * MINUTE);
-    expect((await send({ script: 'relay_on.py' })).status).toBe(403);
-    expect(runScript).not.toHaveBeenCalled();
-  });
-
   it.each(['coil_b.py', 'sole_b.py'])('still runs %s for a round that ended five minutes ago', async (script) => {
     endedRound(5 * MINUTE);
     const res = await send({ script });
     expect(res.status).toBe(200);
     expect(runScript).toHaveBeenCalledWith(PYTHON, [script], expect.anything());
-  });
-
-  it('still switches the supply off for a round that ended five minutes ago', async () => {
-    endedRound(5 * MINUTE);
-    expect((await send({ script: 'relay_off.py' })).status).toBe(200);
-    expect(runScript).toHaveBeenCalledWith(PYTHON, ['relay_off.py'], expect.anything());
   });
 
   it.each([
@@ -185,15 +173,16 @@ describe('POST /api/hardware — the accepted commands', () => {
   it('reports whether the power supply was last switched on or off', async () => {
     resetRigState();
     expect(await (await GET()).json()).toEqual({ busy: false, supply: null });
-    await send({ script: 'relay_on.py' });
+    await runRigScript(['relay_on.py']);
     expect(await (await GET()).json()).toEqual({ busy: false, supply: true });
-    await send({ script: 'relay_off.py' });
+    await runRigScript(['relay_off.py']);
     expect(await (await GET()).json()).toEqual({ busy: false, supply: false });
   });
 
-  it.each(['relay_on.py', 'relay_off.py'])('runs %s from the scripts folder, with the venv\'s Python', async (script) => {
-    expect((await send({ script })).status).toBe(200);
-    expect(runScript.mock.calls).toEqual([[PYTHON, [script], { cwd: '/home/admin/Documents' }]]);
+  // The supply follows who is in the room; a student has no switch for it.
+  it.each(['relay_on.py', 'relay_off.py'])('refuses %s: students do not switch the power supply', async (script) => {
+    expect((await send({ script })).status).toBe(400);
+    expect(runScript).not.toHaveBeenCalled();
   });
 
   it.each(['psu_on.py', '/home/admin/Documents/relay_on.py', '../relay_on.py'])('refuses %s: a script is named, never given by path', async (script) => {
@@ -225,8 +214,8 @@ describe('POST /api/hardware — the accepted commands', () => {
   });
 
   it.each([
-    ['one below the range', -7],
-    ['one above the range', 7],
+    ['one below the range', -11],
+    ['one above the range', 11],
     ['a fraction', 1.5],
     ['a number written as text', '5'],
     ['text with a second command in it', '3; reboot'],

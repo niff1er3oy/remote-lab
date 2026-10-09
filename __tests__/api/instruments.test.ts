@@ -121,7 +121,7 @@ describe('what a closed instrument means', () => {
     expect(runRigScript).toHaveBeenCalledWith(['sole.py', '--position', '3']);
   });
 
-  it.each(['coil_b.py', 'sole_b.py', 'relay_off.py', 'relay_on.py'])('cutting a circuit and the supply are not held back: %s', async (script) => {
+  it.each(['coil_b.py', 'sole_b.py'])('cutting a circuit is not held back: %s', async (script) => {
     expect((await send({ script })).status).toBe(200);
   });
 

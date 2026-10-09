@@ -1,0 +1,154 @@
+/** @jest-environment node */
+import { NextRequest } from 'next/server';
+import { POST } from '@/app/api/lab/presence/route';
+import { POST as switchSupply } from '@/app/api/admin/rig/power/route';
+import { isInRoom, resetPresence } from '@/lib/lab-presence';
+import { resetRigState } from '@/lib/rig';
+import { breakDb, resetDb, seedBooking } from '../helpers/server/firestore';
+import { knownAccount, resetAuth } from '../helpers/server/auth';
+import { ADMIN, signInAs, signOut, STUDENT } from '../helpers/server/session';
+import { freezeTime, moveTimeTo, restoreTime, HOUR, MINUTE } from '../helpers/server/time';
+
+jest.mock('@/lib/firebase-admin', () => ({
+  adminDb: jest.requireActual<typeof import('../helpers/server/firestore')>('../helpers/server/firestore').db,
+  adminAuth: jest.requireActual<typeof import('../helpers/server/auth')>('../helpers/server/auth').auth,
+}));
+jest.mock('@/lib/session', () => ({ getSessionUser: jest.fn() }));
+jest.mock('next/headers', () => ({ cookies: jest.fn() }));
+
+type RunScript = (file: string, args: string[], options: { cwd?: string }) => Promise<{ stdout: string; stderr: string }>;
+jest.mock('child_process', () => {
+  const { promisify } = jest.requireActual<typeof import('util')>('util');
+  const runScript = jest.fn();
+  return { runScript, execFile: Object.assign(jest.fn(), { [promisify.custom]: runScript }) };
+});
+const { runScript } = jest.requireMock<{ runScript: jest.MockedFunction<RunScript> }>('child_process');
+const ran = () => runScript.mock.calls.map(([, args]) => args.join(' '));
+
+const NOW = Date.parse('2026-10-08T03:00:00Z');
+const tell = async (action: unknown) => {
+  const res = await POST(new Request('http://localhost/api/lab/presence', { method: 'POST', body: JSON.stringify({ action }) }));
+  return { status: res.status, body: await res.json() };
+};
+const adminPower = (on: boolean) =>
+  switchSupply(new NextRequest('http://localhost/api/admin/rig/power', { method: 'POST', body: JSON.stringify({ on }) }));
+const round = (startAgo: number, length = 2 * HOUR, status = 'confirmed') =>
+  seedBooking('b1', { user: STUDENT.uid, status, start: NOW - startAgo, end: NOW - startAgo + length });
+
+beforeEach(() => {
+  freezeTime(NOW);
+  resetDb();
+  resetAuth();
+  resetPresence();
+  resetRigState();
+  (globalThis as { __labPresenceChecked?: unknown }).__labPresenceChecked = undefined;
+  knownAccount(ADMIN.uid, 'Admin One', 'admin@example.com');
+  runScript.mockReset().mockResolvedValue({ stdout: '', stderr: '' });
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+  jest.spyOn(console, 'log').mockImplementation(() => {});
+  signInAs(STUDENT);
+});
+
+afterEach(() => {
+  resetPresence();
+  restoreTime();
+  jest.restoreAllMocks();
+});
+
+describe('POST /api/lab/presence', () => {
+  it('answers 401 to someone who is not signed in', async () => {
+    signOut();
+    expect((await tell('enter')).status).toBe(401);
+    expect(ran()).toEqual([]);
+  });
+
+  it.each(['on', 'relay_on.py', '', null, 1])('answers 400 for the action %j', async (action) => {
+    round(30 * MINUTE);
+    expect((await tell(action)).status).toBe(400);
+    expect(ran()).toEqual([]);
+  });
+
+  it('entering during a running round switches the supply on', async () => {
+    round(30 * MINUTE);
+    expect(await tell('enter')).toEqual({ status: 200, body: { ok: true, supply: true } });
+    expect(ran()).toEqual(['relay_on.py']);
+  });
+
+  it.each([
+    ['no round at all', () => {}],
+    ['a round that has ended', () => round(3 * HOUR)],
+    ['a round that was cancelled', () => round(30 * MINUTE, 2 * HOUR, 'cancelled')],
+  ])('entering with %s answers 403 and switches nothing', async (_label, arrange) => {
+    arrange();
+    expect((await tell('enter')).status).toBe(403);
+    expect(ran()).toEqual([]);
+    expect(isInRoom(STUDENT.uid)).toBe(false);
+  });
+
+  it('answers 500 and switches nothing when the round cannot be looked up', async () => {
+    round(30 * MINUTE);
+    breakDb(new Error('UNAVAILABLE: firestore'));
+    const { status, body } = await tell('enter');
+    expect(status).toBe(500);
+    expect(JSON.stringify(body)).not.toContain('UNAVAILABLE');
+    expect(ran()).toEqual([]);
+  });
+
+  it('leaving switches the supply off, and reports it', async () => {
+    round(30 * MINUTE);
+    await tell('enter');
+    expect(await tell('leave')).toEqual({ status: 200, body: { ok: true, supply: false } });
+    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+  });
+
+  it('leaving is accepted after the round has ended', async () => {
+    round(30 * MINUTE);
+    await tell('enter');
+    moveTimeTo(NOW + 3 * HOUR);
+    expect((await tell('leave')).status).toBe(200);
+    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+  });
+
+  it('staying does not run the relay again', async () => {
+    round(30 * MINUTE);
+    await tell('enter');
+    await tell('stay');
+    await tell('stay');
+    expect(ran()).toEqual(['relay_on.py']);
+  });
+
+  it('a page still open after its round ended is put out, and the supply goes off', async () => {
+    round(30 * MINUTE);
+    await tell('enter');
+    moveTimeTo(NOW + 2 * HOUR + MINUTE);
+    expect((await tell('stay')).status).toBe(403);
+    expect(isInRoom(STUDENT.uid)).toBe(false);
+    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+  });
+
+  it('a page heard from for the first time by "stay" is let in and the supply comes on', async () => {
+    // As after a server restart with the lab page still open.
+    round(30 * MINUTE);
+    expect(await tell('stay')).toEqual({ status: 200, body: { ok: true, supply: true } });
+    expect(isInRoom(STUDENT.uid)).toBe(true);
+  });
+
+  it('after an admin switches off, staying reports the supply off and does not switch it back on', async () => {
+    round(30 * MINUTE);
+    await tell('enter');
+    signInAs(ADMIN);
+    expect((await adminPower(false)).status).toBe(200);
+    signInAs(STUDENT);
+    expect(await tell('stay')).toEqual({ status: 200, body: { ok: true, supply: false } });
+    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+  });
+
+  it('after an admin switches off, walking in anew switches the supply on again', async () => {
+    round(30 * MINUTE);
+    signInAs(ADMIN);
+    await adminPower(false);
+    signInAs(STUDENT);
+    expect((await tell('enter')).body.supply).toBe(true);
+    expect(ran()).toEqual(['relay_off.py', 'relay_on.py']);
+  });
+});

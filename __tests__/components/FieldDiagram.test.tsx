@@ -160,22 +160,22 @@ describe('FieldDiagram', () => {
   describe('solenoid', () => {
     const turns = () => draw('solenoid').all('g.field-mark circle');
 
-    it('shows the 75 turns of the winding along both sides', () => {
+    it('shows the 100 turns of the winding along both sides', () => {
       const dots = turns();
       const above = dots.filter(dot => Number(dot.getAttribute('cy')) === -SOLENOID_FIELD.radius);
       const below = dots.filter(dot => Number(dot.getAttribute('cy')) === SOLENOID_FIELD.radius);
 
-      expect(above).toHaveLength(75);
-      expect(below).toHaveLength(75);
-      expect(dots).toHaveLength(150);
+      expect(above).toHaveLength(100);
+      expect(below).toHaveLength(100);
+      expect(dots).toHaveLength(200);
     });
 
     it('spreads the turns evenly from one end of the solenoid to the other', () => {
-      const xs = turns().slice(0, 75).map(dot => Number(dot.getAttribute('cx')));
+      const xs = turns().slice(0, 100).map(dot => Number(dot.getAttribute('cx')));
 
       expect(xs[0]).toBe(-SOLENOID_FIELD.halfLength);
-      expect(xs[74]).toBe(SOLENOID_FIELD.halfLength);
-      const gap = (2 * SOLENOID_FIELD.halfLength) / 74;
+      expect(xs[99]).toBe(SOLENOID_FIELD.halfLength);
+      const gap = (2 * SOLENOID_FIELD.halfLength) / 99;
       for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeCloseTo(gap, 0);
     });
 

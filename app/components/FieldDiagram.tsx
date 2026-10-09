@@ -12,7 +12,7 @@ const GREEN = '#c8ff00';
 const CYAN = '#22d3ee';
 const CX = FIELD_VIEW.w / 2;
 const CY = FIELD_VIEW.h / 2;
-const TURNS = 75;
+const TURNS = 100;
 
 const DIAGRAMS = {
   coil: {

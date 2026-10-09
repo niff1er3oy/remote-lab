@@ -14,6 +14,14 @@ export type SensorAxis = 'magnitude' | 'bx' | 'by' | 'bz';
 // the axial field, off by at most the Earth's own (about 0.05 mT).
 export const SENSOR_AXIS: SensorAxis = 'magnitude';
 
+// The sensor's reading against the true field, fitted on the rig itself:
+// true field = GAIN x reading + OFFSET, both in mT. It was fitted on the size
+// of the field, so it is applied to that and not to a single component.
+export const CALIBRATION = { gain: 1.07353, offset: 0.00831 };
+
+/** The true field in mT for a size of field the sensor read, in mT. */
+export const calibrated = (magnitude: number) => CALIBRATION.gain * magnitude + CALIBRATION.offset;
+
 const MICRO_TO_MILLI = 1e-3;
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -27,9 +35,9 @@ export function fieldFromSensor(message: unknown, axis: SensorAxis = SENSOR_AXIS
   const m = data as Record<string, unknown>;
 
   if (finite(m.bx) && finite(m.by) && finite(m.bz)) {
-    const microtesla = axis === 'magnitude' ? Math.hypot(m.bx, m.by, m.bz) : m[axis] as number;
-    return microtesla * MICRO_TO_MILLI;
+    if (axis === 'magnitude') return calibrated(Math.hypot(m.bx, m.by, m.bz) * MICRO_TO_MILLI);
+    return (m[axis] as number) * MICRO_TO_MILLI;
   }
-  // The earlier form of the feed: one value, already in mT.
+  // The earlier form of the feed: one value, already in mT and already true.
   return finite(m.value) ? m.value : null;
 }

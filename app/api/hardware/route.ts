@@ -4,11 +4,12 @@ import { rigAccess } from '@/lib/rig-access';
 import { PROBE_MAX, PROBE_MIN } from '@/lib/physics';
 import { INSTRUMENT_SCRIPTS } from '@/lib/instruments';
 import { disabledInstruments } from '@/lib/rig-settings';
-import { BREAK_SCRIPTS, rigState, runRigScript, SUPPLY_OFF, SUPPLY_ON } from '@/lib/rig';
+import { BREAK_SCRIPTS, rigState, runRigScript } from '@/lib/rig';
 
 // The rig's whole command set. Nothing else is ever run, and nothing from the
 // request reaches a shell: the script name is matched against these lists and
-// the only argument, the probe position, is a checked integer.
+// the only argument, the probe position, is a checked integer. The power supply
+// is not among them: it follows who is in the room (lib/lab-presence.ts).
 const COIL_SCRIPTS = ['coil_1.py', 'coil_2.py', 'coil_3.py']; // switch a single coil on
 const SOLENOID_SCRIPT = 'sole.py';                            // solenoid on, probe to --position
 // The probe's measuring positions, as sole.py takes them.
@@ -30,9 +31,6 @@ function readCommand(body: unknown): Command | null {
 
   if (COIL_SCRIPTS.includes(script)) return { argv: [script], isBreak: false };
   if (BREAK_SCRIPTS.includes(script)) return { argv: [script], isBreak: true };
-  // Switching the supply off is allowed whenever cutting a circuit is.
-  if (script === SUPPLY_ON) return { argv: [script], isBreak: false };
-  if (script === SUPPLY_OFF) return { argv: [script], isBreak: true };
   if (script === SOLENOID_SCRIPT) {
     if (typeof position !== 'number' || !Number.isInteger(position)) return null;
     if (position < POSITION_MIN || position > POSITION_MAX) return null;
@@ -65,8 +63,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'ไม่มีรอบทดลองที่กำลังดำเนินอยู่ จึงสั่งอุปกรณ์ไม่ได้' }, { status: 403 });
   }
 
-  // An instrument the admin has closed is not started. Cutting a circuit and
-  // switching the supply are never held back by this.
+  // An instrument the admin has closed is not started. Cutting a circuit is
+  // never held back by this.
   const [script] = command.argv;
   if (INSTRUMENT_SCRIPTS.includes(script)) {
     let closed;

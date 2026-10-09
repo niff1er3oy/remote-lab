@@ -68,10 +68,10 @@ const instruments: Inst[] = [
       </svg>
     ),
   },
-  // ตอนที่ 2 — โซลีนอยด์  L=80 mm · R=13 mm · I₀ = 1 A
-  // ชุดทดลองจริงมีโซลีนอยด์อันเดียวคือ 75 รอบ (ใบแลปกล่าวถึง 150 รอบด้วย แต่ไม่มีบนเครื่อง)
+  // ตอนที่ 2 — โซลีนอยด์  L=80 mm · R=21 mm · I₀ = 1 A
+  // ชุดทดลองจริงมีโซลีนอยด์อันเดียวคือ 100 รอบ (ใบแลปกล่าวถึง 150 รอบด้วย แต่ไม่มีบนเครื่อง)
   {
-    id: 3, type: 'solenoid', name: 'โซลีนอยด์ 75 รอบ', sub: 'N=75 · L=80 มม.',
+    id: 3, type: 'solenoid', name: 'โซลีนอยด์ 100 รอบ', sub: 'N=100 · L=80 มม.',
     script: 'sole.py', I0: SOLENOID.I, N: SOLENOID.N, L: SOLENOID.L, R: SOLENOID.R,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -111,6 +111,28 @@ async function sendToRig(command: RigCommand): Promise<string | null> {
     return data?.error ?? 'อุปกรณ์ไม่ตอบรับคำสั่ง';
   } catch {
     return 'เชื่อมต่อกับอุปกรณ์ไม่ได้';
+  }
+}
+
+// How often the page tells the server it is still open. The server takes a
+// page that has been quiet for much longer to have left (lib/lab-presence.ts).
+const HEARTBEAT_MS = 20_000;
+
+// Tells the server this page has entered, is still in, or is leaving the lab
+// room; the power supply follows from that. Resolves to whether the supply is
+// on, or null when the server could not be asked.
+async function tellPresence(action: 'enter' | 'stay' | 'leave'): Promise<boolean | null> {
+  try {
+    const res = await fetch('/api/lab/presence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+      keepalive: action === 'leave',
+    });
+    const data = await res.json().catch(() => null);
+    return typeof data?.supply === 'boolean' ? data.supply : null;
+  } catch {
+    return null;
   }
 }
 
@@ -436,7 +458,7 @@ export default function RemoteLabPage() {
   const { access, onComplete } = useAccessGate();
   const [labStarted, setLabStarted] = useState(false);
   const [instrument, setInstrument] = useState(0);
-  const [z, setZ] = useState(0); // Z position in metres (solenoid only, one of the probe's 13 positions)
+  const [z, setZ] = useState(0); // Z position in metres (solenoid only, one of the probe's 21 positions)
   const [measData, setMeasData] = useState<Map<number, { bMeasured: number; bTheory: number }>>(new Map());
   const [realSensorValue, setRealSensorValue] = useState<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -529,26 +551,42 @@ export default function RemoteLabPage() {
   // by picking the position again.
   const [rigError, setRigError] = useState<{ text: string; canRetry: boolean } | null>(null);
   const [rigAttempt, setRigAttempt] = useState(0);
-  // Nothing is sent to the rig until the booking has been confirmed and the
-  // student has pressed start.
-  const rigReady = access.status === 'allowed' && labStarted;
+  // The student is in the room once the booking has been confirmed and they
+  // have pressed start, until the visit ends.
+  const inRoom = access.status === 'allowed' && labStarted && !ended;
 
-  // The power supply that feeds the coils and the solenoid. Null until the
-  // server says, or the student sets, whether it is on.
+  // The power supply that feeds the coils and the solenoid. The student does
+  // not switch it: the server switches it on when they enter the room and off
+  // when the room is empty, and an admin can switch it at any time. Null until
+  // the server has said whether it is on.
   const [supplyOn, setSupplyOn] = useState<boolean | null>(null);
-  const [supplyBusy, setSupplyBusy] = useState(false);
+  const [entered, setEntered] = useState(false);
   useEffect(() => {
-    if (!rigReady) return;
-    fetch('/api/hardware').then(r => r.json()).then(d => { if (typeof d?.supply === 'boolean') setSupplyOn(d.supply); }).catch(() => {});
-  }, [rigReady]);
-  const switchSupply = useCallback(async (on: boolean) => {
-    setSupplyBusy(true);
-    const failed = await sendToRig({ script: on ? 'relay_on.py' : 'relay_off.py' });
-    record({ kind: 'supply', ok: !failed, detail: on ? 'on' : 'off' });
-    if (failed) setRigError({ text: `${on ? 'เปิด' : 'ปิด'}แหล่งจ่ายไฟไม่สำเร็จ: ${failed}`, canRetry: false });
-    else { setSupplyOn(on); setRigError(null); }
-    setSupplyBusy(false);
-  }, [record]);
+    if (!inRoom) return;
+    let gone = false;
+    tellPresence('enter').then(on => {
+      if (gone) return;
+      setSupplyOn(on);
+      record({ kind: 'supply', ok: on === true, detail: 'on' });
+      if (on !== true) setRigError({ text: 'เปิดแหล่งจ่ายไฟไม่สำเร็จ แจ้งผู้ดูแลระบบหากอุปกรณ์ไม่ทำงาน', canRetry: false });
+      setEntered(true);
+    });
+    const beat = setInterval(() => { tellPresence('stay').then(on => { if (!gone && on !== null) setSupplyOn(on); }); }, HEARTBEAT_MS);
+    // Closing the tab leaves no time for a reply: the goodbye is left with the browser.
+    const bye = () => { navigator.sendBeacon?.('/api/lab/presence', JSON.stringify({ action: 'leave' })); };
+    window.addEventListener('pagehide', bye);
+    return () => {
+      gone = true;
+      clearInterval(beat);
+      window.removeEventListener('pagehide', bye);
+      // Leaving by a link: the room is empty again. Ending the visit has
+      // already said so, and saying it twice does no harm.
+      void tellPresence('leave');
+    };
+  }, [inRoom, record]);
+
+  // Nothing is sent to the rig before the supply has been switched on.
+  const rigReady = inRoom && entered;
 
   // A coil has no "record" step of its own, so what it read is noted when the
   // coil is left. The solenoid's values are noted at each probe position.
@@ -597,9 +635,10 @@ export default function RemoteLabPage() {
       record({ kind: 'power-off', instrument: live.name, ok: !failed, detail: failed ?? undefined });
       if (!failed) powered.current = null;
     }
-    // The supply is switched off whatever the page believes its state to be.
-    const supplyFailed = await sendToRig({ script: 'relay_off.py' });
-    record({ kind: 'supply', ok: !supplyFailed, detail: 'off' });
+    // Leaving the room is what switches the supply off, when nobody else is in it.
+    const supply = await tellPresence('leave');
+    setSupplyOn(supply);
+    record({ kind: 'supply', ok: supply === false, detail: 'off' });
     record({ kind: 'end', detail: how });
     setEnded(true);
   }, [record, recordReading]);
@@ -742,7 +781,7 @@ export default function RemoteLabPage() {
             {/* Left column — selector stacked above sensor values */}
             <div className="shrink-0 min-h-0 flex flex-col gap-3 short:gap-2 w-[200px] xl:w-[230px]">
               <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} closed={closed} />
-              <SupplySwitch on={supplyOn} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
+              <SupplyStatus on={supplyOn} />
               <SensorPanel
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured}
@@ -821,7 +860,7 @@ export default function RemoteLabPage() {
           {compactTab === 'setup' && (
             <div className="flex flex-col gap-3">
               <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} closed={closed} />
-              <SupplySwitch on={supplyOn} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
+              <SupplyStatus on={supplyOn} />
               <SensorPanel
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured}
@@ -1418,38 +1457,34 @@ function CamLatency({ pcRef }: { pcRef: React.RefObject<RTCPeerConnection | null
 
 // ── Power supply ──────────────────────────────────────────────────────────────
 
-// The switch for the supply that feeds the coils and the solenoid. `on` is
-// null while its state is not known; the switch then reads as off.
-function SupplySwitch({ on, busy, onSwitch }: { on: boolean | null; busy: boolean; onSwitch: (on: boolean) => void }) {
-  const knobRef = useRef<HTMLSpanElement>(null);
+// Whether the supply that feeds the coils and the solenoid is on. It is only
+// shown: the supply comes on when the student enters the room and goes off
+// when the room is empty, or when an admin switches it. `on` is null while
+// its state is not known.
+function SupplyStatus({ on }: { on: boolean | null }) {
+  const dotRef = useRef<HTMLSpanElement>(null);
   const settled = useRef<boolean | null>(on);
 
-  // The knob springs when the supply actually changes state.
+  // The dot pulses once when the supply actually changes state.
   useLayoutEffect(() => {
-    const changed = settled.current !== null && on !== null && settled.current !== on;
+    const changed = settled.current !== on && on !== null;
     settled.current = on;
-    if (changed && knobRef.current && !prefersReducedMotion())
-      animate(knobRef.current, { scale: [0.6, 1], duration: 420, ease: 'outBack(2.2)' });
+    if (changed && dotRef.current && !prefersReducedMotion())
+      animate(dotRef.current, { scale: [0.4, 1.5, 1], duration: 520, ease: 'outBack(2.2)' });
   }, [on]);
 
   return (
-    <div className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 px-3 py-1 flex items-center justify-between gap-3">
+    <div role="status" className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 px-3 py-1 flex items-center justify-between gap-3">
       {/* One line: the left column has no height to spare on a laptop screen. */}
-      <p className="min-w-0 truncate text-sm font-semibold text-white">
-        แหล่งจ่ายไฟ{' '}
-        <span className={`font-normal ${on ? 'text-[#c8ff00]' : 'text-gray-500'}`}>
-          {busy ? 'รอสักครู่' : on === null ? 'ไม่ทราบ' : on ? 'เปิด' : 'ปิด'}
-        </span>
-      </p>
-      <button
-        role="switch" aria-checked={on === true} aria-label="แหล่งจ่ายไฟ"
-        disabled={busy}
-        onClick={() => onSwitch(on !== true)}
-        className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${on ? 'border-[#c8ff00]/50 bg-[#c8ff00]/25' : 'border-white/10 bg-gray-800'}`}
-        style={on ? { boxShadow: '0 0 12px rgba(200,255,0,0.25)' } : undefined}
-      >
-        <span ref={knobRef} className={`absolute top-[3px] h-5 w-5 rounded-full transition-[left] duration-200 ${on ? 'left-[23px] bg-[#c8ff00]' : 'left-[3px] bg-gray-500'}`} />
-      </button>
+      <p className="min-w-0 truncate text-sm font-semibold text-white">แหล่งจ่ายไฟ</p>
+      <span className={`flex shrink-0 items-center gap-2 text-sm ${on ? 'text-[#c8ff00]' : 'text-gray-500'}`}>
+        <span
+          ref={dotRef}
+          className={`h-2 w-2 rounded-full ${on ? 'bg-[#c8ff00]' : 'bg-gray-600'}`}
+          style={on ? { boxShadow: '0 0 8px rgba(200,255,0,0.45)' } : undefined}
+        />
+        {on === null ? 'กำลังตรวจสอบ' : on ? 'เปิดอยู่' : 'ปิดอยู่'}
+      </span>
     </div>
   );
 }
@@ -2274,12 +2309,12 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Columns are the probe's positions (−6…+6); each is headed by where that
+  // Columns are the probe's positions (−10…+10); each is headed by where that
   // puts the probe, in cm.
   const zCm = Math.round(z / PROBE_STEP_M);
   const recorded = measData.size;
   const allZ = PROBE_POSITIONS;
-  const zLabel = (position: number) => { const cm = (probeZ(position) * 100).toFixed(1); return position > 0 ? `+${cm}` : position === 0 ? '0' : cm; };
+  const zLabel = (position: number) => { const cm = cmText(probeZ(position)); return position > 0 ? `+${cm}` : cm; };
   const COL_W = 64; // px per Z column
   const LABEL_W = 100; // px for row-label column
 

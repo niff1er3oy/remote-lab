@@ -230,7 +230,7 @@ describe('when the rig setting cannot be read while a round is running', () => {
     expect(runRigScript).not.toHaveBeenCalled();
   });
 
-  it.each(['coil_b.py', 'sole_b.py', 'relay_off.py'])('the rig still runs %s, which is never held back by the setting', async (script) => {
+  it.each(['coil_b.py', 'sole_b.py'])('the rig still runs %s, which is never held back by the setting', async (script) => {
     expect((await send({ script })).status).toBe(200);
     expect(runRigScript).toHaveBeenCalledWith([script]);
   });

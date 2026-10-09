@@ -45,7 +45,7 @@ const SYSTEM_PROMPT = `คุณคือ "ครูฟิสิกส์ Typhoo
 
 การทดลองที่ 8 "สนามแม่เหล็กในขดลวดเดี่ยวและกฎของไบโอต-ซาวัต" รายวิชา 04203102:
 - ตอนที่ 1 ขดลวดเดี่ยว: วัด B ที่จุดกึ่งกลาง สำหรับ n = 1, 2, 3 รอบ ที่ I = 5 A  สูตร $B_0 = \\mu_0 n I / (2R)$
-- ตอนที่ 2 โซลีนอยด์ (ชุดทดลองมีขดเดียว N = 75 รอบ): วัด B ตามแนวแกน Z 13 ตำแหน่ง ห่างกันราว 0.96 cm (Z = −5.75 ถึง +5.75 cm) ที่ I = 1 A  L = 80 mm, R = 13 mm  สูตร $B_z = \\frac{\\mu_0 N I}{2L}\\left[\\frac{L/2+Z}{\\sqrt{R^2+(L/2+Z)^2}} + \\frac{L/2-Z}{\\sqrt{R^2+(L/2-Z)^2}}\\right]$`;
+- ตอนที่ 2 โซลีนอยด์ (ชุดทดลองมีขดเดียว N = 100 รอบ): วัด B ตามแนวแกน Z 21 ตำแหน่ง ห่างกัน 1 cm (Z = −10 ถึง +10 cm) ที่ I = 1 A  L = 80 mm, R = 21 mm (เส้นผ่านศูนย์กลาง 42 mm)  สูตร $B_z = \\frac{\\mu_0 N I}{2L}\\left[\\frac{L/2+Z}{\\sqrt{R^2+(L/2+Z)^2}} + \\frac{L/2-Z}{\\sqrt{R^2+(L/2-Z)^2}}\\right]$`;
 
 function reply(error: string, status: number) {
   return new Response(JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json' } });
