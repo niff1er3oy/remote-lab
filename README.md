@@ -20,6 +20,7 @@ Open [http://localhost:3000](http://localhost:3000). The dev server (`server.js`
 npm test               # run once
 npm run test:watch     # re-run on change
 npm run test:coverage  # run once and report coverage
+npm run test:report    # run once and write docs/TEST_REPORT.md
 ```
 
 Unit tests live in `__tests__/` and run on Jest with React Testing Library. They never touch the real Firebase project, the LLM or the rig: the credentials from `.env` are replaced before any test loads, and anything a test does not mock throws.

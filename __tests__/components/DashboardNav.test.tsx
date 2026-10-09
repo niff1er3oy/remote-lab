@@ -95,6 +95,71 @@ describe('DashboardNav', () => {
     expect(screen.getByRole('link', { name: /PaNa/ })).toBeInTheDocument();
   });
 
+  describe('the admin link', () => {
+    const adminLink = () => screen.queryByRole('link', { name: 'ผู้ดูแลระบบ' });
+
+    it('is in the menu of an administrator and leads to the admin page', () => {
+      render(<DashboardNav user={{ ...alice, is_admin: true }} />);
+      expect(adminLink()).not.toBeInTheDocument();
+
+      fireEvent.click(menuButton());
+
+      expect(adminLink()).toHaveAttribute('href', '/admin');
+    });
+
+    it.each([
+      ['is not an administrator', { ...alice, is_admin: false }],
+      ['carries no administrator flag', alice],
+    ])('is not in the menu of a user who %s', (_label, user) => {
+      render(<DashboardNav user={user} />);
+      fireEvent.click(menuButton());
+
+      expect(adminLink()).not.toBeInTheDocument();
+      expect(screen.getAllByRole('link').map(link => link.getAttribute('href'))).toEqual(['/', '/dashboard']);
+    });
+
+    it('does not depend on the role: an instructor without the flag gets no link, a student with it does', () => {
+      const { unmount } = render(<DashboardNav user={{ ...alice, role: 'instructor' }} />);
+      fireEvent.click(menuButton());
+      expect(adminLink()).not.toBeInTheDocument();
+      unmount();
+
+      render(<DashboardNav user={{ ...alice, role: 'student', is_admin: true }} />);
+      fireEvent.click(menuButton());
+      expect(adminLink()).toBeInTheDocument();
+    });
+
+    it('sits between the dashboard link and the sign-out button', () => {
+      render(<DashboardNav user={{ ...alice, is_admin: true }} />);
+      fireEvent.click(menuButton());
+
+      expect(screen.getAllByRole('link').map(link => link.getAttribute('href'))).toEqual(['/', '/dashboard', '/admin']);
+      expect(adminLink()!.compareDocumentPosition(logoutButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('closes the menu when it is followed', () => {
+      render(<DashboardNav user={{ ...alice, is_admin: true }} />);
+      fireEvent.click(menuButton());
+
+      fireEvent.click(adminLink()!);
+
+      expect(adminLink()).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'ออกจากระบบ' })).not.toBeInTheDocument();
+    });
+
+    it('leaves signing out working for an administrator', async () => {
+      const net = mockFetch(() => ({ body: { ok: true } }));
+      render(<DashboardNav user={{ ...alice, is_admin: true }} />);
+      fireEvent.click(menuButton());
+
+      fireEvent.click(logoutButton());
+      await advance();
+
+      expect(net.requests()).toEqual(['POST /api/auth/logout']);
+      expect(router.replace).toHaveBeenCalledWith('/login');
+    });
+  });
+
   it('signs out on the server and then goes to the login page', async () => {
     const net = mockFetch(() => ({ body: { ok: true } }));
     render(<DashboardNav user={alice} />);

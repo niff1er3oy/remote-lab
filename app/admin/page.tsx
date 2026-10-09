@@ -268,7 +268,10 @@ function RunningPanel({ running, onChanged }: { running: Booking[]; onChanged: (
               onConfirm={async () => {
                 const res = await call(`/api/admin/bookings/${b.booking_id}`, 'PATCH', { action: 'end' });
                 setNotice(res.ok
-                  ? { ok: true, text: res.data?.circuits_cut === false ? 'สิ้นสุดรอบแล้ว แต่ตัดวงจรไม่สำเร็จ ตรวจสอบอุปกรณ์' : 'สิ้นสุดรอบและตัดวงจรแล้ว' }
+                  // A circuit left live is a warning, not a success.
+                  ? res.data?.circuits_cut === false
+                    ? { ok: false, text: 'สิ้นสุดรอบแล้ว แต่ตัดวงจรไม่สำเร็จ ตรวจสอบอุปกรณ์' }
+                    : { ok: true, text: 'สิ้นสุดรอบและตัดวงจรแล้ว' }
                   : { ok: false, text: res.text || 'สิ้นสุดรอบไม่สำเร็จ' });
                 await onChanged();
               }}
@@ -492,7 +495,16 @@ function BookingTable({ bookings, onChanged }: { bookings: Booking[]; onChanged:
     return () => { rows.pause(); };
   }, []);
 
-  if (bookings.length === 0) return <p className="px-4 py-6 text-sm text-gray-500">ไม่มีการจองในช่วงที่เลือก</p>;
+  // The message stays when the list empties: cancelling the last booking in
+  // view must still say that it went through.
+  if (bookings.length === 0) {
+    return (
+      <>
+        <p className="px-4 py-6 text-sm text-gray-500">ไม่มีการจองในช่วงที่เลือก</p>
+        <div className="px-4 pb-3"><Message notice={notice} /></div>
+      </>
+    );
+  }
 
   return (
     <>
