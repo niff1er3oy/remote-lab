@@ -17,7 +17,7 @@ export const SENSOR_AXIS: SensorAxis = 'magnitude';
 // The sensor's reading against the true field, fitted on the rig itself:
 // true field = GAIN x reading + OFFSET, both in mT. It was fitted on the size
 // of the field, so it is applied to that and not to a single component.
-export const CALIBRATION = { gain: 1.07353, offset: 0.00831 };
+export const CALIBRATION = { gain: 1, offset: 0.0243 };
 
 /** The true field in mT for a size of field the sensor read, in mT. */
 export const calibrated = (magnitude: number) => CALIBRATION.gain * magnitude + CALIBRATION.offset;
