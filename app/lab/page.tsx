@@ -68,10 +68,10 @@ const instruments: Inst[] = [
       </svg>
     ),
   },
-  // ตอนที่ 2 — โซลีนอยด์  L=80 mm · R=21 mm · I₀ = 1 A
+  // ตอนที่ 2 — โซลีนอยด์  L=80 mm · R=21 mm · I₀ = 0.5 A
   // ชุดทดลองจริงมีโซลีนอยด์อันเดียวคือ 100 รอบ (ใบแลปกล่าวถึง 150 รอบด้วย แต่ไม่มีบนเครื่อง)
   {
-    id: 3, type: 'solenoid', name: 'โซลีนอยด์ 100 รอบ', sub: 'N=100 · L=80 มม.',
+    id: 3, type: 'solenoid', name: 'โซลีนอยด์ 100 รอบ', sub: 'n=100 · L=80 มม.',
     script: 'sole.py', I0: SOLENOID.I, N: SOLENOID.N, L: SOLENOID.L, R: SOLENOID.R,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -124,10 +124,14 @@ const SENSOR_SILENT_MS = 1000;
 // page that has been quiet for much longer to have left (lib/lab-presence.ts).
 const HEARTBEAT_MS = 20_000;
 
+// What the server says about the power supply. `supply` is null when it does
+// not know or could not be asked; `held` means an admin has switched it off
+// and the student cannot switch it on; `error` is why a request was refused.
+type SupplyAnswer = { supply: boolean | null; held: boolean; error: string | null };
+
 // Tells the server this page has entered, is still in, or is leaving the lab
-// room; the power supply follows from that. Resolves to whether the supply is
-// on, or null when the server could not be asked.
-async function tellPresence(action: 'enter' | 'stay' | 'leave'): Promise<boolean | null> {
+// room (the power supply follows from that), or asks it to switch the supply.
+async function tellPresence(action: 'enter' | 'stay' | 'leave' | 'on' | 'off'): Promise<SupplyAnswer> {
   try {
     const res = await fetch('/api/lab/presence', {
       method: 'POST',
@@ -136,9 +140,13 @@ async function tellPresence(action: 'enter' | 'stay' | 'leave'): Promise<boolean
       keepalive: action === 'leave',
     });
     const data = await res.json().catch(() => null);
-    return typeof data?.supply === 'boolean' ? data.supply : null;
+    return {
+      supply: typeof data?.supply === 'boolean' ? data.supply : null,
+      held: data?.held === true,
+      error: res.ok ? null : (data?.error ?? 'สั่งแหล่งจ่ายไฟไม่สำเร็จ'),
+    };
   } catch {
-    return null;
+    return { supply: null, held: false, error: 'เชื่อมต่อกับเซิร์ฟเวอร์ไม่ได้' };
   }
 }
 
@@ -581,18 +589,34 @@ export default function RemoteLabPage() {
   // when the room is empty, and an admin can switch it at any time. Null until
   // the server has said whether it is on.
   const [supplyOn, setSupplyOn] = useState<boolean | null>(null);
+  const [supplyHeld, setSupplyHeld] = useState(false);
+  const [supplyBusy, setSupplyBusy] = useState(false);
+  // The student's own switch. The server still switches the supply on at
+  // entry and off when the room empties, and an admin's switching off wins.
+  const switchSupply = useCallback(async (on: boolean) => {
+    setSupplyBusy(true);
+    const { supply, held, error } = await tellPresence(on ? 'on' : 'off');
+    if (supply !== null) setSupplyOn(supply);
+    setSupplyHeld(held);
+    record({ kind: 'supply', ok: error === null, detail: on ? 'on' : 'off' });
+    setRigError(error === null ? null : { text: `${on ? 'เปิด' : 'ปิด'}แหล่งจ่ายไฟไม่สำเร็จ: ${error}`, canRetry: false });
+    setSupplyBusy(false);
+  }, [record]);
   const [entered, setEntered] = useState(false);
   useEffect(() => {
     if (!inRoom) return;
     let gone = false;
-    tellPresence('enter').then(on => {
+    tellPresence('enter').then(({ supply: on, held }) => {
       if (gone) return;
       setSupplyOn(on);
+      setSupplyHeld(held);
       record({ kind: 'supply', ok: on === true, detail: 'on' });
       if (on !== true) setRigError({ text: 'เปิดแหล่งจ่ายไฟไม่สำเร็จ แจ้งผู้ดูแลระบบหากอุปกรณ์ไม่ทำงาน', canRetry: false });
       setEntered(true);
     });
-    const beat = setInterval(() => { tellPresence('stay').then(on => { if (!gone && on !== null) setSupplyOn(on); }); }, HEARTBEAT_MS);
+    const beat = setInterval(() => {
+      tellPresence('stay').then(({ supply: on, held }) => { if (!gone && on !== null) { setSupplyOn(on); setSupplyHeld(held); } });
+    }, HEARTBEAT_MS);
     // Closing the tab leaves no time for a reply: the goodbye is left with the browser.
     const bye = () => { navigator.sendBeacon?.('/api/lab/presence', JSON.stringify({ action: 'leave' })); };
     window.addEventListener('pagehide', bye);
@@ -667,7 +691,7 @@ export default function RemoteLabPage() {
       if (!failed) powered.current = null;
     }
     // Leaving the room is what switches the supply off, when nobody else is in it.
-    const supply = await tellPresence('leave');
+    const { supply } = await tellPresence('leave');
     setSupplyOn(supply);
     record({ kind: 'supply', ok: supply === false, detail: 'off' });
     record({ kind: 'end', detail: how });
@@ -812,7 +836,7 @@ export default function RemoteLabPage() {
             {/* Left column — selector stacked above sensor values */}
             <div className="shrink-0 min-h-0 flex flex-col gap-3 short:gap-2 w-[200px] xl:w-[230px]">
               <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} closed={closed} />
-              <SupplyStatus on={supplyOn} />
+              <SupplySwitch on={supplyOn} held={supplyHeld} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
               <SensorPanel
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured}
@@ -892,7 +916,7 @@ export default function RemoteLabPage() {
           {compactTab === 'setup' && (
             <div className="flex flex-col gap-3">
               <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} closed={closed} />
-              <SupplyStatus on={supplyOn} />
+              <SupplySwitch on={supplyOn} held={supplyHeld} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
               <SensorPanel
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured}
@@ -1490,34 +1514,42 @@ function CamLatency({ pcRef }: { pcRef: React.RefObject<RTCPeerConnection | null
 
 // ── Power supply ──────────────────────────────────────────────────────────────
 
-// Whether the supply that feeds the coils and the solenoid is on. It is only
-// shown: the supply comes on when the student enters the room and goes off
-// when the room is empty, or when an admin switches it. `on` is null while
-// its state is not known.
-function SupplyStatus({ on }: { on: boolean | null }) {
-  const dotRef = useRef<HTMLSpanElement>(null);
+// The switch for the supply that feeds the coils and the solenoid. The server
+// switches it on when the student enters the room and off when the room is
+// empty; in between the student can switch it here. `on` is null while its
+// state is not known (the switch then reads as off); `held` means an admin
+// has switched it off, and the student cannot switch it on.
+function SupplySwitch({ on, held, busy, onSwitch }: { on: boolean | null; held: boolean; busy: boolean; onSwitch: (on: boolean) => void }) {
+  const knobRef = useRef<HTMLSpanElement>(null);
   const settled = useRef<boolean | null>(on);
 
-  // The dot pulses once when the supply actually changes state.
+  // The knob springs when the supply actually changes state.
   useLayoutEffect(() => {
-    const changed = settled.current !== on && on !== null;
+    const changed = settled.current !== null && on !== null && settled.current !== on;
     settled.current = on;
-    if (changed && dotRef.current && !prefersReducedMotion())
-      animate(dotRef.current, { scale: [0.4, 1.5, 1], duration: 520, ease: 'outBack(2.2)' });
+    if (changed && knobRef.current && !prefersReducedMotion())
+      animate(knobRef.current, { scale: [0.6, 1], duration: 420, ease: 'outBack(2.2)' });
   }, [on]);
 
+  const locked = held && on !== true;
   return (
-    <div role="status" className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 px-3 py-1 flex items-center justify-between gap-3">
+    <div className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 px-3 py-1 flex items-center justify-between gap-3">
       {/* One line: the left column has no height to spare on a laptop screen. */}
-      <p className="min-w-0 truncate text-sm font-semibold text-white">แหล่งจ่ายไฟ</p>
-      <span className={`flex shrink-0 items-center gap-2 text-sm ${on ? 'text-[#c8ff00]' : 'text-gray-500'}`}>
-        <span
-          ref={dotRef}
-          className={`h-2 w-2 rounded-full ${on ? 'bg-[#c8ff00]' : 'bg-gray-600'}`}
-          style={on ? { boxShadow: '0 0 8px rgba(200,255,0,0.45)' } : undefined}
-        />
-        {on === null ? 'กำลังตรวจสอบ' : on ? 'เปิดอยู่' : 'ปิดอยู่'}
-      </span>
+      <p className="min-w-0 truncate text-sm font-semibold text-white">
+        แหล่งจ่ายไฟ{' '}
+        <span role="status" className={`font-normal ${on ? 'text-[#c8ff00]' : 'text-gray-500'}`}>
+          {busy ? 'รอสักครู่' : locked ? 'ผู้ดูแลปิดไว้' : on === null ? 'กำลังตรวจสอบ' : on ? 'เปิดอยู่' : 'ปิดอยู่'}
+        </span>
+      </p>
+      <button
+        role="switch" aria-checked={on === true} aria-label="แหล่งจ่ายไฟ"
+        disabled={busy || locked}
+        onClick={() => onSwitch(on !== true)}
+        className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${on ? 'border-[#c8ff00]/50 bg-[#c8ff00]/25' : 'border-white/10 bg-gray-800'}`}
+        style={on ? { boxShadow: '0 0 12px rgba(200,255,0,0.25)' } : undefined}
+      >
+        <span ref={knobRef} className={`absolute top-[3px] h-5 w-5 rounded-full transition-[left] duration-200 ${on ? 'left-[23px] bg-[#c8ff00]' : 'left-[3px] bg-gray-500'}`} />
+      </button>
     </div>
   );
 }
@@ -1964,7 +1996,7 @@ const SUGGESTIONS: Record<'coil' | 'solenoid', string[]> = {
   solenoid: [
     'สูตรโซลีนอยด์จำกัดความยาวต่างจากอนันต์อย่างไร?',
     'ทำไม B ที่ปลายขดลวดถึงน้อยกว่ากึ่งกลาง?',
-    'Z ส่งผลต่อ B_z อย่างไร?',
+    'Z ส่งผลต่อ B_Z อย่างไร?',
   ],
 };
 
@@ -2187,8 +2219,11 @@ function ChatPanel({ chat, readings }: { chat: ReturnType<typeof useChat>; readi
 
 // ── Formula Card ─────────────────────────────────────────────────────────────
 
+// A number as text with a real minus sign, as the handout prints it.
+const minus = (text: string) => text.replace('-', '−');
+
 // Full size in the single-column compact tree; one step smaller in the narrow
-// desktop column so a line like "cosα₁ + cosα₂ = 1.9741" fits without wrapping.
+// desktop column so a line like "b/√(R²+b²) = −0.8854" fits without wrapping.
 const FORMULA_TEXT = 'text-sm lg:text-xs xl:text-[13px]';
 
 function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
@@ -2208,13 +2243,13 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
             {/* Algebraic form */}
             <div>
               <span style={{ color: '#c8ff00' }}>B₀</span>
-              <span className="text-gray-400"> = μ₀ · n · I / (2R)</span>
+              <span className="text-gray-400"> = μ₀nI / 2R</span>
             </div>
 
             {/* Substituted fraction */}
             <div className="text-gray-400 pl-3 space-y-0.5">
               <div className="text-gray-500">=</div>
-              <div className="text-gray-300">4π×10⁻⁷ × {n} × {I.toFixed(2)}</div>
+              <div className="text-gray-300">1.2566×10⁻⁶ × {n} × {I.toFixed(2)}</div>
               <div className="h-px bg-gray-700" />
               <div className="text-gray-300">2 × {(R * 1000).toFixed(0)}×10⁻³</div>
             </div>
@@ -2225,7 +2260,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
                 { k: 'n', v: `${n} รอบ`, c: '#a3e635' },
                 { k: 'R', v: `${(R * 1000).toFixed(0)} มม.` },
                 { k: 'I', v: `${I.toFixed(2)} A`, c: '#22d3ee' },
-                { k: 'μ₀', v: '4π×10⁻⁷ H/m' },
+                { k: 'μ₀', v: '1.2566×10⁻⁶ H/m' },
               ] as { k: string; v: string; c?: string }[]).map(p => (
                 <div key={p.k} className="flex gap-1 whitespace-nowrap">
                   <span className="text-gray-600">{p.k} =</span>
@@ -2249,15 +2284,14 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
     );
   }
 
-  // Solenoid
+  // Solenoid, written as the lab handout writes it:
+  //   B_Z = (μ₀nI / 2L) [ a/√(R²+a²) − b/√(R²+b²) ],  a = Z + L/2,  b = Z − L/2
   const { N, L, R } = inst;
-  const a = L / 2 + z;
-  const b = L / 2 - z;
-  const cosA1 = a / Math.sqrt(R * R + a * a);
-  const cosA2 = b / Math.sqrt(R * R + b * b);
+  const a = z + L / 2;
+  const b = z - L / 2;
+  const termA = a / Math.sqrt(R * R + a * a);
+  const termB = b / Math.sqrt(R * R + b * b);
   const result = calcBSolenoid(N, I, L, R, z);
-  const halfLcm = cmText(L / 2);
-  const zCm = cmText(Math.abs(z));
 
   return (
     <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5 short:py-2">
@@ -2269,31 +2303,32 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
         <div className={`min-h-full flex flex-col justify-evenly gap-1.5 py-1 ${FORMULA_TEXT}`}>
           {/* Formula */}
           <div className="space-y-0.5">
-            <div><span style={{ color: '#c8ff00' }}>B_z</span><span className="text-gray-400"> = (μ₀NI / 2L)</span></div>
-            <div className="text-gray-400 pl-4">× [cosα₁ + cosα₂]</div>
-            <div className="text-gray-600 pl-4 short:hidden">cosα = x / √(R² + x²)</div>
+            <div><span style={{ color: '#c8ff00' }}>B_Z</span><span className="text-gray-400"> = (μ₀nI / 2L)</span></div>
+            <div className="text-gray-400 pl-4">× [ a/√(R²+a²)</div>
+            <div className="text-gray-400 pl-4">{'  '}− b/√(R²+b²) ]</div>
           </div>
 
           {/* a and b */}
           <div className="space-y-0.5">
             <div className="text-gray-600">
-              a = {halfLcm} {z < 0 ? '−' : '+'} {zCm} = <span style={{ color: '#a78bfa' }}>{cmText(a)} cm</span>
+              a = Z + L/2 = <span style={{ color: '#a78bfa' }}>{minus(cmText(a))} cm</span>
             </div>
             <div className="text-gray-600">
-              b = {halfLcm} {z < 0 ? '+' : '−'} {zCm} = <span style={{ color: '#a78bfa' }}>{cmText(b)} cm</span>
+              b = Z − L/2 = <span style={{ color: '#a78bfa' }}>{minus(cmText(b))} cm</span>
             </div>
           </div>
 
-          {/* cosα values */}
+          {/* The two terms in the bracket */}
           <div className="space-y-0.5">
-            <div className="text-gray-600">cosα₁ = <span className="text-gray-300">{cosA1.toFixed(4)}</span></div>
-            <div className="text-gray-600">cosα₂ = <span className="text-gray-300">{cosA2.toFixed(4)}</span></div>
-            <div className="text-gray-600">cosα₁ + cosα₂ = <span className="text-gray-200">{(cosA1 + cosA2).toFixed(4)}</span></div>
+            <div className="text-gray-600">a/√(R²+a²) = <span className="text-gray-300">{minus(termA.toFixed(4))}</span></div>
+            <div className="text-gray-600">b/√(R²+b²) = <span className="text-gray-300">{minus(termB.toFixed(4))}</span></div>
+            <div className="text-gray-600">ผลต่าง = <span className="text-gray-200">{(termA - termB).toFixed(4)}</span></div>
           </div>
 
           {/* Parameters */}
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 whitespace-nowrap">
-            <span className="text-gray-600">N=<span style={{ color: '#a3e635' }}>{N}</span></span>
+            <span className="text-gray-600">Z=<span style={{ color: '#a78bfa' }}>{minus(cmText(z))}cm</span></span>
+            <span className="text-gray-600">n=<span style={{ color: '#a3e635' }}>{N}</span></span>
             <span className="text-gray-600">L=<span className="text-gray-400">{(L * 1000).toFixed(0)}mm</span></span>
             <span className="text-gray-600">R=<span className="text-gray-400">{(R * 1000).toFixed(0)}mm</span></span>
             <span className="text-gray-600">I = <span style={{ color: '#22d3ee' }}>{I.toFixed(2)} A</span></span>
@@ -2303,7 +2338,7 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
 
       {/* Result */}
       <div className="shrink-0 pt-2 mt-1 short:pt-1.5 border-t border-white/[0.07] flex items-baseline gap-2">
-        <span className="font-mono text-sm text-gray-500">B_z =</span>
+        <span className="font-mono text-sm text-gray-500">B_Z =</span>
         <span className="font-mono text-2xl short:text-xl font-bold tabular-nums"
           style={{ color: '#c8ff00', textShadow: '0 0 18px rgba(200,255,0,0.45)' }}>
           {result.toFixed(3)}
@@ -2435,7 +2470,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
       <div className="shrink-0 px-3 py-1.5 border-b border-white/5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 shrink-0">
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">ข้อมูลแนวแกน Z</h2>
-          <span className="text-sm font-mono text-gray-600">N={N}</span>
+          <span className="text-sm font-mono text-gray-600">n={N}</span>
           <span className="text-sm font-semibold" style={{ color: recorded === allZ.length ? '#c8ff00' : '#22d3ee' }}>{recorded}/{allZ.length}</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">

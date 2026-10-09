@@ -2,19 +2,22 @@ import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
 import { rigAccess } from '@/lib/rig-access';
 import { rigState } from '@/lib/rig';
-import { enterRoom, isInRoom, leaveRoom, stayInRoom } from '@/lib/lab-presence';
+import { enterRoom, isHeld, isInRoom, leaveRoom, stayInRoom, studentSwitch } from '@/lib/lab-presence';
 
-// POST /api/lab/presence  { action: 'enter' | 'stay' | 'leave' }
+// POST /api/lab/presence  { action: 'enter' | 'stay' | 'leave' | 'on' | 'off' }
 // The lab page tells the server it has been opened, is still open, or is being
-// left. The power supply follows: on while someone is in the room, off when it
-// is empty. Answers with whether the supply is on, as far as the server knows.
+// left. The power supply follows: on when someone enters the room, off when it
+// is empty. 'on' and 'off' are the student's own switch, for as long as their
+// round runs. Answers with whether the supply is on, as far as the server
+// knows, and whether an admin is holding it off.
 
 // How long a round that was found running is trusted before it is looked up again.
 const RECHECK_MS = 60_000;
 const holder = globalThis as typeof globalThis & { __labPresenceChecked?: Map<string, number> };
 const checked = () => (holder.__labPresenceChecked ??= new Map<string, number>());
 
-const answer = () => NextResponse.json({ ok: true, supply: rigState().supply });
+const state = () => ({ supply: rigState().supply, held: isHeld() });
+const answer = () => NextResponse.json({ ok: true, ...state() });
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
@@ -22,7 +25,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null) as { action?: unknown } | null;
   const action = body?.action;
-  if (action !== 'enter' && action !== 'stay' && action !== 'leave')
+  if (action !== 'enter' && action !== 'stay' && action !== 'leave' && action !== 'on' && action !== 'off')
     return NextResponse.json({ ok: false, error: 'ข้อมูลไม่ถูกต้อง' }, { status: 400 });
 
   // Leaving needs no round: it only ever switches things off.
@@ -49,6 +52,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: 'ไม่มีรอบทดลองที่กำลังดำเนินอยู่' }, { status: 403 });
     }
     checked().set(user.uid, Date.now());
+  }
+
+  if (action === 'on' || action === 'off') {
+    const result = await studentSwitch(user.uid, action === 'on');
+    if (result === 'held')
+      return NextResponse.json({ ok: false, error: 'ผู้ดูแลระบบปิดแหล่งจ่ายไฟไว้ จึงเปิดเองไม่ได้', ...state() }, { status: 409 });
+    if (result === 'failed')
+      return NextResponse.json({ ok: false, error: 'สั่งแหล่งจ่ายไฟไม่สำเร็จ ลองใหม่อีกครั้ง', ...state() }, { status: 500 });
+    return answer();
   }
 
   if (action === 'stay' && known) stayInRoom(user.uid);

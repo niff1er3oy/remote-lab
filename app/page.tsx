@@ -313,7 +313,7 @@ function Hero() {
 
 const Z_MIN = -10; // cm, the stretch of the axis the lab itself measures
 const Z_MAX = 10;
-const B_AXIS_MAX = 1.5; // mT
+const B_AXIS_MAX = 0.9; // mT
 const VIEW = { w: 580, h: 286, x0: 46, x1: 556, yTop: 18, yBase: 178, axisY: 226 };
 
 const bAt = (zCm: number) => calcBSolenoid(SOLENOID.N, SOLENOID.I, SOLENOID.L, SOLENOID.R, zCm / 100);
@@ -450,7 +450,7 @@ function FieldProbe() {
           </clipPath>
         </defs>
 
-        {[0.5, 1.0, 1.5].map(v => (
+        {[0.3, 0.6, 0.9].map(v => (
           <g key={v}>
             <line x1={VIEW.x0} x2={VIEW.x1} y1={yOf(v)} y2={yOf(v)} stroke="rgba(255,255,255,0.07)" />
             <text x={VIEW.x0 - 8} y={yOf(v) + 3.5} textAnchor="end" fontSize="12" fill="rgba(255,255,255,0.45)">{v.toFixed(1)}</text>
@@ -516,7 +516,7 @@ const PARTS = [
     part: 'ตอนที่ 1',
     title: 'ขดลวดเดี่ยว',
     body: 'วัดสนามแม่เหล็กที่จุดกึ่งกลางของขดลวด 1, 2 และ 3 รอบ แล้วดูว่าสนามเพิ่มตามจำนวนรอบอย่างที่ทฤษฎีบอกหรือไม่',
-    formula: 'B₀ = μ₀ n I / 2R',
+    formula: 'B₀ = μ₀nI / 2R',
     facts: [
       ['จำนวนรอบ', '1, 2 และ 3 รอบ'],
       ['กระแส', '5 A'],
@@ -528,11 +528,11 @@ const PARTS = [
     part: 'ตอนที่ 2',
     title: 'โซลีนอยด์',
     body: 'เลื่อนหัววัดไปตามแนวแกนของโซลีนอยด์ทีละจุด เก็บค่าตลอดความยาวและเลยปลายออกไป แล้วเทียบกับสูตรของโซลีนอยด์ความยาวจำกัด',
-    formula: 'B_z = (μ₀ N I / 2L) (cos α₁ + cos α₂)',
+    formula: 'B_Z = (μ₀nI / 2L) [ a/√(R²+a²) − b/√(R²+b²) ]',
     facts: [
       ['จำนวนรอบ', '100 รอบ'],
       ['ความยาว', '80 มม.'],
-      ['กระแส', '1 A'],
+      ['กระแส', `${SOLENOID.I} A`],
       ['ตำแหน่งที่วัด', '21 จุด ตลอด ±10 ซม.'],
     ],
   },

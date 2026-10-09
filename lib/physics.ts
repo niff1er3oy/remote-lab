@@ -7,8 +7,9 @@ const MU0 = 4 * Math.PI * 1e-7;
 // (sole.py on the lab machine) moves the probe 1 cm at a time: position n is
 // n cm from the middle of the solenoid. The 21 positions, −10 to 10, span
 // 20 cm, well past both ends of the 8 cm solenoid.
-// 100 turns, 8 cm long, 42 mm across.
-export const SOLENOID = { N: 100, L: 0.08, R: 0.021, I: 1 };
+// 100 turns, 8 cm long, 42 mm across, fed 0.5 A: 0.695 mT at its middle,
+// inside what the magnetometer can read (it tops out near 1.09 mT).
+export const SOLENOID = { N: 100, L: 0.08, R: 0.021, I: 0.5 };
 export const PROBE_MIN = -10;
 export const PROBE_MAX = 10;
 export const PROBE_STEP_M = 0.01;

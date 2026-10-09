@@ -64,8 +64,8 @@ describe('calcBSolenoid — field on the axis of the finite solenoid', () => {
 describe('the solenoid on the rig and its probe positions', () => {
   const at = (position: number) => calcBSolenoid(RIG_SOLENOID.N, RIG_SOLENOID.I, RIG_SOLENOID.L, RIG_SOLENOID.R, probeZ(position));
 
-  it('is 8 cm long with 100 turns, 42 mm across, at 1 A', () => {
-    expect(RIG_SOLENOID).toEqual({ N: 100, L: 0.08, R: 0.021, I: 1 });
+  it('is 8 cm long with 100 turns, 42 mm across, at 0.5 A', () => {
+    expect(RIG_SOLENOID).toEqual({ N: 100, L: 0.08, R: 0.021, I: 0.5 });
   });
 
   it('has 21 positions, from -10 to 10', () => {
@@ -82,13 +82,13 @@ describe('the solenoid on the rig and its probe positions', () => {
   });
 
   it('gives the field worked by hand at the centre and at the last position', () => {
-    // mu0*N*I/2L = 7.85398e-4 T. Centre: 2 x 4/sqrt(2.1^2 + 4^2) = 1.770796.
-    expect(at(0)).toBeCloseTo(1.39078, 4);
+    // mu0*N*I/2L = 3.92699e-4 T. Centre: 2 x 4/sqrt(2.1^2 + 4^2) = 1.770796.
+    expect(at(0)).toBeCloseTo(0.69539, 4);
     // Z = 4 cm, the end of the winding: 8/sqrt(2.1^2 + 8^2) + 0 = 0.967231.
-    expect(at(4)).toBeCloseTo(0.75966, 4);
+    expect(at(4)).toBeCloseTo(0.37983, 4);
     expect(at(-4)).toBeCloseTo(at(4), 12);
     // Z = 10 cm: 14/sqrt(2.1^2 + 14^2) - 6/sqrt(2.1^2 + 6^2) = 0.988936 - 0.943858.
-    expect(at(10)).toBeCloseTo(0.03540, 4);
+    expect(at(10)).toBeCloseTo(0.01770, 4);
     expect(at(-10)).toBeCloseTo(at(10), 12);
   });
 

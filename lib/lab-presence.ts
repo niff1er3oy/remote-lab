@@ -1,9 +1,10 @@
 import { rigState, runRigScript, SUPPLY_OFF, SUPPLY_ON } from '@/lib/rig';
 
-// Who is in the lab room, and the power supply that follows from it. Students
-// never switch the supply themselves: it comes on when one of them enters the
-// room and goes off when the room is empty. An admin can switch it either way
-// from the admin page.
+// Who is in the lab room, and the power supply that follows from it. The
+// supply comes on when a student enters the room and goes off when the room is
+// empty. In between, a student in the room can switch it, and an admin can
+// switch it either way from the admin page; a supply an admin switched off is
+// not a student's to switch back on.
 //
 // The lab page says it is still open every HEARTBEAT_MS. A page that goes
 // quiet for STALE_MS (closed without a goodbye, lost its network) is taken to
@@ -124,6 +125,28 @@ export async function sweep(): Promise<void> {
   for (const [uid, at] of p.seen) if (now - at > STALE_MS) p.seen.delete(uid);
   if (before > 0 && p.seen.size === 0) p.offDue = OFF_ATTEMPTS;
   await offIfEmpty(p);
+}
+
+export const isHeld = () => presence().held;
+
+/**
+ * A student in the room switches the supply. 'held' when an admin has switched
+ * it off and it is not the student's to switch on; 'failed' when the relay did
+ * not answer.
+ */
+export async function studentSwitch(uid: string, on: boolean): Promise<'done' | 'held' | 'failed'> {
+  const p = presence();
+  p.seen.set(uid, Date.now());
+  p.offDue = 0;
+  watch(p);
+  if (on && p.held) return 'held';
+  try {
+    await runRigScript([on ? SUPPLY_ON : SUPPLY_OFF]);
+    return 'done';
+  } catch (err) {
+    console.error(`[lab-presence] could not switch the supply ${on ? 'on' : 'off'}`, err);
+    return 'failed';
+  }
 }
 
 /** An admin switched the supply by hand; the room's own switching steps aside. */
