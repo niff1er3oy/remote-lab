@@ -65,8 +65,21 @@ describe('checkSensor', () => {
   it('is online when the sensor service accepts a connection', async () => {
     const socket = socketThat('connect');
     expect(await checkSensor()).toBe('online');
-    expect(net.connect).toHaveBeenCalledWith({ host: '127.0.0.1', port: 8000 });
+    expect(net.connect).toHaveBeenCalledWith({ host: '127.0.0.1', port: 8888 });
     expect(socket.destroy).toHaveBeenCalled();
+  });
+
+  it.each([
+    ['ws://192.168.1.50:9000/ws/sensor', { host: '192.168.1.50', port: 9000 }],
+    ['http://sensor.local', { host: 'sensor.local', port: 80 }],
+  ])('asks the address in SENSOR_URL: %s', async (url, address) => {
+    process.env.SENSOR_URL = url;
+    try {
+      await checkSensor();
+      expect(net.connect).toHaveBeenLastCalledWith(address);
+    } finally {
+      process.env.SENSOR_URL = '';
+    }
   });
 
   it.each(['error', 'timeout'] as const)('is offline on %s', async (how) => {

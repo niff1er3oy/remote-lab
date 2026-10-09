@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
 import { rigAccess } from '@/lib/rig-access';
+import { PROBE_MAX, PROBE_MIN } from '@/lib/physics';
+import { INSTRUMENT_SCRIPTS } from '@/lib/instruments';
+import { disabledInstruments } from '@/lib/rig-settings';
 import { BREAK_SCRIPTS, rigState, runRigScript, SUPPLY_OFF, SUPPLY_ON } from '@/lib/rig';
 
 // The rig's whole command set. Nothing else is ever run, and nothing from the
@@ -8,8 +11,9 @@ import { BREAK_SCRIPTS, rigState, runRigScript, SUPPLY_OFF, SUPPLY_ON } from '@/
 // the only argument, the probe position, is a checked integer.
 const COIL_SCRIPTS = ['coil_1.py', 'coil_2.py', 'coil_3.py']; // switch a single coil on
 const SOLENOID_SCRIPT = 'sole.py';                            // solenoid on, probe to --position
-const POSITION_MIN = -15; // cm along the solenoid's axis
-const POSITION_MAX = 15;
+// The probe's measuring positions, as sole.py takes them.
+const POSITION_MIN = PROBE_MIN;
+const POSITION_MAX = PROBE_MAX;
 
 // Switching off stays possible for a short while after a booking ends, so a
 // student who leaves a moment late does not leave a circuit live.
@@ -59,6 +63,21 @@ export async function POST(request: Request) {
   }
   if (access !== 'active' && !(command.isBreak && access === 'just-ended')) {
     return NextResponse.json({ error: 'ไม่มีรอบทดลองที่กำลังดำเนินอยู่ จึงสั่งอุปกรณ์ไม่ได้' }, { status: 403 });
+  }
+
+  // An instrument the admin has closed is not started. Cutting a circuit and
+  // switching the supply are never held back by this.
+  const [script] = command.argv;
+  if (INSTRUMENT_SCRIPTS.includes(script)) {
+    let closed;
+    try {
+      closed = await disabledInstruments();
+    } catch (err) {
+      console.error('[Hardware API] Could not read the rig settings:', err);
+      return NextResponse.json({ error: 'ตรวจสอบสถานะอุปกรณ์ไม่ได้ ลองใหม่อีกครั้ง' }, { status: 500 });
+    }
+    if (closed.includes(script))
+      return NextResponse.json({ error: 'ผู้ดูแลระบบปิดใช้งานอุปกรณ์นี้อยู่ เลือกอุปกรณ์อื่น' }, { status: 403 });
   }
 
   if (armBusy) return NextResponse.json({ error: 'อุปกรณ์กำลังทำงานอยู่ รอสักครู่แล้วลองใหม่' }, { status: 409 });

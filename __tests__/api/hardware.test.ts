@@ -124,15 +124,21 @@ describe('POST /api/hardware — who may command the rig', () => {
 
   it('does not switch the power supply on for a round that ended five minutes ago', async () => {
     endedRound(5 * MINUTE);
-    expect((await send({ script: 'psu_on.py' })).status).toBe(403);
+    expect((await send({ script: 'relay_on.py' })).status).toBe(403);
     expect(runScript).not.toHaveBeenCalled();
   });
 
-  it.each(['coil_b.py', 'sole_b.py', 'psu_off.py'])('still runs %s for a round that ended five minutes ago', async (script) => {
+  it.each(['coil_b.py', 'sole_b.py'])('still runs %s for a round that ended five minutes ago', async (script) => {
     endedRound(5 * MINUTE);
     const res = await send({ script });
     expect(res.status).toBe(200);
     expect(runScript).toHaveBeenCalledWith(PYTHON, [script], expect.anything());
+  });
+
+  it('still switches the supply off for a round that ended five minutes ago', async () => {
+    endedRound(5 * MINUTE);
+    expect((await send({ script: 'relay_off.py' })).status).toBe(200);
+    expect(runScript).toHaveBeenCalledWith(PYTHON, ['relay_off.py'], expect.anything());
   });
 
   it.each([
@@ -179,13 +185,23 @@ describe('POST /api/hardware — the accepted commands', () => {
   it('reports whether the power supply was last switched on or off', async () => {
     resetRigState();
     expect(await (await GET()).json()).toEqual({ busy: false, supply: null });
-    await send({ script: 'psu_on.py' });
+    await send({ script: 'relay_on.py' });
     expect(await (await GET()).json()).toEqual({ busy: false, supply: true });
-    await send({ script: 'psu_off.py' });
+    await send({ script: 'relay_off.py' });
     expect(await (await GET()).json()).toEqual({ busy: false, supply: false });
   });
 
-  it.each(['coil_1.py', 'coil_2.py', 'coil_3.py', 'coil_b.py', 'sole_b.py', 'psu_on.py', 'psu_off.py'])(
+  it.each(['relay_on.py', 'relay_off.py'])('runs %s from the scripts folder, with the venv\'s Python', async (script) => {
+    expect((await send({ script })).status).toBe(200);
+    expect(runScript.mock.calls).toEqual([[PYTHON, [script], { cwd: '/home/admin/Documents' }]]);
+  });
+
+  it.each(['psu_on.py', '/home/admin/Documents/relay_on.py', '../relay_on.py'])('refuses %s: a script is named, never given by path', async (script) => {
+    expect((await send({ script })).status).toBe(400);
+    expect(runScript).not.toHaveBeenCalled();
+  });
+
+  it.each(['coil_1.py', 'coil_2.py', 'coil_3.py', 'coil_b.py', 'sole_b.py'])(
     'runs %s with the rig\'s Python, the script name as the only argument, in the script folder',
     async (script) => {
       const res = await send({ script });
@@ -194,8 +210,8 @@ describe('POST /api/hardware — the accepted commands', () => {
     },
   );
 
-  it('runs sole.py --position <n> for every whole number from -15 to 15', async () => {
-    for (let n = -15; n <= 15; n++) {
+  it('runs sole.py --position <n> for every whole number from -6 to 6', async () => {
+    for (let n = -6; n <= 6; n++) {
       runScript.mockClear();
       const res = await send({ script: 'sole.py', position: n });
       expect(res.status).toBe(200);
@@ -209,8 +225,8 @@ describe('POST /api/hardware — the accepted commands', () => {
   });
 
   it.each([
-    ['one below the range', -16],
-    ['one above the range', 16],
+    ['one below the range', -7],
+    ['one above the range', 7],
     ['a fraction', 1.5],
     ['a number written as text', '5'],
     ['text with a second command in it', '3; reboot'],
@@ -302,7 +318,7 @@ describe('POST /api/hardware — one command at a time', () => {
 
   it('refuses a second command while one is running, then accepts one again after it succeeds', async () => {
     const script = scriptInProgress();
-    const first = send({ script: 'sole.py', position: 7 });
+    const first = send({ script: 'sole.py', position: 6 });
     await scriptStarted();
 
     expect(await isBusy()).toBe(true);

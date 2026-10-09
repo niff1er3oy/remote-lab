@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 import MathSource from '@/app/components/MathSource';
-import { calcBCoil, calcBSolenoid } from '@/lib/physics';
+import { calcBCoil, calcBSolenoid, cmText, PROBE_POSITIONS, PROBE_STEP_M, probeZ, SOLENOID } from '@/lib/physics';
 import { prefersReducedMotion } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { clockTime, describeEvent, type LabEvent } from '@/lib/lab-activity';
@@ -67,11 +67,11 @@ const instruments: Inst[] = [
       </svg>
     ),
   },
-  // ตอนที่ 2 — โซลีนอยด์  L=160 mm · R=13 mm · I₀ = 1 A
+  // ตอนที่ 2 — โซลีนอยด์  L=80 mm · R=13 mm · I₀ = 1 A
   // ชุดทดลองจริงมีโซลีนอยด์อันเดียวคือ 75 รอบ (ใบแลปกล่าวถึง 150 รอบด้วย แต่ไม่มีบนเครื่อง)
   {
-    id: 3, type: 'solenoid', name: 'โซลีนอยด์ 75 รอบ', sub: 'N=75 · L=160 มม.',
-    script: 'sole.py', I0: 1, N: 75, L: 0.16, R: 0.013,
+    id: 3, type: 'solenoid', name: 'โซลีนอยด์ 75 รอบ', sub: 'N=75 · L=80 มม.',
+    script: 'sole.py', I0: SOLENOID.I, N: SOLENOID.N, L: SOLENOID.L, R: SOLENOID.R,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
         <rect x="2" y="9" width="20" height="6" rx="1" />
@@ -119,7 +119,7 @@ type AccessState =
   | { status: 'loading' }
   | { status: 'denied'; reason: 'auth' }
   | { status: 'denied'; reason: 'no_booking'; next: { start_time: string; experiment_name: string } | null }
-  | { status: 'allowed'; end_time: string; experiment_name: string };
+  | { status: 'allowed'; end_time: string; experiment_name: string; disabled: string[] };
 
 function useAccessGate() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
@@ -149,7 +149,10 @@ function useAccessGate() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'start' }),
           }).catch(() => { });
-          setAccess({ status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name });
+          setAccess({
+            status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name,
+            disabled: Array.isArray(d.disabled_instruments) ? d.disabled_instruments : [],
+          });
         } else {
           setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
         }
@@ -432,7 +435,7 @@ export default function RemoteLabPage() {
   const { access, onComplete } = useAccessGate();
   const [labStarted, setLabStarted] = useState(false);
   const [instrument, setInstrument] = useState(0);
-  const [z, setZ] = useState(0); // Z position in metres (solenoid only, ±0.15 m)
+  const [z, setZ] = useState(0); // Z position in metres (solenoid only, one of the probe's 13 positions)
   const [measData, setMeasData] = useState<Map<number, { bMeasured: number; bTheory: number }>>(new Map());
   const [realSensorValue, setRealSensorValue] = useState<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -497,6 +500,15 @@ export default function RemoteLabPage() {
     }
   }, [instrument]);
 
+  // Instruments an admin has closed are not offered. If the one selected by
+  // default is among them, the first open one takes its place before the
+  // student starts.
+  const closed = access.status === 'allowed' ? access.disabled : NO_INSTRUMENTS;
+  if (!labStarted && closed.includes(instruments[instrument].script)) {
+    const open = instruments.findIndex(i => !closed.includes(i.script));
+    if (open >= 0) setInstrument(open);
+  }
+
   // Reset Z and measurement data when instrument changes
   const [prevInstrumentForReset, setPrevInstrumentForReset] = useState(instrument);
   if (instrument !== prevInstrumentForReset) {
@@ -530,7 +542,7 @@ export default function RemoteLabPage() {
   }, [rigReady]);
   const switchSupply = useCallback(async (on: boolean) => {
     setSupplyBusy(true);
-    const failed = await sendToRig({ script: on ? 'psu_on.py' : 'psu_off.py' });
+    const failed = await sendToRig({ script: on ? 'relay_on.py' : 'relay_off.py' });
     record({ kind: 'supply', ok: !failed, detail: on ? 'on' : 'off' });
     if (failed) setRigError({ text: `${on ? 'เปิด' : 'ปิด'}แหล่งจ่ายไฟไม่สำเร็จ: ${failed}`, canRetry: false });
     else { setSupplyOn(on); setRigError(null); }
@@ -585,7 +597,7 @@ export default function RemoteLabPage() {
       if (!failed) powered.current = null;
     }
     // The supply is switched off whatever the page believes its state to be.
-    const supplyFailed = await sendToRig({ script: 'psu_off.py' });
+    const supplyFailed = await sendToRig({ script: 'relay_off.py' });
     record({ kind: 'supply', ok: !supplyFailed, detail: 'off' });
     record({ kind: 'end', detail: how });
     setEnded(true);
@@ -605,7 +617,7 @@ export default function RemoteLabPage() {
     let reconnectTimeout: NodeJS.Timeout;
 
     const connect = () => {
-      // Connect to the same domain (e.g. Cloudflare tunnel domain) to let Next.js proxy it to 8000
+      // Connect to the same domain (e.g. Cloudflare tunnel domain) to let Next.js proxy it to the sensor service (SENSOR_URL)
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws/sensor`;
       
@@ -730,7 +742,7 @@ export default function RemoteLabPage() {
           >
             {/* Left column — selector stacked above sensor values */}
             <div className="shrink-0 min-h-0 flex flex-col gap-3 short:gap-2 w-[200px] xl:w-[230px]">
-              <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} />
+              <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} closed={closed} />
               <SupplySwitch on={supplyOn} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
               <SensorPanel
                 inst={inst} I={I}
@@ -809,7 +821,7 @@ export default function RemoteLabPage() {
 
           {compactTab === 'setup' && (
             <div className="flex flex-col gap-3">
-              <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} />
+              <InstrumentSelector active={instrument} onSelect={handleInstrumentSelect} disabled={isBusy} closed={closed} />
               <SupplySwitch on={supplyOn} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
               <SensorPanel
                 inst={inst} I={I}
@@ -1420,14 +1432,14 @@ function SupplySwitch({ on, busy, onSwitch }: { on: boolean | null; busy: boolea
   }, [on]);
 
   return (
-    <div className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 px-3 py-2 short:py-1 flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-white">แหล่งจ่ายไฟ</p>
-        {/* On a short screen the switch itself says it; the line would push the readings out of view. */}
-        <p className={`text-xs short:hidden ${on ? 'text-[#c8ff00]' : 'text-gray-500'}`}>
-          {busy ? 'รอสักครู่' : on === null ? 'ยังไม่ทราบสถานะ' : on ? 'เปิดอยู่' : 'ปิดอยู่'}
-        </p>
-      </div>
+    <div className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 px-3 py-1 flex items-center justify-between gap-3">
+      {/* One line: the left column has no height to spare on a laptop screen. */}
+      <p className="min-w-0 truncate text-sm font-semibold text-white">
+        แหล่งจ่ายไฟ{' '}
+        <span className={`font-normal ${on ? 'text-[#c8ff00]' : 'text-gray-500'}`}>
+          {busy ? 'รอสักครู่' : on === null ? 'ไม่ทราบ' : on ? 'เปิด' : 'ปิด'}
+        </span>
+      </p>
       <button
         role="switch" aria-checked={on === true} aria-label="แหล่งจ่ายไฟ"
         disabled={busy}
@@ -1443,7 +1455,11 @@ function SupplySwitch({ on, busy, onSwitch }: { on: boolean | null; busy: boolea
 
 // ── Instrument Selector ───────────────────────────────────────────────────────
 
-function InstrumentSelector({ active, onSelect, disabled }: { active: number; onSelect: (i: number) => void; disabled?: boolean }) {
+const NO_INSTRUMENTS: string[] = [];
+
+// `closed` lists the instruments (by script) an admin has switched off: they
+// are left out, and so is a group with nothing left in it.
+function InstrumentSelector({ active, onSelect, disabled, closed = NO_INSTRUMENTS }: { active: number; onSelect: (i: number) => void; disabled?: boolean; closed?: string[] }) {
   const [open, setOpen] = useState(false);
   const [dropPos, setDropPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number }>({ top: 0, left: 0, width: 0, maxHeight: 400 });
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -1530,11 +1546,11 @@ function InstrumentSelector({ active, onSelect, disabled }: { active: number; on
               boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)',
             }}
           >
-            {GROUPS.map(g => (
+            {GROUPS.filter(g => instruments.some(inst => inst.type === g.type && !closed.includes(inst.script))).map(g => (
               <div key={g.type}>
                 <p className="text-sm font-bold text-gray-600 uppercase tracking-widest px-2 py-1">{g.label}</p>
                 {instruments.map((inst, i) => {
-                  if (inst.type !== g.type) return null;
+                  if (inst.type !== g.type || closed.includes(inst.script)) return null;
                   const isCur = i === active;
                   return (
                     <button
@@ -1600,7 +1616,7 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, z }: {
         {/* I is already in the readings panel; it only joins this bar when it is wide. */}
         <div className="flex items-center gap-3 text-sm font-mono whitespace-nowrap">
           {instType === 'solenoid' && (
-            <span className="text-gray-500">Z = <span style={{ color: '#a78bfa' }}>{(z * 100).toFixed(0)} cm</span></span>
+            <span className="text-gray-500">Z = <span style={{ color: '#a78bfa' }}>{cmText(z)} cm</span></span>
           )}
           <span className="lg:hidden xl:inline text-gray-500">I = <span style={{ color: '#c8ff00' }}>{I.toFixed(2)} A</span></span>
         </div>
@@ -1644,7 +1660,7 @@ function SensorPanel({ inst, I, bTheory, bMeasured, z }: {
       { label: 'ΔB', hint: '(วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
     ]
     : [
-      { label: 'ตำแหน่ง Z', value: (z * 100).toFixed(0), unit: 'cm', color: '#a78bfa' },
+      { label: 'ตำแหน่ง Z', value: cmText(z), unit: 'cm', color: '#a78bfa' },
       { label: 'กระแส (I)', value: I.toFixed(2), unit: 'A', color: '#c8ff00' },
       { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
       { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
@@ -2171,8 +2187,8 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
   const cosA1 = a / Math.sqrt(R * R + a * a);
   const cosA2 = b / Math.sqrt(R * R + b * b);
   const result = calcBSolenoid(N, I, L, R, z);
-  const halfLcm = (L / 2 * 100).toFixed(0);
-  const zCm = (z * 100).toFixed(0);
+  const halfLcm = cmText(L / 2);
+  const zCm = cmText(Math.abs(z));
 
   return (
     <div className="flex-1 flex flex-col min-h-0 rounded-lg border border-white/[0.07] bg-gray-950/60 px-3 py-2.5 short:py-2">
@@ -2192,10 +2208,10 @@ function FormulaCard({ inst, I, z }: { inst: Inst; I: number; z: number }) {
           {/* a and b */}
           <div className="space-y-0.5">
             <div className="text-gray-600">
-              a = {halfLcm} + {zCm} = <span style={{ color: '#a78bfa' }}>{(a * 100).toFixed(0)} cm</span>
+              a = {halfLcm} {z < 0 ? '−' : '+'} {zCm} = <span style={{ color: '#a78bfa' }}>{cmText(a)} cm</span>
             </div>
             <div className="text-gray-600">
-              b = {halfLcm} − {zCm} = <span style={{ color: '#a78bfa' }}>{(b * 100).toFixed(0)} cm</span>
+              b = {halfLcm} {z < 0 ? '+' : '−'} {zCm} = <span style={{ color: '#a78bfa' }}>{cmText(b)} cm</span>
             </div>
           </div>
 
@@ -2257,9 +2273,12 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const zCm = Math.round(z * 100);
+  // Columns are the probe's positions (−6…+6); each is headed by where that
+  // puts the probe, in cm.
+  const zCm = Math.round(z / PROBE_STEP_M);
   const recorded = measData.size;
-  const allZ = Array.from({ length: 31 }, (_, i) => i - 15); // −15…+15
+  const allZ = PROBE_POSITIONS;
+  const zLabel = (position: number) => { const cm = (probeZ(position) * 100).toFixed(1); return position > 0 ? `+${cm}` : position === 0 ? '0' : cm; };
   const COL_W = 64; // px per Z column
   const LABEL_W = 100; // px for row-label column
 
@@ -2283,32 +2302,31 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
     if (disabled || zVal === zCm) return;
     const from = zCm;
     setIsMoving(true);
-    setZ(zVal / 100);
+    setZ(probeZ(zVal));
     const failed = await sendToRig({ script: 'sole.py', position: zVal });
     if (failed) {
       // Nothing is recorded for a position the probe did not reach, and Z goes
       // back to the last place it is known to have been.
-      setZ(from / 100);
+      setZ(probeZ(from));
     } else {
       const { bMeasured: bM, bTheory: bT } = liveRef.current;
       setMeasData(prev => new Map(prev).set(zVal, { bMeasured: bM, bTheory: bT }));
     }
-    onMoveError(failed, zVal, liveRef.current.bTheory);
+    onMoveError(failed, +cmText(probeZ(zVal)), liveRef.current.bTheory);
     setIsMoving(false);
   }
 
   function clearAll() { setMeasData(new Map()); }
 
   function downloadCSV() {
-    const allZ = Array.from({ length: 31 }, (_, i) => i - 15);
-    const header = 'Z (cm),B_theory (mT),B_measured (mT),delta_B (mT),delta_B (%)\n';
+    const header = 'position,Z (cm),B_theory (mT),B_measured (mT),delta_B (mT),delta_B (%)\n';
     const rows = allZ
       .filter(zv => measData.has(zv))
       .map(zv => {
         const p = measData.get(zv)!;
         const d = p.bMeasured - p.bTheory;
         const pct = (d / p.bTheory) * 100;
-        return `${zv},${p.bTheory.toFixed(4)},${p.bMeasured.toFixed(4)},${d.toFixed(4)},${pct.toFixed(2)}`;
+        return `${zv},${cmText(probeZ(zv))},${p.bTheory.toFixed(4)},${p.bMeasured.toFixed(4)},${d.toFixed(4)},${pct.toFixed(2)}`;
       })
       .join('\n');
     const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8' });
@@ -2345,7 +2363,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
         <div className="flex items-center gap-2 shrink-0">
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">ข้อมูลแนวแกน Z</h2>
           <span className="text-sm font-mono text-gray-600">N={N}</span>
-          <span className="text-sm font-semibold" style={{ color: recorded === 31 ? '#c8ff00' : '#22d3ee' }}>{recorded}/31</span>
+          <span className="text-sm font-semibold" style={{ color: recorded === allZ.length ? '#c8ff00' : '#22d3ee' }}>{recorded}/{allZ.length}</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {isMoving && (
@@ -2353,7 +2371,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
               <svg className="animate-spin" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M21 12a9 9 0 11-6.219-8.56" />
               </svg>
-              <span className="font-mono tabular-nums">{zCm > 0 ? `+${zCm}` : zCm} cm</span>
+              <span className="font-mono tabular-nums">{zLabel(zCm)} cm</span>
             </div>
           )}
           {recorded > 0 && !isMoving && (
@@ -2416,7 +2434,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
                       ${!isCurrent && isMoving ? 'text-gray-700 cursor-not-allowed' : ''}
                     `}
                   >
-                    {zVal > 0 ? `+${zVal}` : zVal}
+                    {zLabel(zVal)}
                   </button>
                   {/* Data cells */}
                   {dataRows.map(r => {

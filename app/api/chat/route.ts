@@ -45,7 +45,7 @@ const SYSTEM_PROMPT = `คุณคือ "ครูฟิสิกส์ Typhoo
 
 การทดลองที่ 8 "สนามแม่เหล็กในขดลวดเดี่ยวและกฎของไบโอต-ซาวัต" รายวิชา 04203102:
 - ตอนที่ 1 ขดลวดเดี่ยว: วัด B ที่จุดกึ่งกลาง สำหรับ n = 1, 2, 3 รอบ ที่ I = 5 A  สูตร $B_0 = \\mu_0 n I / (2R)$
-- ตอนที่ 2 โซลีนอยด์ (ชุดทดลองมีขดเดียว N = 75 รอบ): วัด B ตามแนวแกน Z ทุก 1 cm (Z = −15 ถึง +15 cm) ที่ I = 1 A  L = 160 mm, R = 13 mm  สูตร $B_z = \\frac{\\mu_0 N I}{2L}\\left[\\frac{L/2+Z}{\\sqrt{R^2+(L/2+Z)^2}} + \\frac{L/2-Z}{\\sqrt{R^2+(L/2-Z)^2}}\\right]$`;
+- ตอนที่ 2 โซลีนอยด์ (ชุดทดลองมีขดเดียว N = 75 รอบ): วัด B ตามแนวแกน Z 13 ตำแหน่ง ห่างกันราว 0.96 cm (Z = −5.75 ถึง +5.75 cm) ที่ I = 1 A  L = 80 mm, R = 13 mm  สูตร $B_z = \\frac{\\mu_0 N I}{2L}\\left[\\frac{L/2+Z}{\\sqrt{R^2+(L/2+Z)^2}} + \\frac{L/2-Z}{\\sqrt{R^2+(L/2-Z)^2}}\\right]$`;
 
 function reply(error: string, status: number) {
   return new Response(JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json' } });
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
     ? ` (${Math.abs(delta / context.bTheory * 100).toFixed(1)}% ต่างจากทฤษฎี)`
     : '';
   const zLine = context.instType === 'solenoid' && context.z !== undefined
-    ? `\n- ตำแหน่งหัววัด Z = ${(context.z * 100).toFixed(0)} cm จากจุดกึ่งกลาง`
+    ? `\n- ตำแหน่งหัววัด Z = ${+(context.z * 100).toFixed(2)} cm จากจุดกึ่งกลาง`
     : '';
 
   const contextBlock = `\n\n**บริบทการทดลองปัจจุบัน:**

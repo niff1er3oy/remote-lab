@@ -8,6 +8,7 @@ import DashboardNav from '@/app/components/DashboardNav';
 import SlideIn from '@/app/components/SlideIn';
 import EquipmentStatus from './EquipmentStatus';
 import { prefersReducedMotion, press } from '@/lib/motion';
+import { INSTRUMENTS } from '@/lib/instruments';
 
 type Me = { name: string; email: string; role: string; is_admin?: boolean };
 type Lab = { lab_id: string; code: string; name_th: string; is_active: boolean };
@@ -17,7 +18,7 @@ type Booking = {
   blocked: boolean; note: string;
   user: { uid: string; name: string; email: string };
 };
-type Overview = { labs: Lab[]; running: Booking[]; bookings: Booking[] };
+type Overview = { labs: Lab[]; running: Booking[]; bookings: Booking[]; disabled_instruments: string[] };
 type Notice = { ok: boolean; text: string };
 
 const STATUS: Record<string, { label: string; tone: string }> = {
@@ -166,7 +167,7 @@ export default function AdminPage() {
         <div className="grid gap-4 lg:grid-cols-3">
           <RunningPanel running={data.running} onChanged={load} />
           <RigPanel />
-          <LabsPanel labs={data.labs} onChanged={load} />
+          <LabsPanel labs={data.labs} disabled={data.disabled_instruments ?? []} onChanged={load} />
         </div>
 
         <BlockPanel labs={data.labs} onChanged={load} />
@@ -321,7 +322,7 @@ function RigPanel() {
   );
 }
 
-function LabsPanel({ labs, onChanged }: { labs: Lab[]; onChanged: () => Promise<void> }) {
+function LabsPanel({ labs, disabled, onChanged }: { labs: Lab[]; disabled: string[]; onChanged: () => Promise<void> }) {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState('');
 
@@ -338,7 +339,8 @@ function LabsPanel({ labs, onChanged }: { labs: Lab[]; onChanged: () => Promise<
 
   return (
     <section data-rise className="rounded-xl border border-white/10 bg-gray-900/50 p-4">
-      <h2 className="text-sm font-semibold">การเปิดรับจอง</h2>
+      <h2 className="text-sm font-semibold">การเปิดให้ใช้งาน</h2>
+      <p className="mt-2 text-xs text-gray-500">รับจอง</p>
       {labs.length === 0 && <p className="mt-3 text-sm text-gray-500">ยังไม่มีการทดลองในระบบ</p>}
       {labs.map(lab => (
         <div key={lab.lab_id} className="mt-3 flex items-center justify-between gap-3">
@@ -356,8 +358,68 @@ function LabsPanel({ labs, onChanged }: { labs: Lab[]; onChanged: () => Promise<
           </button>
         </div>
       ))}
+      <InstrumentSwitches disabled={disabled} onChanged={onChanged} />
       <Message notice={notice} />
     </section>
+  );
+}
+
+const SWITCH = (on: boolean) => `relative h-6 w-11 shrink-0 rounded-full border transition-colors disabled:opacity-50 ${on ? 'border-[#c8ff00]/50 bg-[#c8ff00]/25' : 'border-white/10 bg-gray-800'} ${FOCUS}`;
+const KNOB = (on: boolean) => `absolute top-0.5 h-4.5 w-4.5 rounded-full transition-[left] duration-200 ${on ? 'left-[22px] bg-[#c8ff00]' : 'left-0.5 bg-gray-500'}`;
+
+// Which instruments students may use. A closed one disappears from the lab
+// room's list and the rig refuses to start it.
+function InstrumentSwitches({ disabled, onChanged }: { disabled: string[]; onChanged: () => Promise<void> }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const coils = INSTRUMENTS.filter(i => i.part === 'coil').map(i => i.script as string);
+  const coilsOpen = coils.some(script => !disabled.includes(script));
+
+  async function save(next: string[], changed: string[], text: string) {
+    setBusy(true);
+    const res = await call('/api/admin/rig/instruments', 'PATCH', { disabled: next });
+    setNotice(res.ok ? { ok: true, text } : { ok: false, text: res.text || 'เปลี่ยนสถานะไม่สำเร็จ' });
+    await onChanged();
+    if (res.ok && listRef.current && !prefersReducedMotion()) {
+      const knobs = changed.map(script => listRef.current!.querySelector(`[data-knob="${script}"]`)).filter(Boolean) as Element[];
+      if (knobs.length) animate(knobs, { scale: [0.7, 1], duration: 380, delay: stagger(60), ease: 'outBack(2)' });
+    }
+    setBusy(false);
+  }
+
+  const flip = (script: string, label: string) => {
+    const closing = !disabled.includes(script);
+    save(closing ? [...disabled, script] : disabled.filter(s => s !== script), [script], closing ? `ปิดใช้งาน ${label} แล้ว` : `เปิดใช้งาน ${label} แล้ว`);
+  };
+  const flipCoils = () => save(
+    coilsOpen ? [...new Set([...disabled, ...coils])] : disabled.filter(s => !coils.includes(s)),
+    coils, coilsOpen ? 'ปิดการทดลองขดลวดเดี่ยวทั้งหมดแล้ว' : 'เปิดการทดลองขดลวดเดี่ยวทั้งหมดแล้ว',
+  );
+
+  return (
+    <div ref={listRef} className="mt-4 border-t border-white/5 pt-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-gray-500">อุปกรณ์ที่นักศึกษาใช้ได้</p>
+        <button disabled={busy} onClick={e => { press(e.currentTarget); flipCoils(); }}
+          className={`rounded-full border border-white/10 px-3 py-1 text-xs text-gray-200 transition-colors hover:border-cyan-500/30 disabled:opacity-50 ${FOCUS}`}>
+          {coilsOpen ? 'ปิดขดลวดเดี่ยวทั้งหมด' : 'เปิดขดลวดเดี่ยวทั้งหมด'}
+        </button>
+      </div>
+      {INSTRUMENTS.map(inst => {
+        const on = !disabled.includes(inst.script);
+        return (
+          <div key={inst.script} className="mt-2 flex items-center justify-between gap-3">
+            <span className={`text-sm ${on ? 'text-gray-200' : 'text-gray-500'}`}>{inst.label}</span>
+            <button role="switch" aria-checked={on} aria-label={`เปิดใช้งาน ${inst.label}`} disabled={busy}
+              onClick={() => flip(inst.script, inst.label)} className={SWITCH(on)}>
+              <span data-knob={inst.script} className={KNOB(on)} />
+            </button>
+          </div>
+        );
+      })}
+      <Message notice={notice} />
+    </div>
   );
 }
 

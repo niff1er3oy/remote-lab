@@ -159,14 +159,14 @@ describe('field-line data', () => {
 
   describe('scale', () => {
     // The rig's own dimensions (Lab 8 handout): both windings have a radius of
-    // 1.3 cm and the solenoid is 16 cm long.
+    // 1.3 cm and the solenoid is 8 cm long.
     it('draws the coil at its real radius of 1.3 cm', () => {
       expect(COIL_FIELD.radius / COIL_FIELD.pxPerCm).toBeCloseTo(1.3, 5);
     });
 
-    it('draws the solenoid at its real radius of 1.3 cm and length of 16 cm', () => {
+    it('draws the solenoid at its real radius of 1.3 cm and length of 8 cm', () => {
       expect(SOLENOID_FIELD.radius / SOLENOID_FIELD.pxPerCm).toBeCloseTo(1.3, 5);
-      expect((2 * SOLENOID_FIELD.halfLength) / SOLENOID_FIELD.pxPerCm).toBeCloseTo(16, 5);
+      expect((2 * SOLENOID_FIELD.halfLength) / SOLENOID_FIELD.pxPerCm).toBeCloseTo(8, 5);
     });
 
     it('fits the whole length of the solenoid inside the drawing', () => {

@@ -376,7 +376,7 @@ describe('POST /api/admin/rig/power', () => {
     return { status: res.status, body: await res.json() };
   };
 
-  it.each([[true, 'psu_on.py'], [false, 'psu_off.py']])('with on: %s runs %s, whether or not anyone has a round', async (on, script) => {
+  it.each([[true, 'relay_on.py'], [false, 'relay_off.py']])('with on: %s runs %s, whether or not anyone has a round', async (on, script) => {
     expect(await power({ on })).toEqual({ status: 200, body: { ok: true, on } });
     expect(jest.mocked(runRigScript).mock.calls).toEqual([[[script]]]);
   });
@@ -387,7 +387,7 @@ describe('POST /api/admin/rig/power', () => {
   });
 
   it('answers 500 without the script\'s output when the supply does not respond', async () => {
-    jest.mocked(runRigScript).mockRejectedValue(new Error('Traceback: /home/admin/Documents/psu_on.py'));
+    jest.mocked(runRigScript).mockRejectedValue(new Error('Traceback: /home/admin/Documents/relay_on.py'));
     const { status, body } = await power({ on: true });
     expect(status).toBe(500);
     expect(JSON.stringify(body)).not.toMatch(/Traceback|home\/admin/);

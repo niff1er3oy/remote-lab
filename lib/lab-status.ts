@@ -24,13 +24,17 @@ export async function checkCameras(): Promise<Array<{ key: string; state: Reach 
   }));
 }
 
-// The sensor service that /ws/sensor is rewritten to (next.config.ts).
-const SENSOR = { host: '127.0.0.1', port: 8000 };
+// The sensor service that /ws/sensor is rewritten to (next.config.ts), from the
+// same SENSOR_URL setting.
+function sensorAddress(): { host: string; port: number } {
+  const url = new URL((process.env.SENSOR_URL?.trim() || 'http://127.0.0.1:8888').replace(/^ws/, 'http'));
+  return { host: url.hostname, port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80) };
+}
 
 /** Whether the sensor service accepts a connection. */
 export function checkSensor(): Promise<Reach> {
   return new Promise((resolve) => {
-    const socket = net.connect(SENSOR);
+    const socket = net.connect(sensorAddress());
     const done = (state: Reach) => { socket.destroy(); resolve(state); };
     socket.setTimeout(TIMEOUT_MS, () => done('offline'));
     socket.once('connect', () => done('online'));

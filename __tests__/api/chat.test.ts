@@ -214,9 +214,9 @@ describe('POST /api/chat — the readings', () => {
     expect(prompt).not.toMatch(/Infinity|NaN/);
   });
 
-  it('gives the probe position in whole centimetres, negative side included', async () => {
-    await askWith([QUESTION], { ...SOLENOID, z: -0.15 });
-    expect(sentSystemPrompt()).toContain('Z = -15 cm');
+  it('gives the probe position in centimetres to two decimals, negative side included', async () => {
+    await askWith([QUESTION], { ...SOLENOID, z: -0.0575 });
+    expect(sentSystemPrompt()).toContain('Z = -5.75 cm');
   });
 
   it('gives no probe position for a coil', async () => {

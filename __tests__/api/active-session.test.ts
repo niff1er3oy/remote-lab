@@ -44,6 +44,7 @@ describe('GET /api/bookings/active-session — a round running now', () => {
       body: {
         ok: true,
         active: true,
+        disabled_instruments: [],
         booking: {
           booking_id: 'b1',
           experiment_code: 'LAB8',

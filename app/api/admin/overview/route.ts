@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { getAdminUser } from '@/lib/admin';
+import { disabledInstruments } from '@/lib/rig-settings';
 
 const LIVE_STATUSES = ['pending', 'confirmed', 'in_progress'];
 const DAY_MS = 86_400_000;
@@ -79,6 +80,7 @@ export async function GET(req: NextRequest) {
         const lab = d.data() as { code?: string; name_th?: string; is_active?: boolean };
         return { lab_id: d.id, code: lab.code ?? d.id, name_th: lab.name_th ?? '', is_active: lab.is_active === true };
       }),
+      disabled_instruments: await disabledInstruments(),
       running: running.map(shape),
       bookings: listed.map(shape),
     });

@@ -11,9 +11,10 @@ export const SCRIPT_DIR = (fromEnv('RIG_SCRIPT_DIR') ?? '/home/admin/Documents')
 export const PYTHON = fromEnv('RIG_PYTHON') ?? `${SCRIPT_DIR}/venv/bin/python`;
 
 export const BREAK_SCRIPTS = ['coil_b.py', 'sole_b.py']; // cut a circuit
-// The power supply that feeds the coils and the solenoid.
-export const SUPPLY_ON = 'psu_on.py';
-export const SUPPLY_OFF = 'psu_off.py';
+// The relay that switches the supply feeding the coils and the solenoid. Its
+// two scripts sit in the same folder as the rest.
+export const SUPPLY_ON = 'relay_on.py';
+export const SUPPLY_OFF = 'relay_off.py';
 
 // What the rig should be doing, going by the commands this server has sent it.
 // The rig reports nothing back, so this is a record of commands, not a reading:

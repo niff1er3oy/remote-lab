@@ -11,7 +11,7 @@
 import { writeFileSync } from 'node:fs';
 
 const R = 1.3; // cm, winding radius of both the single coil and the solenoid
-const L = 16; // cm, solenoid length
+const L = 8; // cm, solenoid length
 
 // Complete elliptic integrals K(m) and E(m), m = k², by the arithmetic-geometric mean.
 function ellipKE(m) {

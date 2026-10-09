@@ -1,6 +1,8 @@
-import { calcBCoil, calcBSolenoid } from '@/lib/physics';
+import { calcBCoil, calcBSolenoid, cmText, PROBE_MAX, PROBE_MIN, PROBE_POSITIONS, PROBE_STEP_M, probeZ, SOLENOID as RIG_SOLENOID } from '@/lib/physics';
 
-// The rig's own numbers (Lab 8 handout). Results are in mT.
+// A 16 cm solenoid with the rig's winding and current, worked by hand below.
+// (The rig's own solenoid is 8 cm long; it has its own tests further down.)
+// Results are in mT.
 const MU0 = 4 * Math.PI * 1e-7;
 const COIL = { I: 5, R: 0.013 };
 const SOLENOID = { N: 75, I: 1, L: 0.16, R: 0.013 };
@@ -56,5 +58,40 @@ describe('calcBSolenoid — field on the axis of the finite solenoid', () => {
     expect(calcBSolenoid(N, SOLENOID.I, L, SOLENOID.R, 0)).toBeCloseTo(longSolenoid, 6);
     // The real 16 cm solenoid is short enough to fall a little under it.
     expect(at(0)).toBeLessThan(longSolenoid);
+  });
+});
+
+describe('the solenoid on the rig and its probe positions', () => {
+  const at = (position: number) => calcBSolenoid(RIG_SOLENOID.N, RIG_SOLENOID.I, RIG_SOLENOID.L, RIG_SOLENOID.R, probeZ(position));
+
+  it('is 8 cm long with 75 turns of 1.3 cm radius, at 1 A', () => {
+    expect(RIG_SOLENOID).toEqual({ N: 75, L: 0.08, R: 0.013, I: 1 });
+  });
+
+  it('has 13 positions, from -6 to 6', () => {
+    expect(PROBE_POSITIONS).toEqual([-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6]);
+    expect([PROBE_MIN, PROBE_MAX]).toEqual([-6, 6]);
+  });
+
+  it('spreads them over the 115 mm the arm covers, so the ends are at 5.75 cm', () => {
+    expect(PROBE_STEP_M * 12).toBeCloseTo(0.115, 12);
+    expect(probeZ(6)).toBeCloseTo(0.0575, 12);
+    expect(probeZ(-6)).toBeCloseTo(-0.0575, 12);
+    expect(probeZ(0)).toBe(0);
+  });
+
+  it('gives the field worked by hand at the centre and at the last position', () => {
+    // mu0*N*I/2L = 5.89049e-4 T. Centre: 2 x 4/sqrt(1.3^2 + 4^2) = 1.901996.
+    expect(at(0)).toBeCloseTo(1.12037, 4);
+    // Z = 5.75 cm: 9.75/sqrt(1.3^2 + 9.75^2) - 1.75/sqrt(1.3^2 + 1.75^2) = 0.991228 - 0.802743.
+    expect(at(6)).toBeCloseTo(0.11103, 4);
+    expect(at(-6)).toBeCloseTo(at(6), 12);
+  });
+
+  it('writes a length in centimetres with at most two decimals', () => {
+    expect(cmText(probeZ(3))).toBe('2.88');
+    expect(cmText(probeZ(-6))).toBe('-5.75');
+    expect(cmText(0)).toBe('0');
+    expect(cmText(0.04)).toBe('4');
   });
 });

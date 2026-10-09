@@ -3,6 +3,20 @@
 
 const MU0 = 4 * Math.PI * 1e-7;
 
+// The rig's solenoid and the row of points its probe is taken to. The arm
+// (sole.py on the lab machine) moves the probe in 13 steps over 115 mm, so one
+// step is a little under a centimetre: position n is n × PROBE_STEP_M from the
+// middle of the solenoid.
+export const SOLENOID = { N: 75, L: 0.08, R: 0.013, I: 1 };
+export const PROBE_MIN = -6;
+export const PROBE_MAX = 6;
+export const PROBE_STEP_M = 0.115 / 12;
+export const PROBE_POSITIONS = Array.from({ length: PROBE_MAX - PROBE_MIN + 1 }, (_, i) => PROBE_MIN + i);
+/** Where the probe is at position `n`, in metres from the middle of the solenoid. */
+export const probeZ = (position: number) => position * PROBE_STEP_M;
+/** A length in metres as centimetres, to at most two decimals: "2.88", "0", "-5.75". */
+export const cmText = (metres: number) => String(+(metres * 100).toFixed(2));
+
 // Single coil at center (Z=0): B₀ = μ₀·n·I / (2R)  [mT]
 export function calcBCoil(n: number, I: number, R: number): number {
   return (MU0 * n * I) / (2 * R) * 1e3;

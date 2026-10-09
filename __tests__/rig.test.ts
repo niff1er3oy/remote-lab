@@ -1,5 +1,5 @@
 /** @jest-environment node */
-import { cutAllCircuits, resetRigState, rigState, runRigScript } from '@/lib/rig';
+import { cutAllCircuits, resetRigState, rigState, runRigScript, SUPPLY_OFF, SUPPLY_ON } from '@/lib/rig';
 
 type RunScript = (file: string, args: string[], options: { cwd?: string; shell?: unknown }) => Promise<{ stdout: string; stderr: string }>;
 
@@ -55,6 +55,12 @@ describe('where the scripts are', () => {
     expect(rig.PYTHON).toBe('/usr/bin/python3');
   });
 
+  it('runs the relay scripts from that same folder', async () => {
+    const rig = load({ RIG_SCRIPT_DIR: '/opt/lab8' });
+    await rig.runRigScript([rig.SUPPLY_OFF]);
+    expect(runScript).toHaveBeenCalledWith('/opt/lab8/venv/bin/python', ['relay_off.py'], { cwd: '/opt/lab8' });
+  });
+
   it('runs the scripts from the folder and with the Python that were set', async () => {
     const rig = load({ RIG_SCRIPT_DIR: '/opt/lab8', RIG_PYTHON: '/usr/bin/python3' });
     await rig.runRigScript(['coil_1.py']);
@@ -65,7 +71,7 @@ describe('where the scripts are', () => {
 describe('cutAllCircuits', () => {
   it('cuts both circuits and then switches the power supply off', async () => {
     expect(await cutAllCircuits()).toEqual([]);
-    expect(runScript.mock.calls.map(([, args]) => args)).toEqual([['coil_b.py'], ['sole_b.py'], ['psu_off.py']]);
+    expect(runScript.mock.calls.map(([, args]) => args)).toEqual([['coil_b.py'], ['sole_b.py'], ['relay_off.py']]);
   });
 
   it('carries on with the rest when the first script fails, and reports the one that failed', async () => {
@@ -76,7 +82,7 @@ describe('cutAllCircuits', () => {
 
   it('reports every script when none could be run', async () => {
     runScript.mockRejectedValue(new Error('no rig'));
-    expect(await cutAllCircuits()).toEqual(['coil_b.py', 'sole_b.py', 'psu_off.py']);
+    expect(await cutAllCircuits()).toEqual(['coil_b.py', 'sole_b.py', 'relay_off.py']);
   });
 });
 
@@ -123,20 +129,20 @@ describe('rigState — what the rig was last told to do', () => {
   it('is cleared by cutting both circuits', async () => {
     await runRigScript(['sole.py', '--position', '5']);
     await cutAllCircuits();
-    expect(rigState()).toMatchObject({ circuit: null, position: null, supply: false, last: { command: 'psu_off.py', ok: true } });
+    expect(rigState()).toMatchObject({ circuit: null, position: null, supply: false, last: { command: 'relay_off.py', ok: true } });
   });
 
   it('records the power supply being switched on and off, leaving the circuit as it was', async () => {
     await runRigScript(['coil_1.py']);
-    await runRigScript(['psu_on.py']);
+    await runRigScript([SUPPLY_ON]);
     expect(rigState()).toMatchObject({ supply: true, circuit: 'coil_1.py' });
-    await runRigScript(['psu_off.py']);
+    await runRigScript([SUPPLY_OFF]);
     expect(rigState()).toMatchObject({ supply: false, circuit: 'coil_1.py' });
   });
 
   it('does not count the supply as switched when the script fails', async () => {
     runScript.mockRejectedValueOnce(new Error('no answer'));
-    await expect(runRigScript(['psu_on.py'])).rejects.toThrow();
+    await expect(runRigScript([SUPPLY_ON])).rejects.toThrow();
     expect(rigState().supply).toBeNull();
   });
 

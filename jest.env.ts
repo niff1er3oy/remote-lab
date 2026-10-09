@@ -14,4 +14,5 @@ Object.assign(process.env, {
   ADMIN_EMAILS: 'admin@example.com, Second.Admin@Example.com',
   RIG_SCRIPT_DIR: '/home/admin/Documents',
   RIG_PYTHON: '',
+  SENSOR_URL: '',
 });

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import BookingCalendar from './components/BookingCalendar';
 import FieldDiagram from './components/FieldDiagram';
 import { all, prefersReducedMotion, revealOnScroll, riseIn } from '@/lib/motion';
-import { calcBSolenoid } from '@/lib/physics';
+import { calcBSolenoid, SOLENOID } from '@/lib/physics';
 
 export default function Home() {
   return (
@@ -43,7 +43,7 @@ const FOCUS_RING = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus
 
 function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string; is_admin?: boolean } | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -108,6 +108,15 @@ function Navbar() {
                         </svg>
                         แดชบอร์ด
                       </Link>
+                      {user.is_admin && (
+                        <Link href="/admin" onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 3l8 3v6c0 4.5-3.2 8.2-8 9-4.8-.8-8-4.5-8-9V6l8-3z"/>
+                          </svg>
+                          ผู้ดูแลระบบ
+                        </Link>
+                      )}
                       <div className="border-t border-white/[0.06]" />
                       <button onClick={handleLogout}
                         className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors">
@@ -161,6 +170,12 @@ function Navbar() {
                     className="text-center py-2.5 text-sm text-white transition-colors">
                     แดชบอร์ด
                   </Link>
+                  {user.is_admin && (
+                    <Link href="/admin" onClick={() => setMobileOpen(false)}
+                      className="text-center py-2.5 text-sm text-white transition-colors">
+                      ผู้ดูแลระบบ
+                    </Link>
+                  )}
                   <button onClick={() => { handleLogout(); setMobileOpen(false); }}
                     className="text-center py-2.5 text-sm text-red-400 hover:text-red-300 transition-colors">
                     ออกจากระบบ
@@ -296,10 +311,9 @@ function Hero() {
 // solenoid, with a probe the visitor can move — a preview of what the lab
 // session measures. Same formula and numbers as the lab room.
 
-const SOLENOID = { N: 75, L: 0.16, R: 0.013, I: 1 };
-const Z_MIN = -15; // cm, the sweep the lab itself uses
-const Z_MAX = 15;
-const B_AXIS_MAX = 0.6; // mT
+const Z_MIN = -6; // cm, the stretch of the axis the lab itself measures
+const Z_MAX = 6;
+const B_AXIS_MAX = 1.2; // mT
 const VIEW = { w: 580, h: 286, x0: 46, x1: 556, yTop: 18, yBase: 178, axisY: 226 };
 
 const bAt = (zCm: number) => calcBSolenoid(SOLENOID.N, SOLENOID.I, SOLENOID.L, SOLENOID.R, zCm / 100);
@@ -398,7 +412,7 @@ function FieldProbe() {
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-white">ลองเลื่อนหัววัดตามแนวแกน</h2>
-          <p className="mt-0.5 text-xs text-gray-400">โซลีนอยด์ 75 รอบ ยาว 160 มม. กระแส 1 A</p>
+          <p className="mt-0.5 text-xs text-gray-400">โซลีนอยด์ 75 รอบ ยาว 80 มม. กระแส 1 A</p>
         </div>
         {/* Only the digits are monospaced; Thai set in the mono fallback spaces out badly. */}
         <dl className="shrink-0 flex items-end gap-5 text-right">
@@ -436,7 +450,7 @@ function FieldProbe() {
           </clipPath>
         </defs>
 
-        {[0.2, 0.4, 0.6].map(v => (
+        {[0.4, 0.8, 1.2].map(v => (
           <g key={v}>
             <line x1={VIEW.x0} x2={VIEW.x1} y1={yOf(v)} y2={yOf(v)} stroke="rgba(255,255,255,0.07)" />
             <text x={VIEW.x0 - 8} y={yOf(v) + 3.5} textAnchor="end" fontSize="12" fill="rgba(255,255,255,0.45)">{v.toFixed(1)}</text>
@@ -488,7 +502,7 @@ function FieldProbe() {
         className="mt-2 block w-full accent-[#c8ff00]"
       />
       <p className="mt-2 text-xs leading-5 text-gray-400">
-        เส้นนี้คือค่าจากสูตร ในห้องแลปหัววัดจริงจะเลื่อนทีละ 1 ซม. และคุณจะได้ค่าที่วัดมาเทียบกัน
+        เส้นนี้คือค่าจากสูตร ในห้องแลปหัววัดจริงจะเลื่อนทีละจุด ห่างกันราว 1 ซม. และคุณจะได้ค่าที่วัดมาเทียบกัน
       </p>
     </div>
   );
@@ -513,13 +527,13 @@ const PARTS = [
     kind: 'solenoid' as const,
     part: 'ตอนที่ 2',
     title: 'โซลีนอยด์',
-    body: 'เลื่อนหัววัดไปตามแนวแกนของโซลีนอยด์ทีละ 1 ซม. เก็บค่าตลอดความยาว แล้วเทียบกับสูตรของโซลีนอยด์ความยาวจำกัด',
+    body: 'เลื่อนหัววัดไปตามแนวแกนของโซลีนอยด์ทีละจุด เก็บค่าตลอดความยาวและเลยปลายออกไป แล้วเทียบกับสูตรของโซลีนอยด์ความยาวจำกัด',
     formula: 'B_z = (μ₀ N I / 2L) (cos α₁ + cos α₂)',
     facts: [
       ['จำนวนรอบ', '75 รอบ'],
-      ['ความยาว', '160 มม.'],
+      ['ความยาว', '80 มม.'],
       ['กระแส', '1 A'],
-      ['ตำแหน่งที่วัด', '−15 ถึง +15 ซม.'],
+      ['ตำแหน่งที่วัด', '13 จุด ตลอด ±5.75 ซม.'],
     ],
   },
 ];
