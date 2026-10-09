@@ -10,7 +10,7 @@ Remote Lab is a web platform that lets students, researchers, and instructors bo
 - **Firestore** — all application data (bookings, sessions, notifications, lab catalog)
 - **Tailwind CSS 4** — dark navy × bright green (`#c8ff00`) theme, see `AGENTS.md`
 - **Anime.js** — UI micro-animations throughout
-- **Three.js** — 3D field visualization (`app/lab/FieldViz.tsx`)
+- **Three.js** — the 3D view of the lab room's field model (`app/lab/FieldView3D.tsx`); fetched on demand, the first time 3D is chosen
 - **KaTeX** — typesets the formulas in the AI assistant's replies; loaded on demand, the first time a reply contains one
 - **Jest + React Testing Library** — unit tests in `__tests__/`, run with `npm test` (configured through `next/jest` in `jest.config.mjs`). They cover `lib/`, every route handler in `app/api/` (called directly, against in-memory stand-ins for Firestore, Firebase Auth, the LLM and the rig), the components in `app/components/` and the sign-in page. The landing page, the dashboard page and the lab room (`app/lab/`) are not under test. `next/jest` loads `.env`, so `jest.env.ts` swaps the real credentials for test values and `jest.setup.ts` makes Firestore, Firebase Auth and `fetch` throw unless a test mocks them: no test can reach a real service
 - **MediaMTX** (external service) — WebRTC (WHEP) camera streaming, proxied through the Next server
@@ -33,7 +33,9 @@ app/
 │   │                                 selector, sensor/formula panels, field viz,
 │   │                                 AI chat, activity log (~2200 lines, all client
 │   │                                 components co-located in one file)
-│   ├── FieldViz.tsx                — Three.js magnetic field visualization
+│   ├── FieldViz.tsx                — the lab room's field model: the 2D/3D switch and the
+│   │                                 section through the axis (2D, SVG)
+│   ├── FieldView3D.tsx             — the same model turned about the axis (3D, Three.js)
 │   └── LabSummary.tsx              — shown in place of the lab room when a visit ends (finish
 │                                     button or time up): what was done, the values, CSV download
 ├── components/                     — BookingCalendar, DashboardNav, GlobalNotifications,
@@ -62,15 +64,24 @@ lib/
 ├── rig-access.ts                   — whether a user's booking is running now (or just
 │                                     ended); the check behind every hardware command
 ├── field-lines.ts                  — generated: field-line paths for FieldDiagram
+├── field-model.ts                  — generated: the exact field lines of the rig's coil and
+│                                     solenoid for the lab room's field model, with the
+│                                     size of the field along each line
+├── field-geometry.ts               — reads field-model.ts into what the two views draw:
+│                                     which lines, shading, arrowheads, 3D copies, window
 ├── motion.ts                       — shared anime.js helpers (reduced-motion check,
 │                                     reveal-on-scroll, press feedback) for the landing
 │                                     page, dashboard and booking calendar
 └── session.ts                      — session cookie mint/verify (wraps Admin SDK)
 
 scripts/
-└── field-lines.mjs                 — regenerates lib/field-lines.ts by tracing the exact
-                                      Biot-Savart field of the rig's coil and solenoid;
-                                      rerun it if their dimensions change
+├── field-lines.mjs                 — regenerates lib/field-lines.ts by tracing the exact
+│                                     Biot-Savart field of the rig's coil and solenoid;
+│                                     rerun it if their dimensions change
+└── field-model.mjs                 — regenerates lib/field-model.ts the same way for the
+                                      lab room's model (the solenoid as a sheet of current,
+                                      in closed form), and refuses to write a file whose
+                                      axis field or flux does not check out; rerun it too
 
 server.js                           — custom server: loads env and boots Next.js
 ```
@@ -139,6 +150,8 @@ Two physical cameras (`cam1`, `cam2`, `cam3` per experiment type — main + seco
 - Firestore composite indexes are not defined in a `firestore.indexes.json` — they were created ad hoc through the Firebase Console as each query's `FAILED_PRECONDITION` error surfaced during development. If Firestore is ever reset, the composite indexes needed are: `labs(is_active, code)`, `bookings(lab_id, status, start_time)`, `bookings(status, start_time)`, `bookings(user_id, status, start_time)`, `bookings(user_id, start_time desc)`, `notifications(user_id, created_at desc)`.
 
 ## Notable non-obvious behavior
+
+- **The lab room's field model is computed, not drawn** — `scripts/field-model.mjs` traces the field lines of the rig's own coil (radius 1.3 cm) and solenoid (8 cm long, radius 2.1 cm) through the exact off-axis field and stores them in `lib/field-model.ts`, with |B| along each line; `__tests__/field-model.test.ts` checks them against a direct Biot-Savart sum over the wire. Both views (`app/lab/FieldViz.tsx`, `FieldView3D.tsx`, through `lib/field-geometry.ts`) draw those lines to scale. What the drawing means: a line's level is the field summed outward along the mid-plane, in equal steps, so across the mid-plane inside the winding the lines crowd where the field is strong (only there: the field is axisymmetric, and further round a line its gaps follow other things too); the coil's n-turn drawing has n times the lines of the one-turn one; a line's brightness rises with |B| and is measured against the strongest field in that drawing, so it compares places within one drawing and says nothing between drawings; in 3D a line is repeated round the axis in proportion to how far from it it starts, so that each line carries about the same share of the field (the solenoid's within 1 %, the coil's within about a sixth either way; the axis line and the last 2.6 mm next to the coil's wire are outside that count), and a line that leaves the traced region fades out at its edge instead of stopping in mid-air. The probe's two arrows are the field at the probe from theory and from the sensor (which reports a size, drawn along the axis for comparison), each against the theory field at the centre and no longer than 1.3 times it. The 3D camera backs off as the model is turned, so the probe's whole travel stays in the picture, and its canvas exists only while its layout is the visible one. Direction: the current runs counterclockwise seen from +z (out of the page at the top of the section), so B points along +z on the axis. The rig's dimensions are written in both `lib/physics.ts` and the two generators: change them together and rerun both.
 
 - **No pagination via offset/limit anywhere** — Firestore doesn't support it efficiently. `dashboard/history` uses a cursor (`start_time` of the last item returned) instead of a page number. Two bookings can share a start time (a slot cancelled and booked again), so a page never ends between them and can hold more than ten.
 - **`labId` is a human-readable string, not a UUID** — `labs/LAB8` — chosen deliberately since Firestore doesn't need surrogate keys, and it keeps `lab_id` fields readable in the console.

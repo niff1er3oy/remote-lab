@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 9 ตุลาคม 2569 เวลา 07:59
+- รันเมื่อ: 9 ตุลาคม 2569 เวลา 17:28
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1125 ข้อ ใน 40 ไฟล์ (ผ่าน 1125 ไม่ผ่าน 0)
-- เวลาที่ใช้: 9.6 วินาที
+- จำนวนเทสต์: 1357 ข้อ ใน 46 ไฟล์ (ผ่าน 1357 ไม่ผ่าน 0)
+- เวลาที่ใช้: 10.1 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -13,9 +13,9 @@
 
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
-| API ฝั่งเซิร์ฟเวอร์ | 16 | 518 | 518 | 0 |
-| หน้าเว็บและคอมโพเนนต์ | 11 | 401 | 401 | 0 |
-| ไลบรารีและตรรกะกลาง | 13 | 206 | 206 | 0 |
+| API ฝั่งเซิร์ฟเวอร์ | 17 | 542 | 542 | 0 |
+| หน้าเว็บและคอมโพเนนต์ | 12 | 436 | 436 | 0 |
+| ไลบรารีและตรรกะกลาง | 17 | 379 | 379 | 0 |
 
 ## สรุปตามไฟล์
 
@@ -32,9 +32,10 @@
 | `api/dashboard-history.test.ts` | ประวัติการใช้งาน: รายการที่นับเป็นประวัติ เวลาที่ใช้ และการแบ่งหน้า | 23 | ผ่าน |
 | `api/dashboard-stats.test.ts` | ตัวเลขสรุปและรอบที่จองไว้บน dashboard | 10 | ผ่าน |
 | `api/db-test.test.ts` | การตรวจการเชื่อมต่อฐานข้อมูล | 4 | ผ่าน |
-| `api/gaps.test.ts` | กรณีที่เหลือของ API ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม เช่น ฐานข้อมูลล้มเหลว | 25 | ผ่าน |
-| `api/hardware.test.ts` | API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว | 68 | ผ่าน |
-| `api/instruments.test.ts` | การเปิดปิดอุปกรณ์การทดลองโดย admin และผลต่อ API อุปกรณ์กับหน้าห้องแลป | 31 | ผ่าน |
+| `api/gaps.test.ts` | กรณีที่เหลือของ API ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม เช่น ฐานข้อมูลล้มเหลว | 24 | ผ่าน |
+| `api/hardware.test.ts` | API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว | 66 | ผ่าน |
+| `api/instruments.test.ts` | การเปิดปิดอุปกรณ์การทดลองโดย admin และผลต่อ API อุปกรณ์กับหน้าห้องแลป | 29 | ผ่าน |
+| `api/lab-presence.test.ts` |  | 29 | ผ่าน |
 | `api/notifications.test.ts` | รายการแจ้งเตือนและการทำเครื่องหมายว่าอ่านแล้ว | 15 | ผ่าน |
 | `api/notify-upcoming.test.ts` | การแจ้งเตือนเมื่อถึงเวลาเข้าห้องแลปและก่อนเริ่ม 5 นาที โดยไม่ส่งซ้ำ | 23 | ผ่าน |
 | `auth-client.test.ts` | การล็อกอินด้วย Google ฝั่งเบราว์เซอร์ และข้อความ error ที่แสดงผู้ใช้ | 14 | ผ่าน |
@@ -43,22 +44,27 @@
 | `components/DashboardNav.test.tsx` | แถบเมนูผู้ใช้: เมนู ลิงก์ผู้ดูแลระบบ และการออกจากระบบ | 21 | ผ่าน |
 | `components/EquipmentStatus.test.tsx` | ส่วนสถานะอุปกรณ์ในหน้า admin: ชุดทดลอง แหล่งจ่ายไฟ กล้อง และเซนเซอร์ | 53 | ผ่าน |
 | `components/FieldDiagram.test.tsx` | ภาพเส้นสนามในหน้าแรก | 31 | ผ่าน |
+| `components/FieldViz.test.tsx` | แบบจำลองสนามแม่เหล็กในห้องแลป: ภาพตัด 2D หัววัดกับลูกศรทฤษฎีและค่าวัด การสลับ 2D/3D และกรณีเครื่องไม่มี WebGL | 35 | ผ่าน |
 | `components/GlobalNotifications.test.tsx` | กระดิ่ง แผงแจ้งเตือน และ toast: การแสดง การปิด การหายเอง และ reduced motion | 41 | ผ่าน |
 | `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 42 | ผ่าน |
 | `components/LoginPage.test.tsx` | หน้าเข้าสู่ระบบ | 10 | ผ่าน |
 | `components/PortraitGuard.test.tsx` | ข้อความให้หมุนจอเมื่อถือแนวตั้ง | 3 | ผ่าน |
 | `components/SlideIn.test.tsx` | แผงที่เลื่อนเข้าเมื่อปรากฏ | 5 | ผ่าน |
 | `components/useNotifications.test.tsx` | ตัวดึงการแจ้งเตือน: รอบการดึงทุก 30 วินาที การทำเครื่องหมายอ่าน และเมื่อคำขอล้มเหลว | 25 | ผ่าน |
+| `field-geometry.test.ts` | การอ่านแบบจำลองสนามไปวาด: เส้นของแต่ละอุปกรณ์ ความสว่างตามขนาดสนาม หัวลูกศร จำนวนเส้นในมุมมอง 3D และกรอบภาพ | 91 | ผ่าน |
 | `field-lines.test.ts` | ข้อมูลเส้นสนามที่ใช้วาดภาพในหน้าแรก: สมมาตร ไม่ตัดกัน และได้สัดส่วนจริงของอุปกรณ์ | 36 | ผ่าน |
+| `field-model.test.ts` | ข้อมูลเส้นสนามของแบบจำลองในห้องแลป: ตรวจทิศและขนาดสนามกับกฎบีโอต์-ซาวาร์โดยตรง ความสมมาตร ระยะห่างของเส้นตามความเข้มสนาม และจำนวนเส้นตามจำนวนรอบ | 39 | ผ่าน |
 | `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 28 | ผ่าน |
+| `lab-presence.test.ts` |  | 18 | ผ่าน |
 | `lab-status.test.ts` | การตรวจว่ากล้องและเซนเซอร์ตอบสนองหรือไม่ และ API สถานะอุปกรณ์ของ admin | 12 | ผ่าน |
 | `lib-gaps.test.ts` | กรณีที่เหลือของโมดูลใน lib ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม | 16 | ผ่าน |
 | `math.test.tsx` | การแสดงสูตรคณิตศาสตร์ด้วย KaTeX ในแชตผู้ช่วย AI | 5 | ผ่าน |
 | `motion.test.ts` | ตัวช่วยแอนิเมชัน: ไม่ซ่อนเนื้อหาเมื่อผู้ใช้ตั้ง reduced motion หรือเนื้อหาอยู่บนจอแล้ว | 14 | ผ่าน |
-| `physics.test.ts` | สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 13 จุด | 13 | ผ่าน |
+| `physics.test.ts` | สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 21 จุด | 13 | ผ่าน |
 | `rig-access.test.ts` | กติกาว่าใครสั่งอุปกรณ์ได้: รอบที่กำลังดำเนินอยู่ รอบที่เพิ่งจบ และกรณีที่ไม่มีสิทธิ์ | 27 | ผ่าน |
-| `rig.test.ts` | ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์ | 18 | ผ่าน |
+| `rig.test.ts` | ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์ | 21 | ผ่าน |
 | `safety.test.ts` | ตัวกันของชุดทดสอบเอง: เทสต์ต้องไม่ใช้ credential จริง และแตะ Firebase หรือเครือข่ายไม่ได้ถ้าไม่ได้จำลองไว้ | 3 | ผ่าน |
+| `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT | 22 | ผ่าน |
 | `session.test.ts` | การออกและตรวจ session cookie | 12 | ผ่าน |
 | `webrtc-latency.test.ts` | การคำนวณความหน่วงของวิดีโอจากสถิติ WebRTC (เครือข่าย บัฟเฟอร์ ถอดรหัส) และการตรวจภาพค้าง | 8 | ผ่าน |
 
@@ -581,7 +587,7 @@ API ผู้ช่วย AI: สิทธิ์ การกรองข้อ�
 
 กรณีที่เหลือของ API ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม เช่น ฐานข้อมูลล้มเหลว
 
-ผล: ผ่านทั้ง 25 ข้อ
+ผล: ผ่านทั้ง 24 ข้อ
 
 **PATCH /api/admin/bookings/[id] — the cases around the usual ones**
 
@@ -614,7 +620,6 @@ API ผู้ช่วย AI: สิทธิ์ การกรองข้อ�
 - ผ่าน — the rig answers 500 to {"script":"sole.py","position":2} and starts nothing
 - ผ่าน — the rig still runs coil_b.py, which is never held back by the setting
 - ผ่าน — the rig still runs sole_b.py, which is never held back by the setting
-- ผ่าน — the rig still runs relay_off.py, which is never held back by the setting
 **/api/cam/[...path] — settings that are missing when the server starts**
 
 - ผ่าน — answers 404 for cam1 when it has no address, and contacts nothing
@@ -627,7 +632,7 @@ API ผู้ช่วย AI: สิทธิ์ การกรองข้อ�
 
 API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว
 
-ผล: ผ่านทั้ง 68 ข้อ
+ผล: ผ่านทั้ง 66 ข้อ
 
 **POST /api/hardware — who may command the rig**
 
@@ -639,10 +644,8 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — runs a command while the user has a confirmed round running
 - ผ่าน — runs a command while the user has a pending round running
 - ผ่าน — runs a command while the user has a in_progress round running
-- ผ่าน — does not switch the power supply on for a round that ended five minutes ago
 - ผ่าน — still runs coil_b.py for a round that ended five minutes ago
 - ผ่าน — still runs sole_b.py for a round that ended five minutes ago
-- ผ่าน — still switches the supply off for a round that ended five minutes ago
 - ผ่าน — refuses coil_1.py for a round that ended five minutes ago
 - ผ่าน — refuses coil_2.py for a round that ended five minutes ago
 - ผ่าน — refuses coil_3.py for a round that ended five minutes ago
@@ -653,8 +656,8 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 **POST /api/hardware — the accepted commands**
 
 - ผ่าน — reports whether the power supply was last switched on or off
-- ผ่าน — runs relay_on.py from the scripts folder, with the venv's Python
-- ผ่าน — runs relay_off.py from the scripts folder, with the venv's Python
+- ผ่าน — refuses relay_on.py: students do not switch the power supply
+- ผ่าน — refuses relay_off.py: students do not switch the power supply
 - ผ่าน — refuses psu_on.py: a script is named, never given by path
 - ผ่าน — refuses /home/admin/Documents/relay_on.py: a script is named, never given by path
 - ผ่าน — refuses ../relay_on.py: a script is named, never given by path
@@ -710,7 +713,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 การเปิดปิดอุปกรณ์การทดลองโดย admin และผลต่อ API อุปกรณ์กับหน้าห้องแลป
 
-ผล: ผ่านทั้ง 31 ข้อ
+ผล: ผ่านทั้ง 29 ข้อ
 
 **cleanDisabled**
 
@@ -740,15 +743,51 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — the rig refuses to start coil_2.py, even for the student whose round is running
 - ผ่าน — the rig refuses to start coil_3.py, even for the student whose round is running
 - ผ่าน — the solenoid still starts and moves
-- ผ่าน — cutting a circuit and the supply are not held back: coil_b.py
-- ผ่าน — cutting a circuit and the supply are not held back: sole_b.py
-- ผ่าน — cutting a circuit and the supply are not held back: relay_off.py
-- ผ่าน — cutting a circuit and the supply are not held back: relay_on.py
+- ผ่าน — cutting a circuit is not held back: coil_b.py
+- ผ่าน — cutting a circuit is not held back: sole_b.py
 - ผ่าน — a closed solenoid refuses every probe position
 - ผ่าน — opening it again lets it start
 - ผ่าน — the lab room is told which instruments not to offer
 - ผ่าน — the admin page is told too
 - ผ่าน — the rig answers 500, and starts nothing, when Firestore cannot be read
+
+#### `api/lab-presence.test.ts`
+
+ผล: ผ่านทั้ง 29 ข้อ
+
+**POST /api/lab/presence**
+
+- ผ่าน — answers 401 to someone who is not signed in
+- ผ่าน — answers 400 for the action "toggle"
+- ผ่าน — answers 400 for the action "relay_on.py"
+- ผ่าน — answers 400 for the action ""
+- ผ่าน — answers 400 for the action null
+- ผ่าน — answers 400 for the action 1
+- ผ่าน — entering during a running round switches the supply on
+- ผ่าน — entering with no round at all answers 403 and switches nothing
+- ผ่าน — entering with a round that has ended answers 403 and switches nothing
+- ผ่าน — entering with a round that was cancelled answers 403 and switches nothing
+- ผ่าน — answers 500 and switches nothing when the round cannot be looked up
+- ผ่าน — leaving switches the supply off, and reports it
+- ผ่าน — leaving is accepted after the round has ended
+- ผ่าน — staying does not run the relay again
+- ผ่าน — a page still open after its round ended is put out, and the supply goes off
+- ผ่าน — a page heard from for the first time by "stay" is let in and the supply comes on
+- ผ่าน — after an admin switches off, staying reports the supply off and does not switch it back on
+- ผ่าน — after an admin switches off, walking in anew switches the supply on again
+**POST /api/lab/presence — the student's own switch**
+
+- ผ่าน — switches the supply off and on again during the round
+- ผ่าน — staying does not switch back on what the student switched off
+- ผ่าน — refuses "on" without a running round
+- ผ่าน — refuses "off" without a running round
+- ผ่าน — refuses "on" from someone who is not signed in
+- ผ่าน — refuses "off" from someone who is not signed in
+- ผ่าน — does not switch on what an admin switched off, and says why
+- ผ่าน — switches on again once the admin has switched the supply back on
+- ผ่าน — still lets the student switch off while an admin holds the supply off
+- ผ่าน — answers 500 without the script's output when the relay does not answer
+- ผ่าน — the supply a student switched on still goes off when they leave
 
 #### `api/notifications.test.ts`
 
@@ -1190,9 +1229,61 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — marks the current direction that produces the field direction drawn
 **FieldDiagram › solenoid**
 
-- ผ่าน — shows the 75 turns of the winding along both sides
+- ผ่าน — shows the 100 turns of the winding along both sides
 - ผ่าน — spreads the turns evenly from one end of the solenoid to the other
 - ผ่าน — has no single-coil ring or wire ends
+
+#### `components/FieldViz.test.tsx`
+
+แบบจำลองสนามแม่เหล็กในห้องแลป: ภาพตัด 2D หัววัดกับลูกศรทฤษฎีและค่าวัด การสลับ 2D/3D และกรณีเครื่องไม่มี WebGL
+
+ผล: ผ่านทั้ง 35 ข้อ
+
+**FieldViz — the section through the axis (2D)**
+
+- ผ่าน — opens on the section, and says what it shows
+- ผ่าน — draws the coil with 1 turn(s) as 4 lines above the axis, mirrored below it, and the axis
+- ผ่าน — draws the coil with 2 turn(s) as 8 lines above the axis, mirrored below it, and the axis
+- ผ่าน — draws the coil with 3 turn(s) as 12 lines above the axis, mirrored below it, and the axis
+- ผ่าน — draws the solenoid as 6 lines above the axis and the axis
+- ผ่าน — adds lines with the turns, but no arrowheads: those stay on the one-turn coil's lines
+- ผ่าน — draws every stretch of a line twice: the line, and the dashes that run along it
+- ผ่าน — draws a stronger field brighter: a line fades as it leaves the winding, and stays bright while it keeps to the wire
+- ผ่าน — shows one wire end per turn, coming toward the viewer above the axis and going away below it
+- ผ่าน — shows the solenoid's winding along both sides and a tick for each of the probe's 21 positions
+- ผ่าน — is to scale, with a bar that says so
+- ผ่าน — draws nothing while its box has no size, as in the layout the lab room keeps hidden
+**FieldViz — the probe and its two arrows**
+
+- ผ่าน — puts the probe where it is along the axis
+- ผ่าน — glides the probe to a new position
+- ผ่าน — draws the theory arrow at full length for the field at the centre, and the measured one in proportion
+- ผ่าน — shortens the theory arrow as the probe leaves the middle of the solenoid
+- ผ่าน — follows the sensor as its reading changes
+- ผ่าน — draws no measured arrow for a reading of 0
+- ผ่าน — draws no measured arrow for a reading of NaN
+- ผ่าน — points the arrow back along the axis for a field the other way
+- ผ่าน — draws a weak field as a short arrow of the right length, not a fixed-size head
+- ผ่าน — does not let a reading far above theory run off the drawing
+**FieldViz — motion**
+
+- ผ่าน — runs the dashes along the lines, in the direction of the field
+- ผ่าน — keeps everything still for someone who asked for reduced motion
+- ผ่าน — still moves the probe at once under reduced motion
+**FieldViz — switching between 2D and 3D**
+
+- ผ่าน — shows the 3D view of the same instrument when 3D is chosen, and the section again on 2D
+- ผ่าน — names the two buttons as one control
+- ผ่าน — says how to turn the model only where it can be turned
+- ผ่าน — slides the switch and brings the new view in
+- ผ่าน — switches every copy of the panel together: the lab room keeps two layouts mounted
+- ผ่าน — remembers the choice for the next visit
+- ผ่าน — opens on the section when what was stored is not a view
+- ผ่าน — still works when the browser will not store anything
+**FieldView3D — on a machine without WebGL**
+
+- ผ่าน — says it cannot show 3D and points back to 2D, instead of an empty box
+- ผ่าน — does not try to start WebGL while its box has no size
 
 #### `components/GlobalNotifications.test.tsx`
 
@@ -1435,6 +1526,126 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — falls back to the generic message for anything that is not a Firebase error
 - ผ่าน — does not mistake an inherited object property for an error code
 
+#### `field-geometry.test.ts`
+
+การอ่านแบบจำลองสนามไปวาด: เส้นของแต่ละอุปกรณ์ ความสว่างตามขนาดสนาม หัวลูกศร จำนวนเส้นในมุมมอง 3D และกรอบภาพ
+
+ผล: ผ่านทั้ง 91 ข้อ
+
+**linesFor — the lines of a drawing**
+
+- ผ่าน — the coil with 1 turn(s) has 4 lines and the axis
+- ผ่าน — the coil with 2 turn(s) has 8 lines and the axis
+- ผ่าน — the coil with 3 turn(s) has 12 lines and the axis
+- ผ่าน — adding turns keeps the lines already drawn and puts new ones between them
+- ผ่าน — draws the one-turn coil for a number of turns it does not know
+- ผ่าน — the solenoid has one drawing: every line of its model
+- ผ่าน — gives each kind its own model
+**samples — a line as points**
+
+- ผ่าน — reads the flattened triples in order
+- ผ่าน — leaves out a triple that is not complete
+**brightness — how strongly a field is drawn**
+
+- ผ่าน — is nothing for no field and full for the field at the centre
+- ผ่าน — only ever rises with the field
+- ผ่าน — is no brighter than full, however strong the field next to the wire
+- ผ่าน — is nothing for NaN
+- ผ่าน — is nothing for -0.5
+- ผ่าน — is nothing for -Infinity
+- ผ่าน — is measured against the strongest field in the drawing, so nothing stronger than the centre is lost
+- ผ่าน — is nothing when the strongest field is given as 0
+- ผ่าน — is nothing when the strongest field is given as -1
+- ผ่าน — is nothing when the strongest field is given as NaN
+- ผ่าน — knows the strongest field of each model: next to the wire for the coil, hardly above the centre's for the solenoid
+- ผ่าน — uses the whole range of shades in the coil, the brightest only for its strongest field
+- ผ่าน — uses the whole range of shades in the solenoid, the brightest only for its strongest field
+- ผ่าน — falls in one of the shades, the dimmest for the weakest field and the brightest for the strongest
+**shadedRuns — a line cut into stretches of one shade**
+
+- ผ่าน — starts each stretch on the point the one before ended on
+- ผ่าน — keeps neighbouring segments of one shade in one stretch
+- ผ่าน — says how far along the line each stretch begins
+- ผ่าน — shades against the strongest field it is given
+- ผ่าน — takes a closed line back to where it started
+- ผ่าน — covers every segment of every line of the coil
+- ผ่าน — covers every segment of every line of the solenoid
+**midPlaneMarks — where the arrowheads go**
+
+- ผ่าน — marks an open line where it crosses the mid-plane, pointing the way the line runs
+- ผ่าน — marks a point that lies on the mid-plane itself
+- ผ่าน — marks a closed line twice: going one way inside, and back the other way outside
+- ผ่าน — puts none on the axis, which runs along the mid-plane's normal
+- ผ่าน — on the coil every line runs toward +z inside the winding, and a closed one comes back toward -z outside it
+- ผ่าน — on the solenoid every line runs toward +z inside the winding, and a closed one comes back toward -z outside it
+- ผ่าน — puts arrowheads on the one-turn coil's lines only, and on every other line of the solenoid
+**axisField — the field along the axis**
+
+- ผ่าน — is the centre's own field at the centre of the coil, and the same either side
+- ผ่าน — is the centre's own field at the centre of the solenoid, and the same either side
+- ผ่าน — follows the handout's formula for the solenoid
+- ผ่าน — follows B0 x R^3 / (R^2 + z^2)^(3/2) for the coil
+- ผ่าน — holds the last value past the ends of the traced region
+**the 3D view's copies of a line**
+
+- ผ่าน — draws the axis once
+- ผ่าน — repeats a line in proportion to how far from the axis it starts
+- ผ่าน — draws every line at least once
+- ผ่าน — shares the solenoid's field among its 3D lines evenly: one, two, three copies and so on outward
+- ผ่าน — shares the 1-turn coil's field among its 3D lines to within a factor of 1.1
+- ผ่าน — shares the 2-turn coil's field among its 3D lines to within a factor of 1.35
+- ผ่าน — shares the 3-turn coil's field among its 3D lines to within a factor of 1.15
+- ผ่าน — gives the coil about two and three times the 3D lines for two and three turns
+- ผ่าน — gives the coil more copies the further out a line starts, never fewer
+- ผ่าน — gives the solenoid more copies the further out a line starts, never fewer
+- ผ่าน — starts each line's copies at a different angle, inside one turn
+- ผ่าน — turns a point about the axis, keeping its distance from it
+**arrowLength — the probe's arrows**
+
+- ผ่าน — is the full length for the field at the centre, and in proportion below it
+- ผ่าน — stops at 1.3 times the full length for a reading far above theory
+- ผ่าน — is negative for a field the other way along the axis, and stops at 1.3 times that way too
+- ผ่าน — draws nothing for a reading of 0 against 1
+- ผ่าน — draws nothing for a reading of NaN against 1
+- ผ่าน — draws nothing for a reading of Infinity against 1
+- ผ่าน — draws nothing for a reading of 0.5 against 0
+- ผ่าน — draws nothing for a reading of 0.5 against NaN
+- ผ่าน — splits a long arrow into a shaft and a head of full size
+- ผ่าน — keeps a short arrow its true length: the head shrinks to it, and there is no shaft
+- ผ่าน — an arrow of 0.001 cm is that long, whatever the size of its head
+- ผ่าน — an arrow of 0.2 cm is that long, whatever the size of its head
+- ผ่าน — an arrow of 0.4875 cm is that long, whatever the size of its head
+- ผ่าน — an arrow of 0.6 cm is that long, whatever the size of its head
+- ผ่าน — an arrow of 3.38 cm is that long, whatever the size of its head
+- ผ่าน — is nothing for no length
+**edgeFade — lines that leave the traced region**
+
+- ผ่าน — leaves a line alone well inside the region
+- ผ่าน — fades it to nothing at the edge, along the axis or away from it
+- ผ่าน — fades evenly over the last stretch, by whichever edge is nearer
+- ผ่าน — reaches nothing at both ends of every line of the coil that leaves the region, and never touches one that closes
+- ผ่าน — reaches nothing at both ends of every line of the solenoid that leaves the region, and never touches one that closes
+**visibleExtent — the part of the section a box shows**
+
+- ผ่าน — shows the region it prefers in a box of that shape
+- ผ่าน — the coil in a 575 x 300 box: the same scale both ways, the winding and the probe's travel in view, nothing past the traced region
+- ผ่าน — the coil in a 595 x 210 box: the same scale both ways, the winding and the probe's travel in view, nothing past the traced region
+- ผ่าน — the coil in a 874 x 245 box: the same scale both ways, the winding and the probe's travel in view, nothing past the traced region
+- ผ่าน — the coil in a 350 x 280 box: the same scale both ways, the winding and the probe's travel in view, nothing past the traced region
+- ผ่าน — the solenoid in a 580 x 270 box: the same scale both ways, the winding and the probe's travel in view, nothing past the traced region
+- ผ่าน — the solenoid in a 595 x 135 box: the same scale both ways, the winding and the probe's travel in view, nothing past the traced region
+- ผ่าน — the solenoid in a 350 x 130 box: the same scale both ways, the winding and the probe's travel in view, nothing past the traced region
+- ผ่าน — the solenoid in a 874 x 245 box: the same scale both ways, the winding and the probe's travel in view, nothing past the traced region
+- ผ่าน — keeps the whole of the probe's travel in view even in a box too narrow for the traced region
+- ผ่าน — needs to show the winding of each instrument, and all 21 positions of the solenoid's probe
+**cameraDistance — how far back the 3D camera sits**
+
+- ผ่าน — needs no distance for the point it is looking at
+- ผ่าน — from straight in front, stands back by a point's offset over the tangent of half the angle of view
+- ผ่าน — stands further back for a point that is toward the camera, by that much and more
+- ผ่าน — backs off beyond the near end of the axis when the model is turned end-on
+- ผ่าน — puts every point in the picture, with at least one on its edge, whichever way the camera is turned
+
 #### `field-lines.test.ts`
 
 ข้อมูลเส้นสนามที่ใช้วาดภาพในหน้าแรก: สมมาตร ไม่ตัดกัน และได้สัดส่วนจริงของอุปกรณ์
@@ -1479,7 +1690,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 **field-line data › scale**
 
 - ผ่าน — draws the coil at its real radius of 1.3 cm
-- ผ่าน — draws the solenoid at its real radius of 1.3 cm and length of 8 cm
+- ผ่าน — draws the solenoid at its real radius of 2.1 cm and length of 8 cm
 - ผ่าน — fits the whole length of the solenoid inside the drawing
 **field-line data › shape of the solenoid field**
 
@@ -1489,6 +1700,66 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 - ผ่าน — is closest to the axis in the plane of the coil and spreads out on either side
 - ผ่าน — wraps its closed loops around the wire
+
+#### `field-model.test.ts`
+
+ข้อมูลเส้นสนามของแบบจำลองในห้องแลป: ตรวจทิศและขนาดสนามกับกฎบีโอต์-ซาวาร์โดยตรง ความสมมาตร ระยะห่างของเส้นตามความเข้มสนาม และจำนวนเส้นตามจำนวนรอบ
+
+ผล: ผ่านทั้ง 39 ข้อ
+
+**field model data**
+
+- ผ่าน — uses the dimensions of the rig
+- ผ่าน — gives the coil 4, 8 and 12 lines for 1, 2 and 3 turns, and the solenoid 6
+**field model data › single coil**
+
+- ผ่าน — is traced in the agreed frame
+- ผ่าน — lists the axis first, then the lines outward by level, all inside the winding
+- ผ่าน — stores finite triples inside the frame, with b positive
+- ผ่าน — samples every line finely enough to shade it, in about 90 points at most
+- ผ่าน — is the same on both sides of the mid-plane
+- ผ่าน — runs the axis straight from one end of the frame to the other
+- ผ่าน — follows the closed form of the lab on the axis
+- ผ่าน — crosses the mid-plane at rho0 running toward +z
+- ผ่าน — brings every closed line back through the mid-plane outside the winding, running toward -z
+- ผ่าน — runs every open line from one edge of the frame to another
+- ผ่าน — nests the lines: one nearer the wire inside also returns nearer the wire
+- ผ่าน — never lets two field lines cross, or one cross itself
+- ผ่าน — spaces the lines on the mid-plane in inverse proportion to the field there
+**field model data › single coil › against Biot-Savart summed over short pieces of the wire**
+
+- ผ่าน — points along the field with the current counterclockwise seen from +z
+- ผ่าน — runs every line along that field, within 2 degrees
+- ผ่าน — stores that field strength as b, within 2 %
+**field model data › solenoid**
+
+- ผ่าน — is traced in the agreed frame
+- ผ่าน — lists the axis first, then the lines outward by level, all inside the winding
+- ผ่าน — stores finite triples inside the frame, with b positive
+- ผ่าน — samples every line finely enough to shade it, in about 90 points at most
+- ผ่าน — is the same on both sides of the mid-plane
+- ผ่าน — runs the axis straight from one end of the frame to the other
+- ผ่าน — follows the closed form of the lab on the axis
+- ผ่าน — crosses the mid-plane at rho0 running toward +z
+- ผ่าน — brings every closed line back through the mid-plane outside the winding, running toward -z
+- ผ่าน — runs every open line from one edge of the frame to another
+- ผ่าน — nests the lines: one nearer the wire inside also returns nearer the wire
+- ผ่าน — never lets two field lines cross, or one cross itself
+- ผ่าน — spaces the lines on the mid-plane in inverse proportion to the field there
+**field model data › solenoid › against Biot-Savart summed over short pieces of the wire**
+
+- ผ่าน — points along the field with the current counterclockwise seen from +z
+- ผ่าน — runs every line along that field, within 2 degrees
+- ผ่าน — stores that field strength as b, within 2 %
+**field model data › shape of the solenoid field**
+
+- ผ่าน — runs parallel to the axis through the middle half of the winding
+- ผ่าน — is nearly uniform across the middle: within 5 % of the centre field at every rho0
+- ผ่าน — drops by the full sheet current where a line passes out through the winding
+**field model data › shape of the coil field**
+
+- ผ่าน — is closest to the axis in the plane of the coil for the lines that leave the frame
+- ผ่าน — grows stronger from the axis toward the wire in the plane of the coil
 
 #### `lab-activity.test.ts`
 
@@ -1536,6 +1807,37 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — keeps the question "-2+3" from running as a spreadsheet formula
 - ผ่าน — keeps the question "@cmd" from running as a spreadsheet formula
 - ผ่าน — is only the header for a visit with no events
+
+#### `lab-presence.test.ts`
+
+ผล: ผ่านทั้ง 18 ข้อ
+
+**entering the lab room**
+
+- ผ่าน — switches the power supply on
+- ผ่าน — does not run the script again when the supply is already on
+- ผ่าน — says the supply is not on when the relay does not answer, and still counts the student as in
+**leaving the lab room**
+
+- ผ่าน — switches the supply off when that leaves the room empty
+- ผ่าน — leaves the supply on while someone else is still in
+- ผ่าน — cuts a coil left on before switching the supply off
+- ผ่าน — cuts the solenoid left on before switching the supply off
+- ผ่าน — runs nothing for someone who was not in the room
+- ผ่าน — runs nothing the second time the same student says goodbye
+**a page that goes quiet**
+
+- ผ่าน — is kept while it keeps saying it is open
+- ผ่าน — is taken to have left, and the supply goes off
+- ผ่าน — tries switching off again on the next rounds when the relay does not answer, then gives up
+- ผ่าน — stops trying once switching off has worked
+- ผ่าน — does not switch anything off in an empty room nobody has left
+**an admin switching the supply by hand**
+
+- ผ่าน — off: it stays off for the student who is still in the room
+- ผ่าน — off: the next student to walk in switches it on again
+- ผ่าน — on, with nobody in the room: it is left on
+- ผ่าน — on: a page heard from again is no longer held off
 
 #### `lab-status.test.ts`
 
@@ -1642,7 +1944,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 #### `physics.test.ts`
 
-สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 13 จุด
+สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 21 จุด
 
 ผล: ผ่านทั้ง 13 ข้อ
 
@@ -1660,9 +1962,9 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — approaches the long-solenoid value μ₀(N/L)I when the solenoid is long
 **the solenoid on the rig and its probe positions**
 
-- ผ่าน — is 8 cm long with 75 turns of 1.3 cm radius, at 1 A
-- ผ่าน — has 13 positions, from -6 to 6
-- ผ่าน — spreads them over the 115 mm the arm covers, so the ends are at 5.75 cm
+- ผ่าน — is 8 cm long with 100 turns, 42 mm across, at 0.5 A
+- ผ่าน — has 21 positions, from -10 to 10
+- ผ่าน — steps 1 cm at a time from the middle of the solenoid, so the ends are at 10 cm
 - ผ่าน — gives the field worked by hand at the centre and at the last position
 - ผ่าน — writes a length in centimetres with at most two decimals
 
@@ -1716,7 +2018,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์
 
-ผล: ผ่านทั้ง 18 ข้อ
+ผล: ผ่านทั้ง 21 ข้อ
 
 **runRigScript**
 
@@ -1743,6 +2045,9 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — records the power supply being switched on and off, leaving the circuit as it was
 - ผ่าน — does not count the supply as switched when the script fails
 - ผ่าน — keeps what was on when a command fails, and records the failure
+- ผ่าน — keeps why a command failed: the end of the script's output, with its exit code
+- ผ่าน — keeps why a command could not be started at all
+- ผ่าน — keeps no reason after a command that worked
 - ผ่าน — is busy while a script is running
 
 #### `safety.test.ts`
@@ -1756,6 +2061,39 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — runs with test credentials, not the ones in .env
 - ผ่าน — refuses Firestore and Firebase Auth unless the test mocks them
 - ผ่าน — refuses network requests unless the test mocks fetch
+
+#### `sensor.test.ts`
+
+การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT
+
+ผล: ผ่านทั้ง 22 ข้อ
+
+**fieldFromSensor — one message from the magnetometer**
+
+- ผ่าน — turns the three components in microtesla into the calibrated size of the field in millitesla
+- ผ่าน — reads the message as the service sends it, as JSON text
+- ผ่าน — uses the size of the field unless told to use one component
+- ผ่าน — gives one component, with its sign, when asked for it
+- ผ่าน — reads a field of zero as a reading, not as no reading
+- ผ่าน — calibrates with the line fitted on the rig
+- ผ่าน — still reads the earlier form, one value already in millitesla
+- ผ่าน — gives no reading for text that is not JSON
+- ผ่าน — gives no reading for a component missing
+- ผ่าน — gives no reading for a component that is text
+- ผ่าน — gives no reading for a component that is not finite
+- ผ่าน — gives no reading for a null component
+- ผ่าน — gives no reading for an empty object
+- ผ่าน — gives no reading for a list
+- ผ่าน — gives no reading for nothing
+- ผ่าน — gives no reading for a bare number
+**createAverager — twenty values make one reading**
+
+- ผ่าน — takes twenty values for a reading
+- ผ่าน — gives nothing until the block is full, then the mean of the block
+- ผ่าน — starts the next reading from nothing
+- ผ่าน — a fresh reading leaves out what was collected before it was asked for
+- ผ่าน — a fresh reading is null when the sensor does not send enough in time
+- ผ่าน — answers everyone waiting for a fresh reading
 
 #### `session.test.ts`
 

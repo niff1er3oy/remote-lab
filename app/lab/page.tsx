@@ -12,7 +12,7 @@ import { prefersReducedMotion } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { clockTime, describeEvent, type LabEvent } from '@/lib/lab-activity';
 import { createAverager, fieldFromSensor } from '@/lib/sensor';
-import { FieldViz3D } from './FieldViz';
+import { FieldViz } from './FieldViz';
 import LabSummary from './LabSummary';
 
 // KaTeX is only needed once the assistant writes a formula, so it is fetched
@@ -776,6 +776,9 @@ export default function RemoteLabPage() {
     ? calcBCoil(inst.turns, I, inst.R)
     : calcBSolenoid(inst.N, I, inst.L, inst.R, z);
   const bMeasured = realSensorValue ?? bTheory;
+  // The theory field at the middle of the winding: the field model draws the
+  // probe's two arrows against it.
+  const bPeak = inst.type === 'coil' ? bTheory : calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
 
   return (
     <div className="flex flex-col h-screen bg-[#030712] text-white overflow-hidden">
@@ -847,8 +850,8 @@ export default function RemoteLabPage() {
             <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 short:gap-2">
               <div className="flex-1 min-h-0 flex flex-col">
                 <SplitFieldPanel
-                  instType={inst.type}
-                  bTheory={bTheory} bMeasured={bMeasured}
+                  instType={inst.type} turns={inst.type === 'coil' ? inst.turns : 0}
+                  bTheory={bTheory} bMeasured={bMeasured} bPeak={bPeak}
                   I={I} z={z}
                 />
               </div>
@@ -930,8 +933,8 @@ export default function RemoteLabPage() {
             <div className="h-full flex flex-col gap-3">
               <div className="flex-1 min-h-[280px] flex flex-col">
                 <SplitFieldPanel
-                  instType={inst.type}
-                  bTheory={bTheory} bMeasured={bMeasured}
+                  instType={inst.type} turns={inst.type === 'coil' ? inst.turns : 0}
+                  bTheory={bTheory} bMeasured={bMeasured} bPeak={bPeak}
                   I={I} z={z}
                 />
               </div>
@@ -1532,17 +1535,19 @@ function SupplySwitch({ on, held, busy, onSwitch }: { on: boolean | null; held: 
   }, [on]);
 
   const locked = held && on !== true;
+  const why = locked ? 'ผู้ดูแลระบบปิดแหล่งจ่ายไฟไว้ จึงเปิดเองไม่ได้' : undefined;
   return (
-    <div className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 px-3 py-1 flex items-center justify-between gap-3">
-      {/* One line: the left column has no height to spare on a laptop screen. */}
+    <div title={why} className="shrink-0 rounded-xl border border-white/10 bg-gray-900/50 px-3 py-1 flex items-center justify-between gap-3">
+      {/* One line, in a column that can be 200 px wide: the state is one short
+          word, and why a locked switch is locked is in its tooltip and name. */}
       <p className="min-w-0 truncate text-sm font-semibold text-white">
         แหล่งจ่ายไฟ{' '}
         <span role="status" className={`font-normal ${on ? 'text-[#c8ff00]' : 'text-gray-500'}`}>
-          {busy ? 'รอสักครู่' : locked ? 'ผู้ดูแลปิดไว้' : on === null ? 'กำลังตรวจสอบ' : on ? 'เปิดอยู่' : 'ปิดอยู่'}
+          {busy ? 'รอ…' : locked ? 'ล็อก' : on === null ? '…' : on ? 'เปิด' : 'ปิด'}
         </span>
       </p>
       <button
-        role="switch" aria-checked={on === true} aria-label="แหล่งจ่ายไฟ"
+        role="switch" aria-checked={on === true} aria-label={why ? `แหล่งจ่ายไฟ ${why}` : 'แหล่งจ่ายไฟ'}
         disabled={busy || locked}
         onClick={() => onSwitch(on !== true)}
         className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${on ? 'border-[#c8ff00]/50 bg-[#c8ff00]/25' : 'border-white/10 bg-gray-800'}`}
@@ -1692,9 +1697,13 @@ function InstrumentSelector({ active, onSelect, disabled, closed = NO_INSTRUMENT
 
 // ── Split Field Panel ─────────────────────────────────────────────────────────
 
-function SplitFieldPanel({ instType, bTheory, bMeasured, I, z }: {
+function SplitFieldPanel({ instType, turns, bTheory, bMeasured, bPeak, I, z }: {
   instType: 'solenoid' | 'coil';
+  /** Turns of the single coil; not used for the solenoid. */
+  turns: number;
   bTheory: number; bMeasured: number;
+  /** The theory field at the middle of the winding, which the model's arrows are drawn against. */
+  bPeak: number;
   I: number;
   z: number;
 }) {
@@ -1724,7 +1733,7 @@ function SplitFieldPanel({ instType, bTheory, bMeasured, I, z }: {
       </div>
 
       <div className="flex-1 min-h-0">
-        <FieldViz3D instType={instType} />
+        <FieldViz kind={instType} turns={turns} zCm={Number(cmText(z))} bTheory={bTheory} bMeasured={bMeasured} bPeak={bPeak} />
       </div>
     </div>
   );
