@@ -7,7 +7,7 @@ import { prefersReducedMotion } from '@/lib/motion';
 type Reach = 'online' | 'offline' | 'unset';
 type Status = {
   checked_at: string;
-  rig: { busy: boolean; circuit: string | null; position: number | null; supply: boolean | null; last: { command: string; ok: boolean; at: number } | null };
+  rig: { busy: boolean; circuit: string | null; position: number | null; supply: boolean | null; last: { command: string; ok: boolean; at: number; error?: string } | null };
   cameras: Array<{ key: string; state: Reach }>;
   sensor: Reach;
 };
@@ -217,6 +217,9 @@ function RigTile({ rig }: { rig: Status['rig'] | null }) {
             <span className={rig.last.ok ? 'text-[#c8ff00]' : 'text-red-300'}>{rig.last.ok ? 'สำเร็จ' : 'ไม่สำเร็จ'}</span> เมื่อ {clock(rig.last.at)}</>
           : 'ยังไม่มีคำสั่ง'}
       </p>
+      {rig?.last && !rig.last.ok && rig.last.error && (
+        <pre role="alert" className="mt-1.5 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded-md border border-red-500/25 bg-red-500/10 px-2 py-1.5 font-mono text-xs text-red-200">{rig.last.error}</pre>
+      )}
       <p className="mt-0.5 text-xs text-gray-600">อ้างอิงจากคำสั่งที่เว็บส่งไป ไม่ใช่ค่าที่อ่านจากตัวอุปกรณ์</p>
     </div>
   );

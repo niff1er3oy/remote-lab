@@ -28,7 +28,8 @@ export type RigState = {
   position: number | null;
   /** Whether the power supply was last switched on (true) or off (false). Null until either has been sent. */
   supply: boolean | null;
-  last: { command: string; ok: boolean; at: number } | null;
+  /** `error` is why the last command failed, for the admin page only: it can hold paths. */
+  last: { command: string; ok: boolean; at: number; error?: string } | null;
 };
 
 type Tracked = Omit<RigState, 'busy'> & { running: number };
@@ -47,9 +48,18 @@ export function resetRigState(): void {
   holder.__rigState = undefined;
 }
 
-function note(argv: string[], ok: boolean) {
+// What went wrong, in a few lines: the script's own last output when it ran,
+// otherwise why it could not be started (no such file, no such Python).
+function reason(err: unknown): string {
+  const e = err as { stderr?: unknown; stdout?: unknown; message?: unknown; code?: unknown };
+  const output = [e?.stderr, e?.stdout].filter((t): t is string => typeof t === 'string' && t.trim() !== '').join('\n').trim();
+  const text = output ? output.split('\n').slice(-4).join('\n') : String(e?.message ?? err);
+  return (e?.code !== undefined ? `[${String(e.code)}] ` : '') + text.slice(-400);
+}
+
+function note(argv: string[], ok: boolean, err?: unknown) {
   const state = tracked();
-  state.last = { command: argv.join(' '), ok, at: Date.now() };
+  state.last = { command: argv.join(' '), ok, at: Date.now(), ...(ok ? {} : { error: reason(err) }) };
   if (!ok) return;
   const [script] = argv;
   if (script === SUPPLY_ON || script === SUPPLY_OFF) {
@@ -77,7 +87,7 @@ export async function runRigScript(argv: string[]) {
     note(argv, true);
     return result;
   } catch (err) {
-    note(argv, false);
+    note(argv, false, err);
     throw err;
   } finally {
     state.running--;

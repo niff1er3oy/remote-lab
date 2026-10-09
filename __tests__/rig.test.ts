@@ -153,6 +153,27 @@ describe('rigState — what the rig was last told to do', () => {
     expect(rigState()).toMatchObject({ busy: false, circuit: 'coil_1.py', last: { command: 'coil_3.py', ok: false } });
   });
 
+  it('keeps why a command failed: the end of the script\'s output, with its exit code', async () => {
+    runScript.mockRejectedValueOnce(Object.assign(new Error('Command failed'), {
+      code: 1, stdout: 'line 1\nline 2\nline 3\nline 4\nsole.py failed\n', stderr: '',
+    }));
+    await expect(runRigScript(['sole.py', '--position', '2'])).rejects.toThrow();
+    expect(rigState().last).toMatchObject({ ok: false, error: '[1] line 2\nline 3\nline 4\nsole.py failed' });
+  });
+
+  it('keeps why a command could not be started at all', async () => {
+    runScript.mockRejectedValueOnce(Object.assign(new Error('spawn /home/admin/Documents/venv/bin/python ENOENT'), { code: 'ENOENT' }));
+    await expect(runRigScript(['coil_1.py'])).rejects.toThrow();
+    expect(rigState().last?.error).toBe('[ENOENT] spawn /home/admin/Documents/venv/bin/python ENOENT');
+  });
+
+  it('keeps no reason after a command that worked', async () => {
+    runScript.mockRejectedValueOnce(new Error('no rig'));
+    await expect(runRigScript(['coil_1.py'])).rejects.toThrow();
+    await runRigScript(['coil_1.py']);
+    expect(rigState().last).toEqual({ command: 'coil_1.py', ok: true, at: NOW });
+  });
+
   it('is busy while a script is running', async () => {
     let finish!: (r: { stdout: string; stderr: string }) => void;
     runScript.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));

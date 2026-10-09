@@ -1236,7 +1236,9 @@ function CameraSection({ stream = 'dji', name = 'กล้องหลัก' }:
       pc.ontrack = (event) => {
         if (!video) return;
         video.srcObject = event.streams[0] ?? null;
-        video.play().catch(console.error);
+        // A second track arriving restarts playback and rejects the first
+        // play() with an AbortError; that is not a fault.
+        video.play().catch((err: unknown) => { if ((err as { name?: string })?.name !== 'AbortError') console.error(err); });
         setStatus('live');
       };
 
