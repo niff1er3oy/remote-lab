@@ -10,6 +10,7 @@ export type LabEvent = {
   kind:
     | 'start'      // the student pressed start
     | 'background' // the room's own field was read, before anything was switched on (bMeasured)
+    | 'zero'       // the student set the zero again with Set 0, the supply being off (bMeasured: the new zero)
     | 'power-on'   // an instrument's circuit was switched on
     | 'power-off'  // a circuit was cut
     | 'supply'     // the power supply was switched on or off (detail: 'on' | 'off')
@@ -26,7 +27,8 @@ export type LabEvent = {
   bTheory?: number;
   /**
    * Null when the sensor was sending nothing, so there was no measurement.
-   * Every one after the 'background' event has that event's value taken off.
+   * Every one has the zero in force taken off: the value of the latest
+   * 'background' or 'zero' event before it that worked.
    */
   bMeasured?: number | null;
   /** The rig's error, the question asked, or how the visit ended. */
@@ -59,6 +61,10 @@ export function describeEvent(e: LabEvent): string {
       return e.ok && typeof e.bMeasured === 'number'
         ? `อ่านสนามพื้นหลัง ${fixed(e.bMeasured, 3)} mT ก่อนเปิดอุปกรณ์ ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว`
         : 'อ่านสนามพื้นหลังไม่ได้ เพราะเซนเซอร์ไม่ส่งค่า ค่าที่วัดได้จึงยังรวมสนามพื้นหลัง';
+    case 'zero':
+      return e.ok && typeof e.bMeasured === 'number'
+        ? `ตั้งศูนย์ใหม่ (Set 0) ที่ ${fixed(e.bMeasured, 3)} mT ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว`
+        : 'ตั้งศูนย์ (Set 0) ไม่สำเร็จ เพราะเซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่';
     case 'power-on':
       return e.ok ? `เปิดใช้ ${e.instrument}` : `เปิดใช้ ${e.instrument} ไม่สำเร็จ: ${e.detail}`;
     case 'power-off':
@@ -96,10 +102,18 @@ export function readingsOf(events: LabEvent[]): LabReading[] {
 
 export type LabSummary = {
   /**
-   * The room's own field, mT, that every measured value has had taken off.
-   * Null when it was not read: the measured values then still include it.
+   * The room's own field, mT, read on entering and taken off the measured
+   * values. Null when it was not read: the values then still include it,
+   * until a Set 0.
    */
   background: number | null;
+  /**
+   * How many times the student set the zero again with Set 0. When it is not
+   * none, the values measured after each have that zero taken off instead.
+   */
+  rezeroed: number;
+  /** The zero in force when the visit ended, mT; null when none was ever read. */
+  zero: number | null;
   startedAt: number | null;
   endedAt: number | null;
   durationSeconds: number;
@@ -117,8 +131,11 @@ export function summarise(events: LabEvent[]): LabSummary {
   const endedAt = events.length ? events[events.length - 1].at : null;
   const commands = events.filter((e) => COMMANDS.includes(e.kind));
   const background = events.find((e) => e.kind === 'background' && e.ok);
+  const zeros = events.filter((e) => (e.kind === 'background' || e.kind === 'zero') && e.ok && typeof e.bMeasured === 'number');
   return {
     background: typeof background?.bMeasured === 'number' ? background.bMeasured : null,
+    rezeroed: zeros.filter((e) => e.kind === 'zero').length,
+    zero: zeros.length ? zeros[zeros.length - 1].bMeasured ?? null : null,
     startedAt,
     endedAt,
     durationSeconds: startedAt !== null && endedAt !== null ? Math.max(0, Math.round((endedAt - startedAt) / 1000)) : 0,
@@ -139,6 +156,7 @@ export const differencePercent = (r: { bTheory: number; bMeasured: number | null
 const KIND_LABEL: Record<LabEvent['kind'], string> = {
   start: 'เริ่มการทดลอง',
   background: 'สนามพื้นหลัง',
+  zero: 'ตั้งศูนย์ (Set 0)',
   'power-on': 'เปิดใช้อุปกรณ์',
   'power-off': 'ตัดวงจร',
   supply: 'แหล่งจ่ายไฟ',
@@ -180,7 +198,8 @@ export function toCsv(events: LabEvent[]): string {
         e.kind === 'end' ? (e.detail === 'time-up' ? 'หมดเวลา' : 'กดเสร็จสิ้น')
           : e.kind === 'supply' ? (e.detail === 'on' ? 'เปิด' : 'ปิด')
             : e.kind === 'background' ? (e.ok ? 'ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว' : 'เซนเซอร์ไม่ส่งค่า ค่าที่วัดได้ยังรวมสนามพื้นหลัง')
-              : e.detail ?? '',
+              : e.kind === 'zero' ? (e.ok ? 'ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว' : 'เซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่')
+                : e.detail ?? '',
       ),
     ].join(',');
   });

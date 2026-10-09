@@ -48,7 +48,7 @@ describe('summarise — the figures at the top of the summary', () => {
 
   it('is all zeroes for a visit in which nothing happened', () => {
     expect(summarise([])).toEqual({
-      background: null,
+      background: null, rezeroed: 0, zero: null,
       startedAt: null, endedAt: null, durationSeconds: 0, instruments: [], commands: 0, failedCommands: 0, questions: 0, readings: [],
     });
   });
@@ -220,5 +220,50 @@ describe('the background field in the record', () => {
   it('is written to the CSV as not read, with no value', () => {
     const [, first] = toCsv([notRead]).trimEnd().split('\r\n');
     expect(first).toBe('2026-10-08,10:00:01,สนามพื้นหลัง,,,,,,,,ไม่สำเร็จ,เซนเซอร์ไม่ส่งค่า ค่าที่วัดได้ยังรวมสนามพื้นหลัง');
+  });
+});
+
+describe('Set 0 in the record', () => {
+  const entry: LabEvent = { at: at(1), kind: 'background', ok: true, bMeasured: 0.0523 };
+  const again: LabEvent = { at: at(70), kind: 'zero', ok: true, bMeasured: 0.0481 };
+  const failed: LabEvent = { at: at(80), kind: 'zero', ok: false, bMeasured: null };
+
+  it('says what the zero was set to and that it is taken off what follows', () => {
+    expect(describeEvent(again)).toBe('ตั้งศูนย์ใหม่ (Set 0) ที่ 0.048 mT ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว');
+  });
+
+  it('says so when it could not be set, and that the old zero still stands', () => {
+    expect(describeEvent(failed)).toBe('ตั้งศูนย์ (Set 0) ไม่สำเร็จ เพราะเซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่');
+  });
+
+  it('leaves the summary as it was for a visit with no Set 0', () => {
+    expect(summarise([VISIT[0], entry, ...VISIT.slice(1)])).toMatchObject({ background: 0.0523, rezeroed: 0, zero: 0.0523 });
+  });
+
+  it('counts each Set 0 that worked, and gives the zero in force at the end', () => {
+    const later: LabEvent = { at: at(250), kind: 'zero', ok: true, bMeasured: 0.0502 };
+    const s = summarise([VISIT[0], entry, ...VISIT.slice(1, 4), again, failed, ...VISIT.slice(4, 9), later, ...VISIT.slice(9)]);
+    expect(s).toMatchObject({ background: 0.0523, rezeroed: 2, zero: 0.0502 });
+  });
+
+  it('gives a zero even when the one on entering could not be read', () => {
+    const notRead: LabEvent = { at: at(1), kind: 'background', ok: false, bMeasured: null };
+    expect(summarise([VISIT[0], notRead, again])).toMatchObject({ background: null, rezeroed: 1, zero: 0.0481 });
+  });
+
+  it('does not count a Set 0 that failed, and keeps the zero that was in force', () => {
+    expect(summarise([VISIT[0], entry, failed])).toMatchObject({ rezeroed: 0, zero: 0.0523 });
+  });
+
+  it('is not one of the readings, and not a rig command', () => {
+    const withZero = [...VISIT.slice(0, 4), again, failed, ...VISIT.slice(4)];
+    expect(readingsOf(withZero)).toEqual(readingsOf(VISIT));
+    expect(summarise(withZero)).toMatchObject({ commands: summarise(VISIT).commands, failedCommands: summarise(VISIT).failedCommands });
+  });
+
+  it('is written to the CSV with the new zero, or as not set', () => {
+    const [, first, second] = toCsv([again, failed]).trimEnd().split('\r\n');
+    expect(first).toBe('2026-10-08,10:01:10,ตั้งศูนย์ (Set 0),,,,,0.0481,,,สำเร็จ,ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว');
+    expect(second).toBe('2026-10-08,10:01:20,ตั้งศูนย์ (Set 0),,,,,,,,ไม่สำเร็จ,เซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่');
   });
 });

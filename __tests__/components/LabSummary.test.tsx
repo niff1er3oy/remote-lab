@@ -474,3 +474,35 @@ describe('LabSummary — the background field', () => {
     expect(screen.getByText('3 ค่า')).toBeInTheDocument();
   });
 });
+
+describe('LabSummary — Set 0', () => {
+  const entry: LabEvent = { at: at(1), kind: 'background', ok: true, bMeasured: 0.0523 };
+  const again: LabEvent = { at: at(70), kind: 'zero', ok: true, bMeasured: 0.0481 };
+  const failed: LabEvent = { at: at(80), kind: 'zero', ok: false, bMeasured: null };
+  const note = (container: HTMLElement) => container.querySelector('[data-background]');
+
+  it('says each value has had the zero in force at the time taken off, when the zero was set again', () => {
+    const { container } = show([VISIT[0], entry, ...VISIT.slice(1, 4), again, ...VISIT.slice(4)]);
+    expect(note(container)).toHaveTextContent('ค่า B วัดจริงแต่ละค่าหักค่าศูนย์ที่ใช้อยู่ขณะวัดออกแล้ว');
+    expect(note(container)).toHaveTextContent('ตั้งศูนย์ใหม่ด้วย Set 0 1 ครั้ง ค่าล่าสุด 0.048 mT');
+    // No one figure is true of every value any more.
+    expect(note(container)).not.toHaveTextContent('ทุกค่า');
+  });
+
+  it('keeps the plain sentence when the only Set 0 failed', () => {
+    const { container } = show([VISIT[0], entry, failed, ...VISIT.slice(1)]);
+    expect(note(container)).toHaveTextContent('ค่า B วัดจริงทุกค่าหักสนามพื้นหลัง 0.052 mT ออกแล้ว');
+  });
+
+  it('says so when the zero was only ever set by Set 0', () => {
+    const notRead: LabEvent = { at: at(1), kind: 'background', ok: false, bMeasured: null };
+    const { container } = show([VISIT[0], notRead, again, ...VISIT.slice(1)]);
+    expect(note(container)).toHaveTextContent('ตั้งศูนย์ใหม่ด้วย Set 0 1 ครั้ง ค่าล่าสุด 0.048 mT');
+  });
+
+  it('lists each Set 0 in the timeline, a failed one marked as failed', () => {
+    show([VISIT[0], entry, again, failed, ...VISIT.slice(1)]);
+    expect(screen.getByText(/ตั้งศูนย์ใหม่ \(Set 0\) ที่ 0\.048 mT/)).toBeInTheDocument();
+    expect(screen.getByText(/ตั้งศูนย์ \(Set 0\) ไม่สำเร็จ/)).toHaveClass('text-red-300');
+  });
+});

@@ -122,8 +122,8 @@ export async function POST(req: NextRequest) {
   // can explain a difference from theory.
   const backgroundLine = context.background === undefined ? ''
     : context.background === null
-      ? '\n- ค่าวัดจริงยังรวมสนามพื้นหลัง (สนามโลกและสิ่งรอบชุดทดลอง) เพราะอ่านค่าพื้นหลังตอนเข้าห้องไม่ได้'
-      : `\n- ค่าวัดจริงหักสนามพื้นหลัง ${fixed(context.background, 3)} mT ออกแล้ว (อ่านด้วยเซนเซอร์ตอนเข้าห้อง ก่อนเปิดอุปกรณ์)`;
+      ? '\n- ค่าวัดจริงยังรวมสนามพื้นหลัง (สนามโลกและสิ่งรอบชุดทดลอง) เพราะยังอ่านค่าพื้นหลังไม่ได้'
+      : `\n- ค่าวัดจริงหักสนามพื้นหลัง ${fixed(context.background, 3)} mT ออกแล้ว (อ่านด้วยเซนเซอร์ขณะแหล่งจ่ายไฟปิด)`;
 
   const contextBlock = `\n\n**บริบทการทดลองปัจจุบัน:**
 - อุปกรณ์: ${context.instrumentName} (${context.instSub})

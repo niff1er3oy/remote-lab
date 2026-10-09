@@ -202,13 +202,13 @@ describe('POST /api/chat — the readings', () => {
 
   it('says the measured field has had the background taken off, and how much', async () => {
     await askWith([QUESTION], { ...SOLENOID, background: 0.0523 });
-    expect(sentSystemPrompt()).toContain('- สนามแม่เหล็กวัดจริง B_measured = 0.560 mT\n- ค่าวัดจริงหักสนามพื้นหลัง 0.052 mT ออกแล้ว (อ่านด้วยเซนเซอร์ตอนเข้าห้อง ก่อนเปิดอุปกรณ์)\n- ΔB');
+    expect(sentSystemPrompt()).toContain('- สนามแม่เหล็กวัดจริง B_measured = 0.560 mT\n- ค่าวัดจริงหักสนามพื้นหลัง 0.052 mT ออกแล้ว (อ่านด้วยเซนเซอร์ขณะแหล่งจ่ายไฟปิด)\n- ΔB');
   });
 
   it('says the measured field still includes the background when it could not be read', async () => {
     await askWith([QUESTION], { ...SOLENOID, background: null });
     const prompt = sentSystemPrompt();
-    expect(prompt).toContain('- ค่าวัดจริงยังรวมสนามพื้นหลัง (สนามโลกและสิ่งรอบชุดทดลอง) เพราะอ่านค่าพื้นหลังตอนเข้าห้องไม่ได้');
+    expect(prompt).toContain('- ค่าวัดจริงยังรวมสนามพื้นหลัง (สนามโลกและสิ่งรอบชุดทดลอง) เพราะยังอ่านค่าพื้นหลังไม่ได้');
     expect(prompt).not.toContain('ออกแล้ว');
   });
 

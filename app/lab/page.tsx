@@ -8,7 +8,7 @@ import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 import MathSource from '@/app/components/MathSource';
 import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
-import { prefersReducedMotion } from '@/lib/motion';
+import { prefersReducedMotion, press } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { clockTime, describeEvent, type LabEvent } from '@/lib/lab-activity';
 import { aboveBackground, createAverager, fieldFromSensor } from '@/lib/sensor';
@@ -473,7 +473,7 @@ export default function RemoteLabPage() {
   const [labStarted, setLabStarted] = useState(false);
   const [instrument, setInstrument] = useState(0);
   const [z, setZ] = useState(0); // Z position in metres (solenoid only, one of the probe's 21 positions)
-  const [measData, setMeasData] = useState<Map<number, { bMeasured: number; bTheory: number }>>(new Map());
+  const [measData, setMeasData] = useState<Map<number, MeasRecord>>(new Map());
   const [realSensorValue, setRealSensorValue] = useState<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
@@ -610,6 +610,35 @@ export default function RemoteLabPage() {
     setRigError(error === null ? null : { text: `${on ? 'เปิด' : 'ปิด'}แหล่งจ่ายไฟไม่สำเร็จ: ${error}`, canRetry: false });
     setSupplyBusy(false);
   }, [record]);
+  // Set 0: the student has the zero read again, where the probe now is. Only
+  // with the supply off: with current in the winding the sensor reads the very
+  // field being measured, and that would be taken off from then on.
+  const [zeroing, setZeroing] = useState(false);
+  const setZero = useCallback(async (): Promise<boolean> => {
+    if (supplyOn === true) {
+      setRigError({ text: 'ตั้งศูนย์ได้เมื่อแหล่งจ่ายไฟปิดอยู่: ปิดแหล่งจ่ายไฟก่อน แล้วกด Set 0 อีกครั้ง', canRetry: false });
+      return false;
+    }
+    setZeroing(true);
+    const inForce = backgroundNow.current ?? 0;
+    const reading = await freshReading();
+    setZeroing(false);
+    if (reading === null) {
+      record({ kind: 'zero', ok: false, bMeasured: null });
+      setRigError({ text: 'ตั้งศูนย์ไม่สำเร็จ: เซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่', canRetry: false });
+      return false;
+    }
+    // The values just averaged had the old zero taken off: with it put back
+    // they are the field itself, which is the new zero.
+    const zero = reading + inForce;
+    backgroundNow.current = zero;
+    averager.reset();
+    setBackground(zero);
+    record({ kind: 'zero', ok: true, bMeasured: zero });
+    setRigError(null);
+    return true;
+  }, [supplyOn, freshReading, averager, record]);
+
   const [entered, setEntered] = useState(false);
   useEffect(() => {
     if (!inRoom) return;
@@ -690,7 +719,7 @@ export default function RemoteLabPage() {
         if (inst.type === 'solenoid') {
           const bTheory = calcBSolenoid(inst.N, inst.I0, inst.L, inst.R, 0);
           const reading = await freshReading();
-          setMeasData(prev => new Map(prev).set(0, { bMeasured: reading ?? bTheory, bTheory }));
+          setMeasData(prev => new Map(prev).set(0, { bMeasured: reading ?? bTheory, bTheory, zero: backgroundNow.current }));
           record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I: inst.I0, bTheory, bMeasured: reading });
         }
       } finally {
@@ -811,21 +840,21 @@ export default function RemoteLabPage() {
         onTimeUp={() => { onComplete(); endVisit('time-up'); }}
       />
       {rigError && (
-        <div role="alert" className="shrink-0 flex items-center justify-between gap-3 border-b border-red-500/25 bg-red-500/10 px-4 py-1.5 text-sm text-red-300">
+        <div role="alert" className="shrink-0 flex items-center justify-between gap-3 border-b border-red-500/25 bg-red-500/10 px-4 py-1 text-sm text-red-300">
           <span className="min-w-0 truncate" title={rigError.text}>{rigError.text}</span>
           <span className="flex shrink-0 items-center gap-2">
             {rigError.canRetry && (
               <button
                 onClick={() => { setRigError(null); setRigAttempt(n => n + 1); }}
                 disabled={isBusy}
-                className="rounded-full border border-red-400/40 px-3 py-0.5 text-xs font-semibold text-red-200 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                className="h-6 rounded-full border border-red-400/40 px-3 text-xs font-semibold text-red-200 hover:bg-red-500/20 transition-colors disabled:opacity-50"
               >
                 ลองใหม่
               </button>
             )}
             <button
               onClick={() => setRigError(null)}
-              className="rounded-full border border-white/10 px-3 py-0.5 text-xs text-gray-400 hover:text-white transition-colors"
+              className="h-6 rounded-full border border-white/10 px-3 text-xs text-gray-400 hover:text-white transition-colors"
             >
               ปิด
             </button>
@@ -867,6 +896,7 @@ export default function RemoteLabPage() {
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured} background={background}
                 z={z}
+                zero={{ set: setZero, busy: zeroing || isBusy || !rigReady, blocked: supplyOn === true }}
               />
             </div>
             <FormulaPanel inst={inst} I={I} z={z} widthClassName="w-[210px] xl:w-[240px]" />
@@ -948,6 +978,7 @@ export default function RemoteLabPage() {
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured} background={background}
                 z={z}
+                zero={{ set: setZero, busy: zeroing || isBusy || !rigReady, blocked: supplyOn === true }}
               />
               <FormulaPanel inst={inst} I={I} z={z} widthClassName="w-full" />
             </div>
@@ -1766,15 +1797,26 @@ function SplitFieldPanel({ instType, turns, bTheory, bMeasured, bPeak, I, z }: {
 
 // ── Sensor Panel ──────────────────────────────────────────────────────────────
 
-function SensorPanel({ inst, I, bTheory, bMeasured, background, z }: {
+function SensorPanel({ inst, I, bTheory, bMeasured, background, z, zero }: {
   inst: Inst;
   I: number;
   bTheory: number; bMeasured: number;
-  /** The room's own field that the measured value has had taken off; null when it could not be read, undefined before it was tried. */
+  /** The zero that the measured value has had taken off; null when none could be read, undefined before it was tried. */
   background: number | null | undefined;
   z: number;
+  /**
+   * The Set 0 button. `set` resolves to whether the zero was set; `busy`
+   * while it is being read or the rig is at work; `blocked` while the supply
+   * is on, when pressing it only says to switch the supply off first.
+   */
+  zero: { set: () => Promise<boolean>; busy: boolean; blocked: boolean };
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const zeroRef = useRef<HTMLButtonElement>(null);
+  // The button swells for a moment when the zero has been set.
+  const pressZero = async () => {
+    if (await zero.set() && zeroRef.current) press(zeroRef.current, 1.14);
+  };
 
   useEffect(() => {
     if (!panelRef.current) return;
@@ -1791,8 +1833,8 @@ function SensorPanel({ inst, I, bTheory, bMeasured, background, z }: {
   const measured = {
     label: 'B วัดจริง', value: fixed(bMeasured, 3), unit: 'mT', color: '#22d3ee',
     ...(background === undefined ? {}
-      : background === null ? { hint: '(ยังไม่หักพื้นหลัง)', tip: 'B วัดจริง ยังรวมสนามพื้นหลังอยู่ เพราะเซนเซอร์ไม่ส่งค่าตอนเข้าห้อง จึงอ่านค่าพื้นหลังไม่ได้' }
-        : { hint: '(หักพื้นหลัง)', tip: `B วัดจริง หักสนามพื้นหลัง ${fixed(background, 3)} mT ที่อ่านตอนเข้าห้องออกแล้ว` }),
+      : background === null ? { hint: '(ยังไม่หักพื้นหลัง)', tip: 'B วัดจริง ยังรวมสนามพื้นหลังอยู่ เพราะเซนเซอร์ไม่ส่งค่าตอนเข้าห้อง ปิดแหล่งจ่ายไฟแล้วกด Set 0 เพื่ออ่านใหม่' }
+        : { hint: '(หักพื้นหลัง)', tip: `B วัดจริง หักสนามพื้นหลัง ${fixed(background, 3)} mT ออกแล้ว (อ่านตอนเข้าห้อง หรือตอนกด Set 0 ครั้งล่าสุด)` }),
   };
 
   const rows: Array<{ label: string; hint?: string; tip?: string; value: string; unit: string; color: string }> = inst.type === 'coil'
@@ -1813,8 +1855,20 @@ function SensorPanel({ inst, I, bTheory, bMeasured, background, z }: {
 
   return (
     <div ref={panelRef} className="flex-1 min-h-0 flex flex-col rounded-xl border border-white/10 bg-gray-900/50 p-3 short:p-2.5">
-      <h2 className="shrink-0 text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2.5 short:mb-1.5">ค่าที่วัดได้</h2>
-      {/* Rows prefer 42px and squeeze down to 34px when the panel is short, so
+      <div className="shrink-0 mb-2.5 short:mb-1.5 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">ค่าที่วัดได้</h2>
+        {/* The negative margin keeps the heading's line the height it was: the
+            rows below have none to give on a laptop screen. */}
+        <button
+          ref={zeroRef} type="button" onClick={pressZero} disabled={zero.busy} aria-disabled={zero.blocked || undefined}
+          aria-label="Set 0 ตั้งค่าที่เซนเซอร์อ่านได้ตอนนี้เป็นศูนย์"
+          title={zero.blocked ? 'ปิดแหล่งจ่ายไฟก่อน จึงจะตั้งศูนย์ได้' : 'ตั้งค่าที่เซนเซอร์อ่านได้ตอนนี้เป็นศูนย์ (สนามพื้นหลัง ณ ตำแหน่งนี้)'}
+          className={`-my-1 h-6 shrink-0 rounded-md border px-2 text-xs font-semibold normal-case tracking-normal transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${zero.blocked ? 'border-white/5 text-gray-500' : 'border-white/10 text-gray-200 hover:border-cyan-500/30 hover:text-white'}`}
+        >
+          Set 0
+        </button>
+      </div>
+      {/* Rows prefer 42px and squeeze down to 32px when the panel is short, so
           all six readings stay on screen; the scrollbar is only a fallback. */}
       <div className="flex-1 min-h-0 flex flex-col gap-1.5 short:gap-1 overflow-y-auto">
         {rows.map(r => (
@@ -1835,11 +1889,13 @@ function SensorRow({ label, hint, tip, value, unit, color }: { label: string; hi
     prevRef.current = value;
   }, [value]);
   return (
-    <div className="s-card grow-0 shrink basis-[42px] min-h-[34px] flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5">
+    <div className="s-card grow-0 shrink basis-[42px] min-h-[32px] flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5">
       <span title={tip ?? (hint ? `${label} ${hint}` : undefined)} className="min-w-0 text-sm lg:text-[13px] xl:text-sm leading-tight text-gray-400 line-clamp-2">
-        <span className="whitespace-nowrap">{label}</span>
+        {/* The label and its note each stay whole; the space between them is
+            where the note drops to a line of its own when the two do not fit. */}
+        <span className="whitespace-nowrap">{label}</span>{' '}
         {/* No room beside the value in the narrow lg column; the tooltip carries it there. */}
-        {hint && <span className="ml-1 text-[11px] text-gray-500 whitespace-nowrap lg:hidden xl:inline">{hint}</span>}
+        {hint && <span className="text-[11px] text-gray-500 whitespace-nowrap lg:hidden xl:inline">{hint}</span>}
       </span>
       <div className="shrink-0 flex items-baseline gap-1">
         <span ref={valRef} className="text-sm xl:text-base font-mono font-bold tabular-nums" style={{ color }}>{value}</span>
@@ -2408,7 +2464,9 @@ function FormulaPanel({ inst, I, z, widthClassName = 'w-[200px]' }: { inst: Inst
 
 // ── Solenoid Data Panel ───────────────────────────────────────────────────────
 
-type MeasRecord = { bMeasured: number; bTheory: number };
+// One measured position of the solenoid: `zero` is what had been taken off
+// bMeasured when it was read (null when no zero had been read).
+type MeasRecord = { bMeasured: number; bTheory: number; zero: number | null };
 
 function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, freshReading, background, disabled }: {
   z: number; setZ: (v: number) => void;
@@ -2421,7 +2479,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   onMoveError: (message: string | null, zCm: number, bTheory: number) => void;
   /** A reading made of values taken from now on; null when the sensor sends none. */
   freshReading: () => Promise<number | null>;
-  /** The background the measured values have had taken off, for the CSV to say so. */
+  /** The zero the sensor's values have had taken off, kept with each position measured. */
   background: number | null | undefined;
   disabled?: boolean;
 }) {
@@ -2466,7 +2524,7 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
       // The probe is in place: only values taken from here on count.
       const reading = await freshReading();
       const { bMeasured: bM, bTheory: bT } = liveRef.current;
-      setMeasData(prev => new Map(prev).set(zVal, { bMeasured: reading ?? bM, bTheory: bT }));
+      setMeasData(prev => new Map(prev).set(zVal, { bMeasured: reading ?? bM, bTheory: bT, zero: background ?? null }));
     }
     onMoveError(failed, +cmText(probeZ(zVal)), liveRef.current.bTheory);
     setIsMoving(false);
@@ -2475,16 +2533,15 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   function clearAll() { setMeasData(new Map()); }
 
   function downloadCSV() {
-    // B_measured has the background taken off; the last column says how much (empty when it was not read).
-    const header = 'position,Z (cm),B_theory (mT),B_measured (mT),delta_B (mT),delta_B (%),B_background (mT)\n';
-    const taken = typeof background === 'number' ? fixed(background, 4) : '';
+    // B_measured has the zero in force taken off; the last column says how much (empty when none had been read).
+    const header = 'position,Z (cm),B_theory (mT),B_measured (mT),delta_B (mT),delta_B (%),B_zero (mT)\n';
     const rows = allZ
       .filter(zv => measData.has(zv))
       .map(zv => {
         const p = measData.get(zv)!;
         const d = p.bMeasured - p.bTheory;
         const pct = (d / p.bTheory) * 100;
-        return `${zv},${cmText(probeZ(zv))},${p.bTheory.toFixed(4)},${fixed(p.bMeasured, 4)},${fixed(d, 4)},${fixed(pct, 2)},${taken}`;
+        return `${zv},${cmText(probeZ(zv))},${p.bTheory.toFixed(4)},${fixed(p.bMeasured, 4)},${fixed(d, 4)},${fixed(pct, 2)},${p.zero === null ? '' : fixed(p.zero, 4)}`;
       })
       .join('\n');
     const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8' });

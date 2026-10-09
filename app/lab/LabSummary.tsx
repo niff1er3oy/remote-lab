@@ -40,7 +40,7 @@ export default function LabSummary({ events, experimentName, onLeave }: {
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const summary = summarise(events);
-  const backgroundTried = events.some((e) => e.kind === 'background');
+  const backgroundTried = events.some((e) => e.kind === 'background' || e.kind === 'zero');
   const timedOut = events.some((e) => e.kind === 'end' && e.detail === 'time-up');
 
   useLayoutEffect(() => {
@@ -97,9 +97,12 @@ export default function LabSummary({ events, experimentName, onLeave }: {
           {/* What the measured values are measured from. */}
           {backgroundTried && (
             <p data-background className="border-b border-white/5 px-4 py-2 text-xs text-gray-400">
-              {summary.background !== null
-                ? <>ค่า B วัดจริงทุกค่าหักสนามพื้นหลัง <span className="font-mono text-gray-200">{fixed(summary.background, 3)} mT</span> ออกแล้ว (อ่านตอนเข้าห้อง ก่อนเปิดอุปกรณ์)</>
-                : 'ค่า B วัดจริงยังรวมสนามพื้นหลัง เพราะเซนเซอร์ไม่ส่งค่าตอนเข้าห้อง จึงอ่านค่าพื้นหลังไม่ได้'}
+              {summary.rezeroed > 0 && summary.zero !== null
+                // The zero changed part-way: no one figure is true of every value.
+                ? <>ค่า B วัดจริงแต่ละค่าหักค่าศูนย์ที่ใช้อยู่ขณะวัดออกแล้ว รอบนี้ตั้งศูนย์ใหม่ด้วย Set 0 {summary.rezeroed} ครั้ง ค่าล่าสุด <span className="font-mono text-gray-200">{fixed(summary.zero, 3)} mT</span> (ดูเวลาและค่าของแต่ละครั้งในลำดับเหตุการณ์)</>
+                : summary.background !== null
+                  ? <>ค่า B วัดจริงทุกค่าหักสนามพื้นหลัง <span className="font-mono text-gray-200">{fixed(summary.background, 3)} mT</span> ออกแล้ว (อ่านตอนเข้าห้อง ก่อนเปิดอุปกรณ์)</>
+                  : 'ค่า B วัดจริงยังรวมสนามพื้นหลัง เพราะเซนเซอร์ไม่ส่งค่าตอนเข้าห้อง จึงอ่านค่าพื้นหลังไม่ได้'}
             </p>
           )}
           {summary.readings.length === 0 ? (

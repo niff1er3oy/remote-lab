@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 9 ตุลาคม 2569 เวลา 17:50
+- รันเมื่อ: 9 ตุลาคม 2569 เวลา 18:07
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1389 ข้อ ใน 46 ไฟล์ (ผ่าน 1389 ไม่ผ่าน 0)
-- เวลาที่ใช้: 9.8 วินาที
+- จำนวนเทสต์: 1401 ข้อ ใน 46 ไฟล์ (ผ่าน 1401 ไม่ผ่าน 0)
+- เวลาที่ใช้: 9.7 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -14,8 +14,8 @@
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
 | API ฝั่งเซิร์ฟเวอร์ | 17 | 548 | 548 | 0 |
-| หน้าเว็บและคอมโพเนนต์ | 12 | 440 | 440 | 0 |
-| ไลบรารีและตรรกะกลาง | 17 | 401 | 401 | 0 |
+| หน้าเว็บและคอมโพเนนต์ | 12 | 444 | 444 | 0 |
+| ไลบรารีและตรรกะกลาง | 17 | 409 | 409 | 0 |
 
 ## สรุปตามไฟล์
 
@@ -46,7 +46,7 @@
 | `components/FieldDiagram.test.tsx` | ภาพเส้นสนามในหน้าแรก | 31 | ผ่าน |
 | `components/FieldViz.test.tsx` | แบบจำลองสนามแม่เหล็กในห้องแลป: ภาพตัด 2D หัววัดกับลูกศรทฤษฎีและค่าวัด การสลับ 2D/3D และกรณีเครื่องไม่มี WebGL | 35 | ผ่าน |
 | `components/GlobalNotifications.test.tsx` | กระดิ่ง แผงแจ้งเตือน และ toast: การแสดง การปิด การหายเอง และ reduced motion | 41 | ผ่าน |
-| `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 46 | ผ่าน |
+| `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 50 | ผ่าน |
 | `components/LoginPage.test.tsx` | หน้าเข้าสู่ระบบ | 10 | ผ่าน |
 | `components/PortraitGuard.test.tsx` | ข้อความให้หมุนจอเมื่อถือแนวตั้ง | 3 | ผ่าน |
 | `components/SlideIn.test.tsx` | แผงที่เลื่อนเข้าเมื่อปรากฏ | 5 | ผ่าน |
@@ -54,7 +54,7 @@
 | `field-geometry.test.ts` | การอ่านแบบจำลองสนามไปวาด: เส้นของแต่ละอุปกรณ์ ความสว่างตามขนาดสนาม หัวลูกศร จำนวนเส้นในมุมมอง 3D และกรอบภาพ | 91 | ผ่าน |
 | `field-lines.test.ts` | ข้อมูลเส้นสนามที่ใช้วาดภาพในหน้าแรก: สมมาตร ไม่ตัดกัน และได้สัดส่วนจริงของอุปกรณ์ | 36 | ผ่าน |
 | `field-model.test.ts` | ข้อมูลเส้นสนามของแบบจำลองในห้องแลป: ตรวจทิศและขนาดสนามกับกฎบีโอต์-ซาวาร์โดยตรง ความสมมาตร ระยะห่างของเส้นตามความเข้มสนาม และจำนวนเส้นตามจำนวนรอบ | 39 | ผ่าน |
-| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 35 | ผ่าน |
+| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 43 | ผ่าน |
 | `lab-presence.test.ts` |  | 18 | ผ่าน |
 | `lab-status.test.ts` | การตรวจว่ากล้องและเซนเซอร์ตอบสนองหรือไม่ และ API สถานะอุปกรณ์ของ admin | 12 | ผ่าน |
 | `lib-gaps.test.ts` | กรณีที่เหลือของโมดูลใน lib ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม | 16 | ผ่าน |
@@ -1361,7 +1361,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV
 
-ผล: ผ่านทั้ง 46 ข้อ
+ผล: ผ่านทั้ง 50 ข้อ
 
 **LabSummary › the heading**
 
@@ -1425,6 +1425,12 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — says the measured values still include it when it could not be read
 - ผ่าน — says nothing about it for a visit in which it was never tried
 - ผ่าน — lists the reading of it in the timeline, and does not count it among the values recorded
+**LabSummary — Set 0**
+
+- ผ่าน — says each value has had the zero in force at the time taken off, when the zero was set again
+- ผ่าน — keeps the plain sentence when the only Set 0 failed
+- ผ่าน — says so when the zero was only ever set by Set 0
+- ผ่าน — lists each Set 0 in the timeline, a failed one marked as failed
 
 #### `components/LoginPage.test.tsx`
 
@@ -1775,9 +1781,9 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 #### `lab-activity.test.ts`
 
-บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ข้อความแต่ละเหตุการณ์ และไฟล์ CSV
+บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV
 
-ผล: ผ่านทั้ง 35 ข้อ
+ผล: ผ่านทั้ง 43 ข้อ
 
 **summarise — the figures at the top of the summary**
 
@@ -1828,6 +1834,16 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — is not one of the readings, and not a rig command
 - ผ่าน — is written to the CSV with its value and what it is for
 - ผ่าน — is written to the CSV as not read, with no value
+**Set 0 in the record**
+
+- ผ่าน — says what the zero was set to and that it is taken off what follows
+- ผ่าน — says so when it could not be set, and that the old zero still stands
+- ผ่าน — leaves the summary as it was for a visit with no Set 0
+- ผ่าน — counts each Set 0 that worked, and gives the zero in force at the end
+- ผ่าน — gives a zero even when the one on entering could not be read
+- ผ่าน — does not count a Set 0 that failed, and keeps the zero that was in force
+- ผ่าน — is not one of the readings, and not a rig command
+- ผ่าน — is written to the CSV with the new zero, or as not set
 
 #### `lab-presence.test.ts`
 
