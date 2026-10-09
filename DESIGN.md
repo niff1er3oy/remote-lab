@@ -123,7 +123,7 @@ Firestore has no equivalent of a SQL `CHECK` constraint, so `end_time > start_ti
 
 The app has no WebSocket server of its own. The room-sharing feature (room codes, the `/view/[code]` spectator page, in-room chat and the `/ws` room server in `server.js`) was removed; a lab session now has exactly one participant, the user who booked it.
 
-The only live socket is the sensor feed: the lab page opens `/ws/sensor`, which `next.config.ts` rewrites to the sensor service named in `SENSOR_URL` (`ws://127.0.0.1:8888` unless set). The rewrite is fixed when the app is built, so a new address needs a build as well as a restart. Next.js attaches its own upgrade listener to the HTTP server for that rewrite (and for HMR in development), so `server.js` needs no upgrade handling.
+The only live socket is the sensor feed: the lab page opens `/ws/sensor`, which `next.config.ts` rewrites to the sensor service named in `SENSOR_URL` (`ws://127.0.0.1:8888` unless set). The rewrite is fixed when the app is built, so a new address needs a build as well as a restart. The service sends `{"bx", "by", "bz"}` in microtesla; `lib/sensor.ts` turns each message into the size of the field in mT, which is the value the lab room shows and records. Next.js attaches its own upgrade listener to the HTTP server for that rewrite (and for HMR in development), so `server.js` needs no upgrade handling.
 
 Notifications are polled, not pushed — `useNotifications()` calls `/api/notifications` + `/api/bookings/notify-upcoming` every 30 seconds, plus immediately on a `booking-created` DOM event fired by the booking calendar.
 

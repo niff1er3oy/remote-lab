@@ -11,6 +11,7 @@ import { calcBCoil, calcBSolenoid, cmText, PROBE_POSITIONS, PROBE_STEP_M, probeZ
 import { prefersReducedMotion } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { clockTime, describeEvent, type LabEvent } from '@/lib/lab-activity';
+import { fieldFromSensor } from '@/lib/sensor';
 import { FieldViz3D } from './FieldViz';
 import LabSummary from './LabSummary';
 
@@ -623,13 +624,11 @@ export default function RemoteLabPage() {
       
       ws = new WebSocket(wsUrl);
       ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data && typeof data.value === 'number') {
-            sensorNow.current = data.value;
-            setRealSensorValue(data.value);
-          }
-        } catch { }
+        const field = fieldFromSensor(event.data);
+        if (field !== null) {
+          sensorNow.current = field;
+          setRealSensorValue(field);
+        }
       };
       ws.onclose = () => {
         reconnectTimeout = setTimeout(connect, 2000);
