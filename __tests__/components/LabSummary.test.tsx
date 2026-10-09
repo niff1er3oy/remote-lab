@@ -447,3 +447,30 @@ describe('LabSummary', () => {
     });
   });
 });
+
+describe('LabSummary — the background field', () => {
+  const read: LabEvent = { at: at(1), kind: 'background', ok: true, bMeasured: 0.0523 };
+  const notRead: LabEvent = { at: at(1), kind: 'background', ok: false, bMeasured: null };
+  const note = (container: HTMLElement) => container.querySelector('[data-background]');
+
+  it('says above the readings how much was taken off every measured value', () => {
+    const { container } = show([VISIT[0], read, ...VISIT.slice(1)]);
+    expect(note(container)).toHaveTextContent('ค่า B วัดจริงทุกค่าหักสนามพื้นหลัง 0.052 mT ออกแล้ว');
+  });
+
+  it('says the measured values still include it when it could not be read', () => {
+    const { container } = show([VISIT[0], notRead, ...VISIT.slice(1)]);
+    expect(note(container)).toHaveTextContent('ค่า B วัดจริงยังรวมสนามพื้นหลัง');
+    expect(note(container)).not.toHaveTextContent('ออกแล้ว');
+  });
+
+  it('says nothing about it for a visit in which it was never tried', () => {
+    expect(note(show(VISIT).container)).not.toBeInTheDocument();
+  });
+
+  it('lists the reading of it in the timeline, and does not count it among the values recorded', () => {
+    show([VISIT[0], read, ...VISIT.slice(1)]);
+    expect(screen.getByText(/อ่านสนามพื้นหลัง 0\.052 mT ก่อนเปิดอุปกรณ์/)).toBeInTheDocument();
+    expect(screen.getByText('3 ค่า')).toBeInTheDocument();
+  });
+});

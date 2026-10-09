@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 9 ตุลาคม 2569 เวลา 17:28
+- รันเมื่อ: 9 ตุลาคม 2569 เวลา 17:50
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1357 ข้อ ใน 46 ไฟล์ (ผ่าน 1357 ไม่ผ่าน 0)
-- เวลาที่ใช้: 10.1 วินาที
+- จำนวนเทสต์: 1389 ข้อ ใน 46 ไฟล์ (ผ่าน 1389 ไม่ผ่าน 0)
+- เวลาที่ใช้: 9.8 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -13,9 +13,9 @@
 
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
-| API ฝั่งเซิร์ฟเวอร์ | 17 | 542 | 542 | 0 |
-| หน้าเว็บและคอมโพเนนต์ | 12 | 436 | 436 | 0 |
-| ไลบรารีและตรรกะกลาง | 17 | 379 | 379 | 0 |
+| API ฝั่งเซิร์ฟเวอร์ | 17 | 548 | 548 | 0 |
+| หน้าเว็บและคอมโพเนนต์ | 12 | 440 | 440 | 0 |
+| ไลบรารีและตรรกะกลาง | 17 | 401 | 401 | 0 |
 
 ## สรุปตามไฟล์
 
@@ -28,7 +28,7 @@
 | `api/bookings-id.test.ts` | การเริ่ม จบ และยกเลิกการจองของตัวเอง | 33 | ผ่าน |
 | `api/bookings.test.ts` | การจองรอบ: การตรวจข้อมูล การกันจองซ้อน และสิ่งที่ถูกบันทึก | 36 | ผ่าน |
 | `api/cam.test.ts` | พร็อกซีกล้อง: การส่งต่อไปยังกล้องที่ถูกต้อง และการกัน path ที่พยายามออกนอกที่อยู่ของกล้อง | 33 | ผ่าน |
-| `api/chat.test.ts` | API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ | 75 | ผ่าน |
+| `api/chat.test.ts` | API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ | 81 | ผ่าน |
 | `api/dashboard-history.test.ts` | ประวัติการใช้งาน: รายการที่นับเป็นประวัติ เวลาที่ใช้ และการแบ่งหน้า | 23 | ผ่าน |
 | `api/dashboard-stats.test.ts` | ตัวเลขสรุปและรอบที่จองไว้บน dashboard | 10 | ผ่าน |
 | `api/db-test.test.ts` | การตรวจการเชื่อมต่อฐานข้อมูล | 4 | ผ่าน |
@@ -46,7 +46,7 @@
 | `components/FieldDiagram.test.tsx` | ภาพเส้นสนามในหน้าแรก | 31 | ผ่าน |
 | `components/FieldViz.test.tsx` | แบบจำลองสนามแม่เหล็กในห้องแลป: ภาพตัด 2D หัววัดกับลูกศรทฤษฎีและค่าวัด การสลับ 2D/3D และกรณีเครื่องไม่มี WebGL | 35 | ผ่าน |
 | `components/GlobalNotifications.test.tsx` | กระดิ่ง แผงแจ้งเตือน และ toast: การแสดง การปิด การหายเอง และ reduced motion | 41 | ผ่าน |
-| `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 42 | ผ่าน |
+| `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 46 | ผ่าน |
 | `components/LoginPage.test.tsx` | หน้าเข้าสู่ระบบ | 10 | ผ่าน |
 | `components/PortraitGuard.test.tsx` | ข้อความให้หมุนจอเมื่อถือแนวตั้ง | 3 | ผ่าน |
 | `components/SlideIn.test.tsx` | แผงที่เลื่อนเข้าเมื่อปรากฏ | 5 | ผ่าน |
@@ -54,17 +54,17 @@
 | `field-geometry.test.ts` | การอ่านแบบจำลองสนามไปวาด: เส้นของแต่ละอุปกรณ์ ความสว่างตามขนาดสนาม หัวลูกศร จำนวนเส้นในมุมมอง 3D และกรอบภาพ | 91 | ผ่าน |
 | `field-lines.test.ts` | ข้อมูลเส้นสนามที่ใช้วาดภาพในหน้าแรก: สมมาตร ไม่ตัดกัน และได้สัดส่วนจริงของอุปกรณ์ | 36 | ผ่าน |
 | `field-model.test.ts` | ข้อมูลเส้นสนามของแบบจำลองในห้องแลป: ตรวจทิศและขนาดสนามกับกฎบีโอต์-ซาวาร์โดยตรง ความสมมาตร ระยะห่างของเส้นตามความเข้มสนาม และจำนวนเส้นตามจำนวนรอบ | 39 | ผ่าน |
-| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 28 | ผ่าน |
+| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 35 | ผ่าน |
 | `lab-presence.test.ts` |  | 18 | ผ่าน |
 | `lab-status.test.ts` | การตรวจว่ากล้องและเซนเซอร์ตอบสนองหรือไม่ และ API สถานะอุปกรณ์ของ admin | 12 | ผ่าน |
 | `lib-gaps.test.ts` | กรณีที่เหลือของโมดูลใน lib ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม | 16 | ผ่าน |
 | `math.test.tsx` | การแสดงสูตรคณิตศาสตร์ด้วย KaTeX ในแชตผู้ช่วย AI | 5 | ผ่าน |
 | `motion.test.ts` | ตัวช่วยแอนิเมชัน: ไม่ซ่อนเนื้อหาเมื่อผู้ใช้ตั้ง reduced motion หรือเนื้อหาอยู่บนจอแล้ว | 14 | ผ่าน |
-| `physics.test.ts` | สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 21 จุด | 13 | ผ่าน |
+| `physics.test.ts` | สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 21 จุด | 20 | ผ่าน |
 | `rig-access.test.ts` | กติกาว่าใครสั่งอุปกรณ์ได้: รอบที่กำลังดำเนินอยู่ รอบที่เพิ่งจบ และกรณีที่ไม่มีสิทธิ์ | 27 | ผ่าน |
 | `rig.test.ts` | ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์ | 21 | ผ่าน |
 | `safety.test.ts` | ตัวกันของชุดทดสอบเอง: เทสต์ต้องไม่ใช้ credential จริง และแตะ Firebase หรือเครือข่ายไม่ได้ถ้าไม่ได้จำลองไว้ | 3 | ผ่าน |
-| `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT | 22 | ผ่าน |
+| `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง | 30 | ผ่าน |
 | `session.test.ts` | การออกและตรวจ session cookie | 12 | ผ่าน |
 | `webrtc-latency.test.ts` | การคำนวณความหน่วงของวิดีโอจากสถิติ WebRTC (เครือข่าย บัฟเฟอร์ ถอดรหัส) และการตรวจภาพค้าง | 8 | ผ่าน |
 
@@ -427,7 +427,7 @@ API ของ admin: สิทธิ์ ภาพรวมการจอง ก
 
 API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ
 
-ผล: ผ่านทั้ง 75 ข้อ
+ผล: ผ่านทั้ง 81 ข้อ
 
 **POST /api/chat — who may use the assistant**
 
@@ -469,6 +469,12 @@ API ผู้ช่วย AI: สิทธิ์ การกรองข้อ�
 **POST /api/chat — the readings**
 
 - ผ่าน — writes the readings into the tutor's instructions
+- ผ่าน — says the measured field has had the background taken off, and how much
+- ผ่าน — says the measured field still includes the background when it could not be read
+- ผ่าน — says nothing about the background when it is given as undefined
+- ผ่าน — says nothing about the background when it is given as "0.05"
+- ผ่าน — says nothing about the background when it is given as true
+- ผ่าน — says nothing about the background when it is given as {"value": 1}
 - ผ่าน — marks a measured field above theory with a plus sign
 - ผ่าน — leaves the percentage out when the theoretical field is zero
 - ผ่าน — gives the probe position in centimetres to two decimals, negative side included
@@ -1355,7 +1361,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV
 
-ผล: ผ่านทั้ง 42 ข้อ
+ผล: ผ่านทั้ง 46 ข้อ
 
 **LabSummary › the heading**
 
@@ -1413,6 +1419,12 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — animates nothing when the visitor asked for reduced motion
 - ผ่าน — stops its animations when the summary goes away
 - ผ่าน — leaves the heading, the rows and the buttons visible without the animation
+**LabSummary — the background field**
+
+- ผ่าน — says above the readings how much was taken off every measured value
+- ผ่าน — says the measured values still include it when it could not be read
+- ผ่าน — says nothing about it for a visit in which it was never tried
+- ผ่าน — lists the reading of it in the timeline, and does not count it among the values recorded
 
 #### `components/LoginPage.test.tsx`
 
@@ -1765,7 +1777,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ข้อความแต่ละเหตุการณ์ และไฟล์ CSV
 
-ผล: ผ่านทั้ง 28 ข้อ
+ผล: ผ่านทั้ง 35 ข้อ
 
 **summarise — the figures at the top of the summary**
 
@@ -1807,6 +1819,15 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — keeps the question "-2+3" from running as a spreadsheet formula
 - ผ่าน — keeps the question "@cmd" from running as a spreadsheet formula
 - ผ่าน — is only the header for a visit with no events
+**the background field in the record**
+
+- ผ่าน — says what was read and that it is taken off what follows
+- ผ่าน — says so when it could not be read, and what that means for the values
+- ผ่าน — is in the summary as the value taken off every measurement
+- ผ่าน — is absent from the summary when it was not read, or never tried
+- ผ่าน — is not one of the readings, and not a rig command
+- ผ่าน — is written to the CSV with its value and what it is for
+- ผ่าน — is written to the CSV as not read, with no value
 
 #### `lab-presence.test.ts`
 
@@ -1946,7 +1967,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 21 จุด
 
-ผล: ผ่านทั้ง 13 ข้อ
+ผล: ผ่านทั้ง 20 ข้อ
 
 **calcBCoil — field at the centre of a single coil**
 
@@ -1967,6 +1988,15 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — steps 1 cm at a time from the middle of the solenoid, so the ends are at 10 cm
 - ผ่าน — gives the field worked by hand at the centre and at the last position
 - ผ่าน — writes a length in centimetres with at most two decimals
+**fixed and signedFixed — a field as text**
+
+- ผ่าน — writes a number to the decimals asked for
+- ผ่าน — writes -0.0002, a hair under zero, as zero and not as a negative zero
+- ผ่าน — writes -0.00049, a hair under zero, as zero and not as a negative zero
+- ผ่าน — writes -1e-17, a hair under zero, as zero and not as a negative zero
+- ผ่าน — writes -0, a hair under zero, as zero and not as a negative zero
+- ผ่าน — keeps the sign of a value that does not round away
+- ผ่าน — shows the sign of a difference either way, and a plus for none
 
 #### `rig-access.test.ts`
 
@@ -2064,9 +2094,9 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 #### `sensor.test.ts`
 
-การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT
+การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง
 
-ผล: ผ่านทั้ง 22 ข้อ
+ผล: ผ่านทั้ง 30 ข้อ
 
 **fieldFromSensor — one message from the magnetometer**
 
@@ -2094,6 +2124,18 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — a fresh reading leaves out what was collected before it was asked for
 - ผ่าน — a fresh reading is null when the sensor does not send enough in time
 - ผ่าน — answers everyone waiting for a fresh reading
+**aboveBackground — a reading with the room's own field taken off**
+
+- ผ่าน — is the calibrated reading less the calibrated background
+- ผ่าน — takes the two calibrated values as they are, so the calibration's offset cancels
+- ผ่าน — is nothing when the sensor reads what it read on entering
+- ผ่าน — can come out a little below zero, and is left that way
+- ผ่าน — leaves the reading as it is when the background could not be read
+- ผ่าน — works on what a message from the sensor carries
+**createAverager — starting over**
+
+- ผ่าน — drops what was collected toward the next reading
+- ผ่าน — does not disturb someone waiting for a fresh reading
 
 #### `session.test.ts`
 

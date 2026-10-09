@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getSessionUser } from '@/lib/session';
+import { fixed, signedFixed } from '@/lib/physics';
 
 const TYPHOON_API = 'https://api.opentyphoon.ai/v1/chat/completions';
 
@@ -17,6 +18,8 @@ interface ChatContext {
   instSub: string;
   instType: 'coil' | 'solenoid';
   I: number;
+  /** The room's own field already taken off bMeasured, mT; null when it could not be read. */
+  background?: number | null;
   bTheory: number;
   bMeasured: number;
   z?: number;
@@ -86,6 +89,7 @@ function readContext(raw: unknown): ChatContext | null {
     instType: c.instType,
     I, bTheory, bMeasured,
     z: num(c.z) ?? undefined,
+    background: c.background === null ? null : num(c.background) ?? undefined,
   };
 }
 
@@ -114,12 +118,19 @@ export async function POST(req: NextRequest) {
     ? `\n- ตำแหน่งหัววัด Z = ${+(context.z * 100).toFixed(2)} cm จากจุดกึ่งกลาง`
     : '';
 
+  // Whether the measured value still has the Earth's field in it changes what
+  // can explain a difference from theory.
+  const backgroundLine = context.background === undefined ? ''
+    : context.background === null
+      ? '\n- ค่าวัดจริงยังรวมสนามพื้นหลัง (สนามโลกและสิ่งรอบชุดทดลอง) เพราะอ่านค่าพื้นหลังตอนเข้าห้องไม่ได้'
+      : `\n- ค่าวัดจริงหักสนามพื้นหลัง ${fixed(context.background, 3)} mT ออกแล้ว (อ่านด้วยเซนเซอร์ตอนเข้าห้อง ก่อนเปิดอุปกรณ์)`;
+
   const contextBlock = `\n\n**บริบทการทดลองปัจจุบัน:**
 - อุปกรณ์: ${context.instrumentName} (${context.instSub})
 - กระแสที่จ่าย I = ${context.I.toFixed(2)} A (ค่าที่ตั้งไว้ ชุดทดลองไม่ได้วัดกระแส)${zLine}
 - สนามแม่เหล็กทฤษฎี B_theory = ${context.bTheory.toFixed(3)} mT
-- สนามแม่เหล็กวัดจริง B_measured = ${context.bMeasured.toFixed(3)} mT
-- ΔB = ${delta >= 0 ? '+' : ''}${delta.toFixed(3)} mT${percent}`;
+- สนามแม่เหล็กวัดจริง B_measured = ${fixed(context.bMeasured, 3)} mT${backgroundLine}
+- ΔB = ${signedFixed(delta, 3)} mT${percent}`;
 
   let upstream: Response;
   try {

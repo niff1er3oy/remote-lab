@@ -1,4 +1,4 @@
-import { calibrated, CALIBRATION, createAverager, fieldFromSensor, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
+import { aboveBackground, calibrated, CALIBRATION, createAverager, fieldFromSensor, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
@@ -101,5 +101,56 @@ describe('createAverager — twenty values make one reading', () => {
     averager.add(1);
     averager.add(3);
     expect(await Promise.all([first, second])).toEqual([2, 2]);
+  });
+});
+
+describe('aboveBackground — a reading with the room\'s own field taken off', () => {
+  it('is the calibrated reading less the calibrated background', () => {
+    // The coil on: 0.292 mT. The room alone, read on entering: 0.050 mT.
+    expect(aboveBackground(0.292, 0.05)).toBeCloseTo(0.242, 12);
+  });
+
+  it('takes the two calibrated values as they are, so the calibration\'s offset cancels', () => {
+    // Raw sizes of 0.25 and 0.04 mT: 1.07353 x (0.25 - 0.04).
+    expect(aboveBackground(calibrated(0.25), calibrated(0.04))).toBeCloseTo(CALIBRATION.gain * 0.21, 12);
+  });
+
+  it('is nothing when the sensor reads what it read on entering', () => {
+    expect(aboveBackground(calibrated(0.05), calibrated(0.05))).toBe(0);
+  });
+
+  it('can come out a little below zero, and is left that way', () => {
+    expect(aboveBackground(0.048, 0.05)).toBeCloseTo(-0.002, 12);
+  });
+
+  it('leaves the reading as it is when the background could not be read', () => {
+    expect(aboveBackground(0.292, null)).toBe(0.292);
+  });
+
+  it('works on what a message from the sensor carries', () => {
+    const background = fieldFromSensor({ bx: 30, by: 40, bz: 0 }) as number; // 0.05 mT raw
+    const coilOn = fieldFromSensor({ bx: 180, by: 240, bz: 0 }) as number; // 0.30 mT raw
+    expect(aboveBackground(coilOn, background)).toBeCloseTo(CALIBRATION.gain * 0.25, 12);
+  });
+});
+
+describe('createAverager — starting over', () => {
+  it('drops what was collected toward the next reading', () => {
+    const averager = createAverager(4);
+    // Taken before the background was known: these still have it in them.
+    [9, 9, 9].forEach((v) => averager.add(v));
+    averager.reset();
+    [1, 2, 3].forEach((v) => expect(averager.add(v)).toBeNull());
+    expect(averager.add(4)).toBe(2.5);
+  });
+
+  it('does not disturb someone waiting for a fresh reading', async () => {
+    const averager = createAverager(2);
+    const reading = averager.fresh(1000);
+    averager.add(100);
+    averager.reset();
+    averager.add(1);
+    averager.add(3);
+    expect(await reading).toBe(2);
   });
 });

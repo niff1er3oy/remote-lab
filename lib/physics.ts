@@ -21,6 +21,22 @@ export const probeZ = (position: number) => position * PROBE_STEP_M;
 /** A length in metres as centimetres, to at most two decimals: "2.5", "0", "-10". */
 export const cmText = (metres: number) => String(+(metres * 100).toFixed(2));
 
+/**
+ * A number to `digits` decimals, never as a negative zero: a field of
+ * -0.0002 mT (a reading a hair under the background it is measured from)
+ * reads "0.000", not "-0.000".
+ */
+export function fixed(value: number, digits: number): string {
+  const text = value.toFixed(digits);
+  return Number(text) === 0 ? (0).toFixed(digits) : text;
+}
+
+/** The same with its sign always shown, for a difference: "+0.012", "-0.300", "+0.000". */
+export function signedFixed(value: number, digits: number): string {
+  const text = fixed(value, digits);
+  return Number(text) < 0 ? text : `+${text}`;
+}
+
 // Single coil at center (Z=0): B₀ = μ₀·n·I / (2R)  [mT]
 export function calcBCoil(n: number, I: number, R: number): number {
   return (MU0 * n * I) / (2 * R) * 1e3;

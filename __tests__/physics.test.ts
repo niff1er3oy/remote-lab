@@ -1,4 +1,4 @@
-import { calcBCoil, calcBSolenoid, cmText, PROBE_MAX, PROBE_MIN, PROBE_POSITIONS, PROBE_STEP_M, probeZ, SOLENOID as RIG_SOLENOID } from '@/lib/physics';
+import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_MAX, PROBE_MIN, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID as RIG_SOLENOID } from '@/lib/physics';
 
 // A 16 cm solenoid with the rig's winding and current, worked by hand below.
 // (The rig's own solenoid is 8 cm long; it has its own tests further down.)
@@ -98,5 +98,31 @@ describe('the solenoid on the rig and its probe positions', () => {
     expect(cmText(probeZ(-6))).toBe('-6');
     expect(cmText(0)).toBe('0');
     expect(cmText(0.04)).toBe('4');
+  });
+});
+
+describe('fixed and signedFixed — a field as text', () => {
+  it('writes a number to the decimals asked for', () => {
+    expect(fixed(0.2417, 3)).toBe('0.242');
+    expect(fixed(-0.3004, 3)).toBe('-0.300');
+    expect(fixed(12, 2)).toBe('12.00');
+  });
+
+  it.each([-0.0002, -0.00049, -1e-17, -0])('writes %p, a hair under zero, as zero and not as a negative zero', (value) => {
+    expect(fixed(value, 3)).toBe('0.000');
+    expect(fixed(value, 1)).toBe('0.0');
+  });
+
+  it('keeps the sign of a value that does not round away', () => {
+    expect(fixed(-0.0005, 3)).toBe('-0.001');
+    expect(fixed(-0.04, 1)).toBe('0.0');
+    expect(fixed(-0.06, 1)).toBe('-0.1');
+  });
+
+  it('shows the sign of a difference either way, and a plus for none', () => {
+    expect(signedFixed(0.0123, 3)).toBe('+0.012');
+    expect(signedFixed(-0.3, 3)).toBe('-0.300');
+    expect(signedFixed(0, 3)).toBe('+0.000');
+    expect(signedFixed(-0.0002, 3)).toBe('+0.000');
   });
 });

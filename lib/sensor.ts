@@ -42,6 +42,15 @@ export function fieldFromSensor(message: unknown, axis: SensorAxis = SENSOR_AXIS
   return finite(m.value) ? m.value : null;
 }
 
+/**
+ * A reading with the room's own field taken off it. Both are calibrated sizes
+ * in mT. The background is what the sensor read on entering the lab room,
+ * before anything was switched on: the Earth's field and whatever else is near
+ * the rig. Null when it could not be read; the reading is then left as it is.
+ * The result can be a little below zero: a difference of two readings is.
+ */
+export const aboveBackground = (reading: number, background: number | null) => reading - (background ?? 0);
+
 // One reading is the mean of this many messages in a row. The service sends
 // about twenty a second, so a reading takes about a second.
 export const SAMPLES_PER_READING = 20;
@@ -62,6 +71,10 @@ export function createAverager(size = SAMPLES_PER_READING) {
       block = [];
       for (const tell of waiting.splice(0)) tell(reading);
       return reading;
+    },
+    /** Drops what has been collected toward the next reading: it was taken on other terms. */
+    reset(): void {
+      block = [];
     },
     /**
      * A reading made only of values that arrive from now on: what was

@@ -3,12 +3,11 @@
 import { useLayoutEffect, useRef } from 'react';
 import { animate, stagger } from 'animejs';
 import { prefersReducedMotion } from '@/lib/motion';
+import { fixed, signedFixed } from '@/lib/physics';
 import {
   clockTime, describeEvent, difference, differencePercent, summarise, toCsv,
   type LabEvent, type LabReading,
 } from '@/lib/lab-activity';
-
-const signed = (v: number, digits: number) => `${v >= 0 ? '+' : ''}${v.toFixed(digits)}`;
 
 function durationText(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -41,6 +40,7 @@ export default function LabSummary({ events, experimentName, onLeave }: {
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const summary = summarise(events);
+  const backgroundTried = events.some((e) => e.kind === 'background');
   const timedOut = events.some((e) => e.kind === 'end' && e.detail === 'time-up');
 
   useLayoutEffect(() => {
@@ -94,6 +94,14 @@ export default function LabSummary({ events, experimentName, onLeave }: {
 
         <section data-rise className="rounded-xl border border-white/10 bg-gray-900/50">
           <h2 className="border-b border-white/5 px-4 py-2.5 text-sm font-semibold text-gray-200">ค่าที่ได้จากการทดลอง</h2>
+          {/* What the measured values are measured from. */}
+          {backgroundTried && (
+            <p data-background className="border-b border-white/5 px-4 py-2 text-xs text-gray-400">
+              {summary.background !== null
+                ? <>ค่า B วัดจริงทุกค่าหักสนามพื้นหลัง <span className="font-mono text-gray-200">{fixed(summary.background, 3)} mT</span> ออกแล้ว (อ่านตอนเข้าห้อง ก่อนเปิดอุปกรณ์)</>
+                : 'ค่า B วัดจริงยังรวมสนามพื้นหลัง เพราะเซนเซอร์ไม่ส่งค่าตอนเข้าห้อง จึงอ่านค่าพื้นหลังไม่ได้'}
+            </p>
+          )}
           {summary.readings.length === 0 ? (
             <p className="px-4 py-5 text-sm text-gray-500">รอบนี้ยังไม่มีค่าที่บันทึกไว้</p>
           ) : (
@@ -171,9 +179,9 @@ function ReadingRow({ reading: r }: { reading: LabReading }) {
       <td className="px-3 py-1.5 text-right text-[#a78bfa]">{r.zCm === null ? '—' : r.zCm > 0 ? `+${r.zCm}` : r.zCm}</td>
       <td className="px-3 py-1.5 text-right text-gray-300">{r.I.toFixed(2)}</td>
       <td className="px-3 py-1.5 text-right text-[#c8ff00]">{r.bTheory.toFixed(3)}</td>
-      <td className="px-3 py-1.5 text-right text-cyan-400">{r.bMeasured === null ? '—' : r.bMeasured.toFixed(3)}</td>
-      <td className={`px-3 py-1.5 text-right ${off ? 'text-red-400' : 'text-gray-300'}`}>{d === null ? '—' : signed(d, 3)}</td>
-      <td className={`px-4 py-1.5 text-right ${off ? 'text-red-400' : 'text-gray-300'}`}>{pct === null ? '—' : signed(pct, 1)}</td>
+      <td className="px-3 py-1.5 text-right text-cyan-400">{r.bMeasured === null ? '—' : fixed(r.bMeasured, 3)}</td>
+      <td className={`px-3 py-1.5 text-right ${off ? 'text-red-400' : 'text-gray-300'}`}>{d === null ? '—' : signedFixed(d, 3)}</td>
+      <td className={`px-4 py-1.5 text-right ${off ? 'text-red-400' : 'text-gray-300'}`}>{pct === null ? '—' : signedFixed(pct, 1)}</td>
     </tr>
   );
 }

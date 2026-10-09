@@ -48,6 +48,7 @@ describe('summarise — the figures at the top of the summary', () => {
 
   it('is all zeroes for a visit in which nothing happened', () => {
     expect(summarise([])).toEqual({
+      background: null,
       startedAt: null, endedAt: null, durationSeconds: 0, instruments: [], commands: 0, failedCommands: 0, questions: 0, readings: [],
     });
   });
@@ -180,5 +181,44 @@ describe('toCsv — the download', () => {
 
   it('is only the header for a visit with no events', () => {
     expect(lines([])).toHaveLength(1);
+  });
+});
+
+describe('the background field in the record', () => {
+  const read: LabEvent = { at: at(1), kind: 'background', ok: true, bMeasured: 0.0523 };
+  const notRead: LabEvent = { at: at(1), kind: 'background', ok: false, bMeasured: null };
+
+  it('says what was read and that it is taken off what follows', () => {
+    expect(describeEvent(read)).toBe('อ่านสนามพื้นหลัง 0.052 mT ก่อนเปิดอุปกรณ์ ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว');
+  });
+
+  it('says so when it could not be read, and what that means for the values', () => {
+    expect(describeEvent(notRead)).toBe('อ่านสนามพื้นหลังไม่ได้ เพราะเซนเซอร์ไม่ส่งค่า ค่าที่วัดได้จึงยังรวมสนามพื้นหลัง');
+  });
+
+  it('is in the summary as the value taken off every measurement', () => {
+    expect(summarise([VISIT[0], read, ...VISIT.slice(1)]).background).toBe(0.0523);
+  });
+
+  it('is absent from the summary when it was not read, or never tried', () => {
+    expect(summarise([VISIT[0], notRead, ...VISIT.slice(1)]).background).toBeNull();
+    expect(summarise(VISIT).background).toBeNull();
+  });
+
+  it('is not one of the readings, and not a rig command', () => {
+    const withBackground = [VISIT[0], read, ...VISIT.slice(1)];
+    expect(readingsOf(withBackground)).toEqual(readingsOf(VISIT));
+    expect(summarise(withBackground).commands).toBe(summarise(VISIT).commands);
+    expect(summarise([notRead]).failedCommands).toBe(0);
+  });
+
+  it('is written to the CSV with its value and what it is for', () => {
+    const [, first] = toCsv([read]).trimEnd().split('\r\n');
+    expect(first).toBe('2026-10-08,10:00:01,สนามพื้นหลัง,,,,,0.0523,,,สำเร็จ,ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว');
+  });
+
+  it('is written to the CSV as not read, with no value', () => {
+    const [, first] = toCsv([notRead]).trimEnd().split('\r\n');
+    expect(first).toBe('2026-10-08,10:00:01,สนามพื้นหลัง,,,,,,,,ไม่สำเร็จ,เซนเซอร์ไม่ส่งค่า ค่าที่วัดได้ยังรวมสนามพื้นหลัง');
   });
 });

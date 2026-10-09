@@ -200,6 +200,23 @@ describe('POST /api/chat — the readings', () => {
     expect(prompt).toContain('- ΔB = -0.021 mT (3.6% ต่างจากทฤษฎี)');
   });
 
+  it('says the measured field has had the background taken off, and how much', async () => {
+    await askWith([QUESTION], { ...SOLENOID, background: 0.0523 });
+    expect(sentSystemPrompt()).toContain('- สนามแม่เหล็กวัดจริง B_measured = 0.560 mT\n- ค่าวัดจริงหักสนามพื้นหลัง 0.052 mT ออกแล้ว (อ่านด้วยเซนเซอร์ตอนเข้าห้อง ก่อนเปิดอุปกรณ์)\n- ΔB');
+  });
+
+  it('says the measured field still includes the background when it could not be read', async () => {
+    await askWith([QUESTION], { ...SOLENOID, background: null });
+    const prompt = sentSystemPrompt();
+    expect(prompt).toContain('- ค่าวัดจริงยังรวมสนามพื้นหลัง (สนามโลกและสิ่งรอบชุดทดลอง) เพราะอ่านค่าพื้นหลังตอนเข้าห้องไม่ได้');
+    expect(prompt).not.toContain('ออกแล้ว');
+  });
+
+  it.each([[undefined], ['0.05'], [true], [{ value: 1 }]])('says nothing about the background when it is given as %p', async (background) => {
+    await askWith([QUESTION], { ...SOLENOID, background });
+    expect(sentSystemPrompt()).not.toContain('สนามพื้นหลัง');
+  });
+
   it('marks a measured field above theory with a plus sign', async () => {
     await askWith([QUESTION], { ...SOLENOID, bTheory: 0.5, bMeasured: 0.55 });
     // 0.05 / 0.5 = 10 %.

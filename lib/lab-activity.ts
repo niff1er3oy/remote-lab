@@ -1,3 +1,5 @@
+import { fixed } from '@/lib/physics';
+
 // What a student did during one visit to the lab room, kept in the page while
 // the visit lasts. The lab room's log tab, the summary shown on leaving and
 // the CSV download are all drawn from this one list, so they cannot disagree.
@@ -7,6 +9,7 @@ export type LabEvent = {
   at: number;
   kind:
     | 'start'      // the student pressed start
+    | 'background' // the room's own field was read, before anything was switched on (bMeasured)
     | 'power-on'   // an instrument's circuit was switched on
     | 'power-off'  // a circuit was cut
     | 'supply'     // the power supply was switched on or off (detail: 'on' | 'off')
@@ -21,7 +24,10 @@ export type LabEvent = {
   zCm?: number;
   I?: number;
   bTheory?: number;
-  /** Null when the sensor was sending nothing, so there was no measurement. */
+  /**
+   * Null when the sensor was sending nothing, so there was no measurement.
+   * Every one after the 'background' event has that event's value taken off.
+   */
   bMeasured?: number | null;
   /** The rig's error, the question asked, or how the visit ended. */
   detail?: string;
@@ -49,6 +55,10 @@ export function describeEvent(e: LabEvent): string {
   switch (e.kind) {
     case 'start':
       return 'เริ่มการทดลอง';
+    case 'background':
+      return e.ok && typeof e.bMeasured === 'number'
+        ? `อ่านสนามพื้นหลัง ${fixed(e.bMeasured, 3)} mT ก่อนเปิดอุปกรณ์ ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว`
+        : 'อ่านสนามพื้นหลังไม่ได้ เพราะเซนเซอร์ไม่ส่งค่า ค่าที่วัดได้จึงยังรวมสนามพื้นหลัง';
     case 'power-on':
       return e.ok ? `เปิดใช้ ${e.instrument}` : `เปิดใช้ ${e.instrument} ไม่สำเร็จ: ${e.detail}`;
     case 'power-off':
@@ -70,7 +80,7 @@ export function describeEvent(e: LabEvent): string {
   }
 }
 
-const fieldText = (b: number | null | undefined) => (b === null || b === undefined ? 'ไม่มีสัญญาณเซนเซอร์' : `${b.toFixed(3)} mT`);
+const fieldText = (b: number | null | undefined) => (b === null || b === undefined ? 'ไม่มีสัญญาณเซนเซอร์' : `${fixed(b, 3)} mT`);
 
 /** The latest values taken for each instrument and probe position, in the order first taken. */
 export function readingsOf(events: LabEvent[]): LabReading[] {
@@ -85,6 +95,11 @@ export function readingsOf(events: LabEvent[]): LabReading[] {
 }
 
 export type LabSummary = {
+  /**
+   * The room's own field, mT, that every measured value has had taken off.
+   * Null when it was not read: the measured values then still include it.
+   */
+  background: number | null;
   startedAt: number | null;
   endedAt: number | null;
   durationSeconds: number;
@@ -101,7 +116,9 @@ export function summarise(events: LabEvent[]): LabSummary {
   const startedAt = events.find((e) => e.kind === 'start')?.at ?? events[0]?.at ?? null;
   const endedAt = events.length ? events[events.length - 1].at : null;
   const commands = events.filter((e) => COMMANDS.includes(e.kind));
+  const background = events.find((e) => e.kind === 'background' && e.ok);
   return {
+    background: typeof background?.bMeasured === 'number' ? background.bMeasured : null,
     startedAt,
     endedAt,
     durationSeconds: startedAt !== null && endedAt !== null ? Math.max(0, Math.round((endedAt - startedAt) / 1000)) : 0,
@@ -121,6 +138,7 @@ export const differencePercent = (r: { bTheory: number; bMeasured: number | null
 
 const KIND_LABEL: Record<LabEvent['kind'], string> = {
   start: 'เริ่มการทดลอง',
+  background: 'สนามพื้นหลัง',
   'power-on': 'เปิดใช้อุปกรณ์',
   'power-off': 'ตัดวงจร',
   supply: 'แหล่งจ่ายไฟ',
@@ -138,7 +156,7 @@ function cell(value: string): string {
   return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
-const num = (v: number | null | undefined, digits: number) => (v === null || v === undefined ? '' : v.toFixed(digits));
+const num = (v: number | null | undefined, digits: number) => (v === null || v === undefined ? '' : fixed(v, digits));
 
 /** The whole visit as CSV, one row per event, oldest first. */
 export function toCsv(events: LabEvent[]): string {
@@ -161,7 +179,8 @@ export function toCsv(events: LabEvent[]): string {
       cell(
         e.kind === 'end' ? (e.detail === 'time-up' ? 'หมดเวลา' : 'กดเสร็จสิ้น')
           : e.kind === 'supply' ? (e.detail === 'on' ? 'เปิด' : 'ปิด')
-            : e.detail ?? '',
+            : e.kind === 'background' ? (e.ok ? 'ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว' : 'เซนเซอร์ไม่ส่งค่า ค่าที่วัดได้ยังรวมสนามพื้นหลัง')
+              : e.detail ?? '',
       ),
     ].join(',');
   });

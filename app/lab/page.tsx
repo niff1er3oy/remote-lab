@@ -7,11 +7,11 @@ import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 import MathSource from '@/app/components/MathSource';
-import { calcBCoil, calcBSolenoid, cmText, PROBE_POSITIONS, PROBE_STEP_M, probeZ, SOLENOID } from '@/lib/physics';
+import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
 import { prefersReducedMotion } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { clockTime, describeEvent, type LabEvent } from '@/lib/lab-activity';
-import { createAverager, fieldFromSensor } from '@/lib/sensor';
+import { aboveBackground, createAverager, fieldFromSensor } from '@/lib/sensor';
 import { FieldViz } from './FieldViz';
 import LabSummary from './LabSummary';
 
@@ -493,6 +493,14 @@ export default function RemoteLabPage() {
   // for it: there is then no measurement to record.
   const sensorNow = useRef<number | null>(null);
   const lastValueAt = useRef(0);
+  // The room's own field (the Earth's, and whatever else is near the rig):
+  // read once on entering, before anything is switched on, and taken off every
+  // value the sensor sends after that. Undefined until that reading has been
+  // tried; null when the sensor sent nothing to take it from, and the values
+  // shown then still include it.
+  const [background, setBackground] = useState<number | null | undefined>(undefined);
+  const backgroundNow = useRef<number | null>(null);
+  const backgroundTried = useRef(false);
   // The screen shows every value as it arrives. What goes on record is not one
   // value but a reading: twenty in a row, taken where the probe now is, and
   // their mean.
@@ -606,14 +614,27 @@ export default function RemoteLabPage() {
   useEffect(() => {
     if (!inRoom) return;
     let gone = false;
-    tellPresence('enter').then(({ supply: on, held }) => {
+    (async () => {
+      // First the room's own field, while nothing is switched on: the supply
+      // comes on only once it has been read.
+      if (!backgroundTried.current) {
+        const reading = await freshReading();
+        if (gone) return;
+        backgroundTried.current = true;
+        backgroundNow.current = reading;
+        // What is half-collected toward the next reading still has the background in it.
+        averager.reset();
+        setBackground(reading);
+        record({ kind: 'background', ok: reading !== null, bMeasured: reading });
+      }
+      const { supply: on, held } = await tellPresence('enter');
       if (gone) return;
       setSupplyOn(on);
       setSupplyHeld(held);
       record({ kind: 'supply', ok: on === true, detail: 'on' });
       if (on !== true) setRigError({ text: 'เปิดแหล่งจ่ายไฟไม่สำเร็จ แจ้งผู้ดูแลระบบหากอุปกรณ์ไม่ทำงาน', canRetry: false });
       setEntered(true);
-    });
+    })();
     const beat = setInterval(() => {
       tellPresence('stay').then(({ supply: on, held }) => { if (!gone && on !== null) { setSupplyOn(on); setSupplyHeld(held); } });
     }, HEARTBEAT_MS);
@@ -628,7 +649,7 @@ export default function RemoteLabPage() {
       // already said so, and saying it twice does no harm.
       void tellPresence('leave');
     };
-  }, [inRoom, record]);
+  }, [inRoom, record, freshReading, averager]);
 
   // Nothing is sent to the rig before the supply has been switched on.
   const rigReady = inRoom && entered;
@@ -721,8 +742,10 @@ export default function RemoteLabPage() {
         const field = fieldFromSensor(event.data);
         if (field === null) return;
         lastValueAt.current = Date.now();
-        averager.add(field);
-        setRealSensorValue(field);
+        // With the room's own field taken off, once it has been read.
+        const net = aboveBackground(field, backgroundNow.current);
+        averager.add(net);
+        setRealSensorValue(net);
       };
       ws.onclose = () => {
         reconnectTimeout = setTimeout(connect, 2000);
@@ -842,7 +865,7 @@ export default function RemoteLabPage() {
               <SupplySwitch on={supplyOn} held={supplyHeld} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
               <SensorPanel
                 inst={inst} I={I}
-                bTheory={bTheory} bMeasured={bMeasured}
+                bTheory={bTheory} bMeasured={bMeasured} background={background}
                 z={z}
               />
             </div>
@@ -865,6 +888,7 @@ export default function RemoteLabPage() {
                     isMoving={isMoving} setIsMoving={setIsMoving}
                     onMoveError={reportMove}
                     freshReading={freshReading}
+                    background={background}
                     disabled={isBusy}
                   />
                 </div>
@@ -881,7 +905,7 @@ export default function RemoteLabPage() {
         >
           <RightTabs
             chat={chat}
-            readings={{ inst, I, bTheory, bMeasured, z }}
+            readings={{ inst, I, bTheory, bMeasured, z, background }}
             events={events}
           />
         </div>
@@ -922,7 +946,7 @@ export default function RemoteLabPage() {
               <SupplySwitch on={supplyOn} held={supplyHeld} busy={supplyBusy || isBusy} onSwitch={switchSupply} />
               <SensorPanel
                 inst={inst} I={I}
-                bTheory={bTheory} bMeasured={bMeasured}
+                bTheory={bTheory} bMeasured={bMeasured} background={background}
                 z={z}
               />
               <FormulaPanel inst={inst} I={I} z={z} widthClassName="w-full" />
@@ -948,6 +972,7 @@ export default function RemoteLabPage() {
                     isMoving={isMoving} setIsMoving={setIsMoving}
                     onMoveError={reportMove}
                     freshReading={freshReading}
+                    background={background}
                     disabled={isBusy}
                   />
                 </div>
@@ -959,7 +984,7 @@ export default function RemoteLabPage() {
             <div className="h-full flex flex-col">
               <RightTabs
                 chat={chat}
-            readings={{ inst, I, bTheory, bMeasured, z }}
+            readings={{ inst, I, bTheory, bMeasured, z, background }}
                 events={events}
               />
             </div>
@@ -1720,7 +1745,7 @@ function SplitFieldPanel({ instType, turns, bTheory, bMeasured, bPeak, I, z }: {
           <span className="text-gray-600 font-normal">VS</span>
           <span className="flex items-center gap-1.5" style={{ color: '#22d3ee' }}>
             <span className="h-2 w-2 shrink-0 rounded-full inline-block" style={{ backgroundColor: '#22d3ee' }} />
-            วัดจริง · {bMeasured.toFixed(3)} mT
+            วัดจริง · {fixed(bMeasured, 3)} mT
           </span>
         </div>
         {/* I is already in the readings panel; it only joins this bar when it is wide. */}
@@ -1741,10 +1766,12 @@ function SplitFieldPanel({ instType, turns, bTheory, bMeasured, bPeak, I, z }: {
 
 // ── Sensor Panel ──────────────────────────────────────────────────────────────
 
-function SensorPanel({ inst, I, bTheory, bMeasured, z }: {
+function SensorPanel({ inst, I, bTheory, bMeasured, background, z }: {
   inst: Inst;
   I: number;
   bTheory: number; bMeasured: number;
+  /** The room's own field that the measured value has had taken off; null when it could not be read, undefined before it was tried. */
+  background: number | null | undefined;
   z: number;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -1760,21 +1787,28 @@ function SensorPanel({ inst, I, bTheory, bMeasured, z }: {
   }, [inst.id]);
 
   const delta = bMeasured - bTheory;
+  // The measured value says what was done to it.
+  const measured = {
+    label: 'B วัดจริง', value: fixed(bMeasured, 3), unit: 'mT', color: '#22d3ee',
+    ...(background === undefined ? {}
+      : background === null ? { hint: '(ยังไม่หักพื้นหลัง)', tip: 'B วัดจริง ยังรวมสนามพื้นหลังอยู่ เพราะเซนเซอร์ไม่ส่งค่าตอนเข้าห้อง จึงอ่านค่าพื้นหลังไม่ได้' }
+        : { hint: '(หักพื้นหลัง)', tip: `B วัดจริง หักสนามพื้นหลัง ${fixed(background, 3)} mT ที่อ่านตอนเข้าห้องออกแล้ว` }),
+  };
 
-  const rows = inst.type === 'coil'
+  const rows: Array<{ label: string; hint?: string; tip?: string; value: string; unit: string; color: string }> = inst.type === 'coil'
     ? [
       { label: `จำนวนรอบ (n)`, value: String(inst.turns), unit: 'รอบ', color: '#a3e635' },
       { label: 'กระแส (I)', value: I.toFixed(2), unit: 'A', color: '#c8ff00' },
       { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
-      { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
-      { label: 'ΔB', hint: '(วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
+      measured,
+      { label: 'ΔB', hint: '(วัด − ทฤษฎี)', value: signedFixed(delta, 3), unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
     ]
     : [
       { label: 'ตำแหน่ง Z', value: cmText(z), unit: 'cm', color: '#a78bfa' },
       { label: 'กระแส (I)', value: I.toFixed(2), unit: 'A', color: '#c8ff00' },
       { label: 'B ทฤษฎี', value: bTheory.toFixed(3), unit: 'mT', color: '#c8ff00' },
-      { label: 'B วัดจริง', value: bMeasured.toFixed(3), unit: 'mT', color: '#22d3ee' },
-      { label: 'ΔB', hint: '(วัด − ทฤษฎี)', value: `${delta >= 0 ? '+' : ''}${delta.toFixed(3)}`, unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
+      measured,
+      { label: 'ΔB', hint: '(วัด − ทฤษฎี)', value: signedFixed(delta, 3), unit: 'mT', color: Math.abs(delta) > bTheory * 0.05 ? '#f87171' : '#86efac' },
     ];
 
   return (
@@ -1791,7 +1825,7 @@ function SensorPanel({ inst, I, bTheory, bMeasured, z }: {
   );
 }
 
-function SensorRow({ label, hint, value, unit, color }: { label: string; hint?: string; value: string; unit: string; color: string }) {
+function SensorRow({ label, hint, tip, value, unit, color }: { label: string; hint?: string; tip?: string; value: string; unit: string; color: string }) {
   const valRef = useRef<HTMLSpanElement>(null);
   const prevRef = useRef(value);
   useEffect(() => {
@@ -1802,8 +1836,8 @@ function SensorRow({ label, hint, value, unit, color }: { label: string; hint?: 
   }, [value]);
   return (
     <div className="s-card grow-0 shrink basis-[42px] min-h-[34px] flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5">
-      <span title={hint ? `${label} ${hint}` : undefined} className="min-w-0 text-sm lg:text-[13px] xl:text-sm leading-tight text-gray-400 line-clamp-2">
-        {label}
+      <span title={tip ?? (hint ? `${label} ${hint}` : undefined)} className="min-w-0 text-sm lg:text-[13px] xl:text-sm leading-tight text-gray-400 line-clamp-2">
+        <span className="whitespace-nowrap">{label}</span>
         {/* No room beside the value in the narrow lg column; the tooltip carries it there. */}
         {hint && <span className="ml-1 text-[11px] text-gray-500 whitespace-nowrap lg:hidden xl:inline">{hint}</span>}
       </span>
@@ -2015,6 +2049,8 @@ type ChatReadings = {
   I: number;
   bTheory: number; bMeasured: number;
   z: number;
+  /** The background taken off bMeasured; null when it could not be read, undefined before it was tried. */
+  background: number | null | undefined;
 };
 
 // The conversation with the AI assistant. It lives in the page, above the two
@@ -2024,7 +2060,7 @@ function useChat(onAsk: (question: string) => void) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [streaming, setStreaming] = useState(false);
 
-  async function send(text: string, { inst, I, bTheory, bMeasured, z }: ChatReadings) {
+  async function send(text: string, { inst, I, bTheory, bMeasured, z, background }: ChatReadings) {
     if (!text.trim() || streaming) return;
     onAsk(text.trim());
     const userMsg: ChatMsg = { id: ++_cid, role: 'user', content: text.trim() };
@@ -2048,6 +2084,7 @@ function useChat(onAsk: (question: string) => void) {
             instType: inst.type,
             I, bTheory, bMeasured,
             z: inst.type === 'solenoid' ? z : undefined,
+            background,
           },
         }),
       });
@@ -2373,7 +2410,7 @@ function FormulaPanel({ inst, I, z, widthClassName = 'w-[200px]' }: { inst: Inst
 
 type MeasRecord = { bMeasured: number; bTheory: number };
 
-function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, freshReading, disabled }: {
+function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, freshReading, background, disabled }: {
   z: number; setZ: (v: number) => void;
   bMeasured: number; bTheory: number;
   measData: Map<number, MeasRecord>;
@@ -2384,6 +2421,8 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   onMoveError: (message: string | null, zCm: number, bTheory: number) => void;
   /** A reading made of values taken from now on; null when the sensor sends none. */
   freshReading: () => Promise<number | null>;
+  /** The background the measured values have had taken off, for the CSV to say so. */
+  background: number | null | undefined;
   disabled?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -2436,14 +2475,16 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   function clearAll() { setMeasData(new Map()); }
 
   function downloadCSV() {
-    const header = 'position,Z (cm),B_theory (mT),B_measured (mT),delta_B (mT),delta_B (%)\n';
+    // B_measured has the background taken off; the last column says how much (empty when it was not read).
+    const header = 'position,Z (cm),B_theory (mT),B_measured (mT),delta_B (mT),delta_B (%),B_background (mT)\n';
+    const taken = typeof background === 'number' ? fixed(background, 4) : '';
     const rows = allZ
       .filter(zv => measData.has(zv))
       .map(zv => {
         const p = measData.get(zv)!;
         const d = p.bMeasured - p.bTheory;
         const pct = (d / p.bTheory) * 100;
-        return `${zv},${cmText(probeZ(zv))},${p.bTheory.toFixed(4)},${p.bMeasured.toFixed(4)},${d.toFixed(4)},${pct.toFixed(2)}`;
+        return `${zv},${cmText(probeZ(zv))},${p.bTheory.toFixed(4)},${fixed(p.bMeasured, 4)},${fixed(d, 4)},${fixed(pct, 2)},${taken}`;
       })
       .join('\n');
     const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8' });
@@ -2462,13 +2503,13 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
     },
     {
       key: 'meas', label: 'วัดได้ (mT)', color: '#22d3ee',
-      getValue: p => ({ text: p.bMeasured.toFixed(3), color: '#22d3ee' }),
+      getValue: p => ({ text: fixed(p.bMeasured, 3), color: '#22d3ee' }),
     },
     {
       key: 'delta', label: 'ΔB%', color: '#6b7280',
       getValue: p => {
         const d = (p.bMeasured - p.bTheory) / p.bTheory * 100;
-        return { text: `${d >= 0 ? '+' : ''}${d.toFixed(1)}`, color: Math.abs(d) > 5 ? '#f87171' : '#86efac' };
+        return { text: signedFixed(d, 1), color: Math.abs(d) > 5 ? '#f87171' : '#86efac' };
       },
     },
   ];
