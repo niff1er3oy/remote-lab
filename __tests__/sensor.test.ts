@@ -1,4 +1,4 @@
-import { calibrated, CALIBRATION, fieldFromSensor, SENSOR_AXIS } from '@/lib/sensor';
+import { calibrated, CALIBRATION, createAverager, fieldFromSensor, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
@@ -48,5 +48,58 @@ describe('fieldFromSensor — one message from the magnetometer', () => {
     ['a bare number', 5],
   ])('gives no reading for %s', (_label, message) => {
     expect(fieldFromSensor(message)).toBeNull();
+  });
+});
+
+describe('createAverager — twenty values make one reading', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('takes twenty values for a reading', () => {
+    expect(SAMPLES_PER_READING).toBe(20);
+  });
+
+  it('gives nothing until the block is full, then the mean of the block', () => {
+    const averager = createAverager();
+    for (let i = 1; i <= 19; i++) expect(averager.add(i)).toBeNull();
+    // 1 + 2 + ... + 20 = 210; 210 / 20 = 10.5
+    expect(averager.add(20)).toBeCloseTo(10.5, 12);
+  });
+
+  it('starts the next reading from nothing', () => {
+    const averager = createAverager(4);
+    [100, 100, 100].forEach((v) => averager.add(v));
+    expect(averager.add(100)).toBe(100);
+    [1, 2, 3].forEach((v) => expect(averager.add(v)).toBeNull());
+    expect(averager.add(4)).toBe(2.5);
+  });
+
+  it('a fresh reading leaves out what was collected before it was asked for', async () => {
+    const averager = createAverager(4);
+    // Taken while the probe was still moving.
+    [9, 9, 9].forEach((v) => averager.add(v));
+    const reading = averager.fresh(1000);
+    [1, 2, 3, 4].forEach((v) => averager.add(v));
+    expect(await reading).toBe(2.5);
+  });
+
+  it('a fresh reading is null when the sensor does not send enough in time', async () => {
+    jest.useFakeTimers();
+    const averager = createAverager(4);
+    const reading = averager.fresh(4000);
+    [1, 2, 3].forEach((v) => averager.add(v));
+    jest.advanceTimersByTime(4000);
+    expect(await reading).toBeNull();
+    // The late value completes an ordinary reading and disturbs nothing.
+    expect(averager.add(4)).toBe(2.5);
+  });
+
+  it('answers everyone waiting for a fresh reading', async () => {
+    const averager = createAverager(2);
+    const first = averager.fresh(1000);
+    averager.add(5);
+    const second = averager.fresh(1000);
+    averager.add(1);
+    averager.add(3);
+    expect(await Promise.all([first, second])).toEqual([2, 2]);
   });
 });

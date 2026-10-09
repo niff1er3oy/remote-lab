@@ -1,6 +1,6 @@
 // Reads one message from the magnetometer service (a WebSocket on the lab
 // machine, see SENSOR_URL). The service sends the three components of the
-// field in microtesla, about ten times a second:
+// field in microtesla, about twenty times a second:
 //
 //   {"bx": 12.34, "by": -5.6, "bz": 1120.01}
 //
@@ -40,4 +40,41 @@ export function fieldFromSensor(message: unknown, axis: SensorAxis = SENSOR_AXIS
   }
   // The earlier form of the feed: one value, already in mT and already true.
   return finite(m.value) ? m.value : null;
+}
+
+// One reading is the mean of this many messages in a row. The service sends
+// about twenty a second, so a reading takes about a second.
+export const SAMPLES_PER_READING = 20;
+
+/**
+ * Turns the stream of single values into readings: every `size` values make
+ * one reading, their mean.
+ */
+export function createAverager(size = SAMPLES_PER_READING) {
+  let block: number[] = [];
+  let waiting: Array<(reading: number) => void> = [];
+  return {
+    /** Takes one value. Gives the reading it completes, or null while the block is still filling. */
+    add(value: number): number | null {
+      block.push(value);
+      if (block.length < size) return null;
+      const reading = block.reduce((sum, v) => sum + v, 0) / size;
+      block = [];
+      for (const tell of waiting.splice(0)) tell(reading);
+      return reading;
+    },
+    /**
+     * A reading made only of values that arrive from now on: what was
+     * collected so far is dropped (it was taken before the probe got here).
+     * Resolves to null when the sensor does not send enough within `timeoutMs`.
+     */
+    fresh(timeoutMs: number): Promise<number | null> {
+      block = [];
+      return new Promise((resolve) => {
+        const tell = (reading: number) => { clearTimeout(timer); resolve(reading); };
+        const timer = setTimeout(() => { waiting = waiting.filter((w) => w !== tell); resolve(null); }, timeoutMs);
+        waiting.push(tell);
+      });
+    },
+  };
 }
