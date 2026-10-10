@@ -553,3 +553,39 @@ describe('POST /api/chat — the state of the lab room', () => {
     expect(await promptWith({ recorded: { 0: STATE.recorded[0] } })).toContain('**ค่าที่บันทึกแล้วในการทดลองครั้งนี้:** ยังไม่มี');
   });
 });
+
+describe('POST /api/chat — the three lab documents', () => {
+  const prompt = async () => {
+    await ask({ messages: [QUESTION], context: SOLENOID });
+    return sentSystemPrompt();
+  };
+
+  it('names the documents as the lab room lists them', async () => {
+    const text = await prompt();
+    for (const name of ['**Lab Manual**', '**Briefing Slides**', '**Worksheet**']) expect(text).toContain(name);
+  });
+
+  it('says what the worksheet asks for, and what the manual has the student do', async () => {
+    const text = await prompt();
+    expect(text).toContain('เปอร์เซ็นต์ความคลาดเคลื่อน');
+    expect(text).toContain('ตั้งแหล่งจ่าย 18 V');
+    expect(text).toContain('Zero Adjust');
+  });
+
+  it('says where the documents differ from this rig, and to use the rig\'s own values', async () => {
+    const text = await prompt();
+    expect(text).toContain('150 รอบ ยาว 160 mm รัศมี 13 mm กระแส 1 A');
+    expect(text).toContain('100 รอบ ยาว 80 mm รัศมี 21 mm');
+    expect(text).toContain('ตรงกับปุ่ม Set 0');
+  });
+
+  it('tells the tutor not to make up what the summary does not hold', async () => {
+    expect(await prompt()).toContain('ห้ามแต่งเนื้อหาขึ้นเอง');
+  });
+
+  it('keeps the formulas as LaTeX the page can typeset', async () => {
+    const text = await prompt();
+    expect(text).toContain('$B = \\frac{\\mu_0 I}{2\\pi a}$');
+    expect(text).toContain('$B_Z = \\frac{\\mu_0 I R^2}{2(R^2+Z^2)^{3/2}}$');
+  });
+});

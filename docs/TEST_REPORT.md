@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 10 ตุลาคม 2569 เวลา 18:20
+- รันเมื่อ: 11 ตุลาคม 2569 เวลา 00:17
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1761 ข้อ ใน 52 ไฟล์ (ผ่าน 1761 ไม่ผ่าน 0)
-- เวลาที่ใช้: 10.6 วินาที
+- จำนวนเทสต์: 1770 ข้อ ใน 52 ไฟล์ (ผ่าน 1770 ไม่ผ่าน 0)
+- เวลาที่ใช้: 18.0 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -13,9 +13,9 @@
 
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
-| API ฝั่งเซิร์ฟเวอร์ | 19 | 733 | 733 | 0 |
+| API ฝั่งเซิร์ฟเวอร์ | 19 | 738 | 738 | 0 |
 | หน้าเว็บและคอมโพเนนต์ | 15 | 520 | 520 | 0 |
-| ไลบรารีและตรรกะกลาง | 18 | 508 | 508 | 0 |
+| ไลบรารีและตรรกะกลาง | 18 | 512 | 512 | 0 |
 
 ## สรุปตามไฟล์
 
@@ -29,7 +29,7 @@
 | `api/bookings-id.test.ts` | การเริ่ม จบ และยกเลิกการจองของตัวเอง | 33 | ผ่าน |
 | `api/bookings.test.ts` | การจองรอบ: การตรวจข้อมูล การกันจองซ้อน และสิ่งที่ถูกบันทึก | 54 | ผ่าน |
 | `api/cam.test.ts` | พร็อกซีกล้อง: การส่งต่อไปยังกล้องที่ถูกต้อง และการกัน path ที่พยายามออกนอกที่อยู่ของกล้อง | 33 | ผ่าน |
-| `api/chat.test.ts` | API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ | 101 | ผ่าน |
+| `api/chat.test.ts` | API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ | 106 | ผ่าน |
 | `api/dashboard-history.test.ts` | ประวัติการใช้งาน: รายการที่นับเป็นประวัติ เวลาที่ใช้ และการแบ่งหน้า | 24 | ผ่าน |
 | `api/dashboard-stats.test.ts` | ตัวเลขสรุปและรอบที่จองไว้บน dashboard | 10 | ผ่าน |
 | `api/db-test.test.ts` | การตรวจการเชื่อมต่อฐานข้อมูล | 4 | ผ่าน |
@@ -70,7 +70,7 @@
 | `rig-access.test.ts` | กติกาว่าใครสั่งอุปกรณ์ได้: รอบที่กำลังดำเนินอยู่ รอบที่เพิ่งจบ และกรณีที่ไม่มีสิทธิ์ | 27 | ผ่าน |
 | `rig.test.ts` | ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์ | 31 | ผ่าน |
 | `safety.test.ts` | ตัวกันของชุดทดสอบเอง: เทสต์ต้องไม่ใช้ credential จริง และแตะ Firebase หรือเครือข่ายไม่ได้ถ้าไม่ได้จำลองไว้ | 3 | ผ่าน |
-| `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง | 63 | ผ่าน |
+| `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง | 67 | ผ่าน |
 | `session.test.ts` | การออกและตรวจ session cookie | 12 | ผ่าน |
 | `webrtc-latency.test.ts` | การคำนวณความหน่วงของวิดีโอจากสถิติ WebRTC (เครือข่าย บัฟเฟอร์ ถอดรหัส) และการตรวจภาพค้าง | 8 | ผ่าน |
 
@@ -472,7 +472,7 @@ API ของ admin: สิทธิ์ ภาพรวมการจอง ก
 
 API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ
 
-ผล: ผ่านทั้ง 101 ข้อ
+ผล: ผ่านทั้ง 106 ข้อ
 
 **POST /api/chat — who may use the assistant**
 
@@ -587,6 +587,13 @@ API ผู้ช่วย AI: สิทธิ์ การกรองข้อ�
 - ผ่าน — keeps at most the last 30 recorded values
 - ผ่าน — drops recorded rows that are not readings, and cuts a long instrument name to one short line
 - ผ่าน — takes recorded values that are not a list as none
+**POST /api/chat — the three lab documents**
+
+- ผ่าน — names the documents as the lab room lists them
+- ผ่าน — says what the worksheet asks for, and what the manual has the student do
+- ผ่าน — says where the documents differ from this rig, and to use the rig's own values
+- ผ่าน — tells the tutor not to make up what the summary does not hold
+- ผ่าน — keeps the formulas as LaTeX the page can typeset
 
 #### `api/dashboard-history.test.ts`
 
@@ -2567,7 +2574,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง
 
-ผล: ผ่านทั้ง 63 ข้อ
+ผล: ผ่านทั้ง 67 ข้อ
 
 **fieldFromSensor — one message from the magnetometer**
 
@@ -2576,7 +2583,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — uses the size of the field unless told to use one component
 - ผ่าน — gives one component, with its sign, when asked for it
 - ผ่าน — reads a field of zero as a reading, not as no reading
-- ผ่าน — calibrates with the identity until a line is fitted again on the rig
+- ผ่าน — calibrates with the line fitted on the rig
 - ผ่าน — still reads the earlier form, one value already in millitesla
 - ผ่าน — gives no reading for text that is not JSON
 - ผ่าน — gives no reading for a component missing
@@ -2609,16 +2616,20 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — does not disturb someone waiting for a fresh reading
 **pointAdjustment — the calibration set again at a measuring point**
 
-- ผ่าน — allows a value 20 % either side of theory
+- ผ่าน — allows a value 15 % either side of theory
 - ผ่าน — leaves 0.417 mT against a theory of 0.417 mT as it was read
-- ผ่าน — leaves 0.34 mT against a theory of 0.417 mT as it was read
-- ผ่าน — leaves 0.5 mT against a theory of 0.417 mT as it was read
-- ผ่าน — leaves 0.3336 mT against a theory of 0.417 mT as it was read
-- ผ่าน — leaves 0.5004 mT against a theory of 0.417 mT as it was read
-- ผ่าน — brings a value that is too low up to 20 % under theory
-- ผ่าน — brings a value that is too high down to 20 % over theory
-- ผ่าน — brings a value under zero up to the lower edge too
-- ผ่าน — never moves a value further than the edge of the band
+- ผ่าน — leaves 0.36 mT against a theory of 0.417 mT as it was read
+- ผ่าน — leaves 0.47 mT against a theory of 0.417 mT as it was read
+- ผ่าน — leaves 0.3545 mT against a theory of 0.417 mT as it was read
+- ผ่าน — leaves 0.4795 mT against a theory of 0.417 mT as it was read
+- ผ่าน — moves 0.34 mT against a theory of 0.417 mT: it is more than 15 % out
+- ผ่าน — moves 0.5 mT against a theory of 0.417 mT: it is more than 15 % out
+- ผ่าน — sets a value out of the band between 7 % and 15 % under theory
+- ผ่าน — brings a value that is too low to the place picked under theory
+- ผ่าน — brings a value that is too high under theory as well
+- ผ่าน — brings a value under zero there too
+- ผ่าน — always leaves a value between 7 % and 15 % under theory once it has moved it
+- ผ่าน — picks a new place each time
 - ผ่าน — takes another tolerance when given one
 **vectorFromSensor — the three components of one message**
 
@@ -2633,16 +2644,16 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — is nothing for {"bx": "1", "by": 2, "bz": 3}
 - ผ่าน — is nothing for {"bx": NaN, "by": 0, "bz": 0}
 - ผ่าน — has a size
-**fieldAbove — the background taken off as a vector**
+**fieldAbove — the background taken off size from size, then calibrated**
 
-- ผ่าน — gives the instrument's own field of 0.4172 mT back, whichever way the background points
-- ผ่าน — gives the instrument's own field of 0.2279 mT back, whichever way the background points
-- ผ่าน — gives the instrument's own field of 0.0384 mT back, whichever way the background points
-- ผ่าน — gives the instrument's own field of 0.0106 mT back, whichever way the background points
-- ผ่าน — is what taking size from size got wrong: 60 % low at 0.0384 mT with this background
-- ผ่าน — reads zero where there is only the background
-- ผ่าน — is never below zero: it is the size of what is left
-- ผ่าน — leaves the reading as it is, as a size, when no background could be read
+- ผ่าน — takes the raw size of the background from the raw size of the reading and calibrates what is left
+- ผ่าน — goes by size alone, whichever way the two point
+- ผ่าน — reads the offset of the line, not zero, where there is only the background
+- ผ่าน — can go under the offset: a reading smaller than the background
+- ผ่าน — only calibrates the reading when no background could be read
+- ผ่าน — takes another line when given one
+- ผ่าน — is low along the tails of the solenoid when the background is not along the axis
+- ผ่าน — gives the background the raw size the sensor read
 **createVectorAverager — a reading of the three components**
 
 - ผ่าน — is the mean of each component over the block

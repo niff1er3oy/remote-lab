@@ -415,9 +415,9 @@ function LabDocsPanel({ onClose }: { onClose: () => void }) {
 // ── Lab Intro Screen ──────────────────────────────────────────────────────────
 
 const LAB8_DOCS = [
-  { label: 'คู่มือการทดลองที่ 08', file: 'การทดลองที่ 08.pdf' },
-  { label: 'การทดลองที่ 08 สนามแม่เหล็ก', file: 'การทดลองที่ 08 สนามแม่เหล็ก.pdf' },
-  { label: 'ข้อมูลการทดลอง 8 สนามแม่เหล็ก', file: 'data 8 สนามแม่เหล็ก.pdf' },
+  { label: 'Lab Manual', file: 'Lab Manual.pdf' },
+  { label: 'Briefing Slides', file: 'Briefing Slides.pdf' },
+  { label: 'Worksheet', file: 'Worksheet.pdf' },
 ];
 
 function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => void }) {

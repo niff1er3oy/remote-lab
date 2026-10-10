@@ -49,9 +49,9 @@ const STATUS_LABELS: Record<string, string> = {
 
 // Same labels and files as the document list inside the lab room.
 const HANDOUTS = [
-  { label: 'คู่มือการทดลองที่ 08', file: 'การทดลองที่ 08.pdf' },
-  { label: 'การทดลองที่ 08 สนามแม่เหล็ก', file: 'การทดลองที่ 08 สนามแม่เหล็ก.pdf' },
-  { label: 'ข้อมูลการทดลอง 8 สนามแม่เหล็ก', file: 'data 8 สนามแม่เหล็ก.pdf' },
+  { label: 'Lab Manual', file: 'Lab Manual.pdf' },
+  { label: 'Briefing Slides', file: 'Briefing Slides.pdf' },
+  { label: 'Worksheet', file: 'Worksheet.pdf' },
 ];
 
 const FOCUS_RING = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c8ff00]';

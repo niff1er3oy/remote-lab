@@ -37,7 +37,7 @@ const NAV_LINKS = [
   { href: '#how-it-works', label: 'ขั้นตอน' },
 ];
 
-const HANDOUT_URL = `/doc/lab8/${encodeURIComponent('การทดลองที่ 08.pdf')}`;
+const HANDOUT_URL = `/doc/lab8/${encodeURIComponent('Lab Manual.pdf')}`;
 
 const FOCUS_RING = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c8ff00]';
 
@@ -695,7 +695,7 @@ function Experiment() {
             rel="noopener noreferrer"
             className={`rise mt-6 inline-block text-sm text-cyan-400 underline underline-offset-4 hover:text-white transition-colors ${FOCUS_RING}`}
           >
-            อ่านคู่มือการทดลองที่ 08 (PDF)
+            อ่าน Lab Manual (PDF)
           </a>
         </div>
       </div>
@@ -927,7 +927,7 @@ function Footer() {
             rel="noopener noreferrer"
             className={`text-sm text-gray-500 hover:text-white transition-colors ${FOCUS_RING}`}
           >
-            คู่มือการทดลอง (PDF)
+            Lab Manual (PDF)
           </a>
         </div>
       </div>
