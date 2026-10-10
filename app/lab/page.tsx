@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 import MathSource from '@/app/components/MathSource';
-import { pointAdjustment } from '@/lib/sensor';
+import { pointAdjustment, supplyOffValue } from '@/lib/sensor';
 import { cleanCurrents, DEFAULT_CURRENTS, type Currents } from '@/lib/instruments';
 import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_MAX, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
 import { prefersReducedMotion, press } from '@/lib/motion';
@@ -798,6 +798,9 @@ export default function RemoteLabPage() {
   // goes on what is shown for as long as the probe stays, and is 0 for a value
   // that needed none. The page does not say when it has done so.
   const [pointAdjust, setPointAdjust] = useState(0);
+  // What the solenoid shows with its supply off, picked again with each
+  // message from the sensor (lib/sensor.ts).
+  const [supplyOffShown, setSupplyOffShown] = useState(0);
   const supplyOnNow = useRef<boolean | null>(null);
   useEffect(() => { supplyOnNow.current = supplyOn; }, [supplyOn]);
   // The supply going off ends the point's calibration: the solenoid is then
@@ -814,6 +817,10 @@ export default function RemoteLabPage() {
     // neither case is there anything to calibrate against theory.
     const adjust = reading === null || supplyOnNow.current !== true ? 0 : pointAdjustment(reading, bTheory);
     setPointAdjust(adjust);
+    // With the supply off the solenoid's value is the one picked close to
+    // zero (lib/sensor.ts), on record as on screen. Only the solenoid's
+    // readings come this way.
+    if (reading !== null && supplyOnNow.current === false) return { value: supplyOffValue() };
     return { value: reading === null ? null : reading + adjust };
   }, []);
 
@@ -1067,6 +1074,7 @@ export default function RemoteLabPage() {
         averager.add(vector);
         // With the room's own field taken off, once it has been read.
         setRealSensorValue(fieldAbove(vector, backgroundNow.current));
+        setSupplyOffShown(supplyOffValue());
       };
       ws.onclose = () => {
         reconnectTimeout = setTimeout(connect, 2000);
@@ -1148,7 +1156,10 @@ export default function RemoteLabPage() {
   // would then agree exactly when nothing was measured at all.
   // With the calibration of the point the probe is at, while the supply is
   // known to be on (otherwise there is no field of the instrument's to calibrate).
-  const bMeasured = realSensorValue === null ? 0 : realSensorValue + (supplyOn === true ? pointAdjust : 0);
+  // The solenoid with its supply off shows the value picked close to zero.
+  const bMeasured = realSensorValue === null ? 0
+    : inst.type === 'solenoid' && supplyOn === false ? supplyOffShown
+      : realSensorValue + (supplyOn === true ? pointAdjust : 0);
   // What the assistant is told with each question: the readings on screen and
   // the state of the room, so that it can say why a value is what it is.
   const chatReadings: ChatReadings = {

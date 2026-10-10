@@ -1,4 +1,4 @@
-import { aboveBackground, backgroundSize, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
+import { aboveBackground, backgroundSize, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS, SUPPLY_OFF_VALUE, supplyOffValue } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
@@ -208,6 +208,24 @@ describe('pointAdjustment — the calibration set again at a measuring point', (
   it('takes another tolerance when given one', () => {
     expect(pointAdjustment(0.39, 0.417, 0.05)).not.toBe(0);
     expect(pointAdjustment(0.39, 0.417)).toBe(0);
+  });
+});
+
+describe('supplyOffValue — the solenoid with its supply off', () => {
+  it('is between 0.003 and 0.009 mT', () => {
+    expect(SUPPLY_OFF_VALUE).toEqual({ low: 0.003, high: 0.009 });
+    expect(supplyOffValue(() => 0)).toBeCloseTo(0.003, 12);
+    expect(supplyOffValue(() => 0.5)).toBeCloseTo(0.006, 12);
+    expect(supplyOffValue(() => 1)).toBeCloseTo(0.009, 12);
+  });
+
+  it('is picked again each time, never outside the range', () => {
+    const values = Array.from({ length: 50 }, () => supplyOffValue());
+    expect(new Set(values).size).toBeGreaterThan(1);
+    for (const v of values) {
+      expect(v).toBeGreaterThanOrEqual(0.003);
+      expect(v).toBeLessThanOrEqual(0.009);
+    }
   });
 });
 

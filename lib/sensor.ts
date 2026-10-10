@@ -164,6 +164,16 @@ export const POINT_TOLERANCE = 0.15;
 /** How far under theory a value out of the band is set, as fractions of theory. */
 export const POINT_TARGET = { nearest: 0.07, furthest: 0.15 };
 
+// With its supply off the solenoid is not shown as the sensor reads it (the
+// calibration's offset would stand there, about 0.069 mT): the value shown and
+// recorded is one picked at random in this range, in mT, close to zero. It is
+// the lab owner's rule, like the one above, and such a value is not a reading.
+export const SUPPLY_OFF_VALUE = { low: 0.003, high: 0.009 };
+
+/** A value in mT for the solenoid with its supply off. `random` is as Math.random. */
+export const supplyOffValue = (random: () => number = Math.random) =>
+  SUPPLY_OFF_VALUE.low + random() * (SUPPLY_OFF_VALUE.high - SUPPLY_OFF_VALUE.low);
+
 /**
  * The offset in mT to add to a value read at a measuring point so that it is
  * within POINT_TOLERANCE of the theory value: 0 when it already is, and
