@@ -2,12 +2,12 @@ import { aboveBackground, calibrated, CALIBRATION, createAverager, fieldFromSens
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
-    // sqrt(300^2 + 400^2 + 1200^2) = 1300 uT = 1.3 mT; 1.3 + 0.0243 = 1.3243
-    expect(fieldFromSensor({ bx: 300, by: 400, bz: 1200 })).toBeCloseTo(1.3243, 12);
+    // sqrt(300^2 + 400^2 + 1200^2) = 1300 uT = 1.3 mT; 1.1076 x 1.3 + 0.0692 = 1.50908
+    expect(fieldFromSensor({ bx: 300, by: 400, bz: 1200 })).toBeCloseTo(1.50908, 12);
   });
 
   it('reads the message as the service sends it, as JSON text', () => {
-    expect(fieldFromSensor('{"bx": 0, "by": 0, "bz": 1000}')).toBeCloseTo(1.0243, 12);
+    expect(fieldFromSensor('{"bx": 0, "by": 0, "bz": 1000}')).toBeCloseTo(1.1768, 12);
   });
 
   it('uses the size of the field unless told to use one component', () => {
@@ -22,13 +22,13 @@ describe('fieldFromSensor — one message from the magnetometer', () => {
   });
 
   it('reads a field of zero as a reading, not as no reading', () => {
-    expect(fieldFromSensor({ bx: 0, by: 0, bz: 0 })).toBe(0.0243);
+    expect(fieldFromSensor({ bx: 0, by: 0, bz: 0 })).toBe(0.0692);
     expect(fieldFromSensor({ bx: 0, by: 0, bz: 0 }, 'bz')).toBe(0);
   });
 
   it('calibrates with the line fitted on the rig', () => {
-    expect(CALIBRATION).toEqual({ gain: 1, offset: 0.0243 });
-    expect(calibrated(0.5)).toBeCloseTo(0.5243, 12);
+    expect(CALIBRATION).toEqual({ gain: 1.1076, offset: 0.0692 });
+    expect(calibrated(0.5)).toBeCloseTo(0.623, 12);
   });
 
   it('still reads the earlier form, one value already in millitesla', () => {

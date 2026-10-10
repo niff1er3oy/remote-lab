@@ -115,8 +115,8 @@ describe('checkReadiness — a lab machine with everything in place', () => {
   it('says which Python it found and what the sensor read', async () => {
     const { checks } = await checkReadiness();
     expect(check(checks, 'rig-python').detail).toBe(`Python 3.11.2 ที่ ${PYTHON}`);
-    // sqrt(30^2 + 40^2) = 50 uT = 0.05 mT, plus the calibration's 0.0243.
-    expect(check(checks, 'sensor-data').detail).toContain('ได้ค่า 0.074 mT');
+    // sqrt(30^2 + 40^2) = 50 uT = 0.05 mT; calibrated, 1.1076 x 0.05 + 0.0692 = 0.12458.
+    expect(check(checks, 'sensor-data').detail).toContain('ได้ค่า 0.125 mT');
   });
 });
 
