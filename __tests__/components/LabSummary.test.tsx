@@ -73,6 +73,19 @@ describe('LabSummary', () => {
       expect(screen.queryByText('การทดลองสิ้นสุดแล้ว')).not.toBeInTheDocument();
     });
 
+    it('says the round was ended by an admin or by the clock when it was ended from outside', () => {
+      show([...VISIT.slice(0, -1), { at: at(300), kind: 'end', detail: 'round-closed' }]);
+
+      expect(screen.getByText('รอบนี้สิ้นสุดแล้ว (ผู้ดูแลระบบสิ้นสุดรอบ หรือหมดเวลา)')).toBeInTheDocument();
+      expect(screen.queryByText('การทดลองสิ้นสุดแล้ว')).not.toBeInTheDocument();
+      expect(screen.getAllByRole('listitem').at(-1)).toHaveTextContent('ผู้ดูแลระบบสิ้นสุดรอบ หรือหมดเวลา สิ้นสุดการทดลอง');
+    });
+
+    it('goes by the last ending when the student came back after an earlier one', () => {
+      show([{ at: at(0), kind: 'start' }, { at: at(10), kind: 'end', detail: 'time-up' }, { at: at(20), kind: 'start' }, { at: at(30), kind: 'end', detail: 'finished' }]);
+      expect(screen.getByText('การทดลองสิ้นสุดแล้ว')).toBeInTheDocument();
+    });
+
     it('names the experiment', () => {
       show(VISIT);
       expect(screen.getByText(EXPERIMENT)).toBeInTheDocument();
@@ -514,6 +527,44 @@ describe('LabSummary — the background field', () => {
     show([VISIT[0], read, ...VISIT.slice(1)]);
     expect(screen.getByText(/อ่านสนามพื้นหลัง 0\.052 mT ก่อนเปิดอุปกรณ์/)).toBeInTheDocument();
     expect(screen.getByText('3 ค่า')).toBeInTheDocument();
+  });
+});
+
+describe('LabSummary — a visit left and continued in the same round', () => {
+  const note = (container: HTMLElement) => container.querySelector('[data-background]');
+  // Five minutes in the room, ten away, then two more: the earlier part as it
+  // was kept, followed by the part after coming back.
+  const CONTINUED: LabEvent[] = [
+    { at: at(0), kind: 'start' },
+    { at: at(1), kind: 'background', ok: true, bMeasured: 0.0523 },
+    ...VISIT.slice(1, -1),
+    { at: at(900), kind: 'start' },
+    { at: at(901), kind: 'background', ok: true, bMeasured: 0.0611 },
+    { at: at(960), kind: 'move', instrument: SOLENOID, ok: true, zCm: 2, I: 1, bTheory: 0.61, bMeasured: 0.6 },
+    { at: at(1020), kind: 'end', detail: 'finished' },
+  ];
+
+  it('holds the values of both parts in one table', () => {
+    show(CONTINUED);
+    expect(bodyRows().map(row => cellTexts(row).slice(0, 2))).toEqual([[COIL, NO_VALUE], [SOLENOID, '+4'], [SOLENOID, '-8'], [SOLENOID, '+2']]);
+    expect(screen.getAllByRole('listitem')).toHaveLength(CONTINUED.length);
+  });
+
+  it('gives the time in the room, without the time away', () => {
+    show(CONTINUED);
+    expect(figure('เวลาที่ใช้')).toHaveTextContent('6 นาที 59 วินาที');
+  });
+
+  it('says the background was read again on coming back, so no one figure is true of every value', () => {
+    const { container } = show(CONTINUED);
+    expect(note(container)).toHaveTextContent('ค่า B วัดจริงแต่ละค่าหักค่าศูนย์ที่ใช้อยู่ขณะวัดออกแล้ว รอบนี้เข้าห้อง 2 ครั้ง และอ่านสนามพื้นหลังใหม่ทุกครั้งที่เข้า ค่าล่าสุด 0.061 mT');
+    expect(note(container)).not.toHaveTextContent('ทุกค่า');
+    expect(note(container)).not.toHaveTextContent('Set 0');
+  });
+
+  it('says so when the background could not be read on coming back', () => {
+    const { container } = show(CONTINUED.map((e): LabEvent => (e.at === at(901) ? { at: e.at, kind: 'background', ok: false, bMeasured: null } : e)));
+    expect(note(container)).toHaveTextContent('รอบนี้เข้าห้อง 2 ครั้ง และอ่านสนามพื้นหลังใหม่ทุกครั้งที่เข้า ครั้งล่าสุดอ่านไม่ได้ ค่าที่วัดหลังจากนั้นจึงยังรวมสนามพื้นหลัง');
   });
 });
 

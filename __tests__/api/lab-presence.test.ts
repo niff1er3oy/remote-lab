@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/lab/presence/route';
 import { POST as switchSupply } from '@/app/api/admin/rig/power/route';
+import { POST as stopRig } from '@/app/api/admin/rig/stop/route';
 import { isInRoom, resetPresence } from '@/lib/lab-presence';
 import { resetRigState, runRigScript } from '@/lib/rig';
 import { breakDb, resetDb, seedBooking } from '../helpers/server/firestore';
@@ -268,5 +269,64 @@ describe('POST /api/lab/presence — the student\'s own switch', () => {
     await tell('on');
     await tell('leave');
     expect(ran().slice(-1)).toEqual([OFF]);
+  });
+});
+
+describe('POST /api/lab/presence — after the emergency stop', () => {
+  const STOP = ['coil_b.py', 'sole_b.py', OFF];
+  const stop = async () => {
+    signInAs(ADMIN);
+    const res = await stopRig();
+    signInAs(STUDENT);
+    return res.status;
+  };
+
+  it('does not switch on for the student in the room, and says the supply is held', async () => {
+    round(30 * MINUTE);
+    await tell('enter');
+    expect(await stop()).toBe(200);
+    const { status, body } = await tell('on');
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ ok: false, supply: false, held: true });
+    expect(ran()).toEqual([ON, ...STOP]);
+  });
+
+  it('staying reports the supply off and held, and does not switch it back on', async () => {
+    round(30 * MINUTE);
+    await tell('enter');
+    await stop();
+    expect(await tell('stay')).toEqual({ status: 200, body: { ok: true, supply: false, held: true } });
+    expect(ran()).toEqual([ON, ...STOP]);
+  });
+
+  it('holds the supply even when none of the scripts could be run', async () => {
+    round(30 * MINUTE);
+    await tell('enter');
+    await tell('off');
+    runScript.mockRejectedValue(new Error('Traceback: /home/admin/Documents/relay.py'));
+    expect(await stop()).toBe(500);
+    runScript.mockReset().mockResolvedValue({ stdout: '', stderr: '' });
+    const { status, body } = await tell('on');
+    expect(status).toBe(409);
+    expect(body.held).toBe(true);
+    expect(ran()).toEqual([]);
+  });
+
+  it('switches on again once an admin has switched the supply on', async () => {
+    round(30 * MINUTE);
+    await tell('enter');
+    await stop();
+    signInAs(ADMIN);
+    await adminPower(true);
+    signInAs(STUDENT);
+    await tell('off');
+    expect(await tell('on')).toEqual({ status: 200, body: { ok: true, supply: true, held: false } });
+  });
+
+  it('switches on for the next student who walks in', async () => {
+    round(30 * MINUTE);
+    await stop();
+    expect(await tell('enter')).toEqual({ status: 200, body: { ok: true, supply: true, held: false } });
+    expect(ran()).toEqual([...STOP, ON]);
   });
 });

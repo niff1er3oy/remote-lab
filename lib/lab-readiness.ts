@@ -28,7 +28,7 @@ const DATABASE = 'ฐานข้อมูล';
 export const RIG_SCRIPTS = [...INSTRUMENT_SCRIPTS, ...BREAK_SCRIPTS, RELAY_SCRIPT];
 const SCRIPT_LABEL: Record<string, string> = {
   'coil_1.py': 'เปิดขดลวด 1 รอบ', 'coil_2.py': 'เปิดขดลวด 2 รอบ', 'coil_3.py': 'เปิดขดลวด 3 รอบ',
-  'sole.py': 'เปิดโซลีนอยด์และเลื่อนหัววัด', 'coil_b.py': 'ตัดวงจรขดลวด', 'sole_b.py': 'ตัดวงจรโซลีนอยด์',
+  'sole.py': 'เปิดโซลีนอยด์และเลื่อนหัววัด', 'coil_b.py': 'ตัดวงจรขดลวด', 'sole_b.py': 'เก็บแขนกลของโซลีนอยด์',
   'relay.py': 'เปิดและปิดแหล่งจ่ายไฟ',
 };
 

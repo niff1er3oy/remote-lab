@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { NextRequest } from 'next/server';
-import { POST } from '@/app/api/bookings/route';
-import { all, breakDb, LAB8, resetDb, seed, seedBooking, ts } from '../helpers/server/firestore';
+import { MAX_ACTIVE_BOOKINGS, POST } from '@/app/api/bookings/route';
+import { all, breakDb, db, LAB8, resetDb, seed, seedBooking, ts } from '../helpers/server/firestore';
 import { signInAs, signOut } from '../helpers/server/session';
 import { freezeTime, restoreTime } from '../helpers/server/time';
 
@@ -219,5 +219,113 @@ describe('POST /api/bookings — rounds that overlap', () => {
     expect((await book(ROUND)).status).toBe(200);
     expect((await book(ROUND)).status).toBe(409);
     expect(all('bookings')).toHaveLength(1);
+  });
+});
+
+describe('POST /api/bookings — at most five rounds at a time', () => {
+  // Rounds the user already holds, one a day from 10 October, clear of ROUND.
+  const holding = (count: number, more: { status?: string; user?: string; lab?: string; blocked?: boolean } = {}, prefix = 'held') => {
+    for (let i = 0; i < count; i++)
+      seedBooking(`${prefix}-${i}`, { start: `2026-10-${10 + i}T10:00:00Z`, end: `2026-10-${10 + i}T12:00:00Z`, ...more });
+  };
+  const made = () => all('bookings').filter((b) => b.id.startsWith('auto-'));
+
+  it('lets a user hold five', () => {
+    expect(MAX_ACTIVE_BOOKINGS).toBe(5);
+  });
+
+  it('accepts the fifth round', async () => {
+    holding(4);
+    expect((await book(ROUND)).status).toBe(200);
+    expect(made()).toHaveLength(1);
+  });
+
+  it('answers 409 with the reason and stores nothing for a sixth', async () => {
+    holding(5);
+    const res = await book(ROUND);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: 'จองได้ไม่เกิน 5 รอบพร้อมกัน ยกเลิกรอบที่ไม่ใช้ก่อนจึงจะจองเพิ่มได้' });
+    expect(made()).toEqual([]);
+    expect(all('notifications')).toEqual([]);
+  });
+
+  it('refuses the sixth of six requests in a row', async () => {
+    const statuses = [];
+    for (let day = 10; day < 16; day++)
+      statuses.push((await book({ ...ROUND, start_time: `2026-10-${day} 10:00:00`, end_time: `2026-10-${day} 12:00:00` })).status);
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 409]);
+    expect(made()).toHaveLength(5);
+  });
+
+  it.each(['pending', 'confirmed', 'in_progress'])('counts a %s round', async (status) => {
+    holding(5, { status });
+    expect((await book(ROUND)).status).toBe(409);
+  });
+
+  it.each(['cancelled', 'completed'])('does not count a %s round', async (status) => {
+    holding(4);
+    holding(3, { status }, 'gone');
+    expect((await book(ROUND)).status).toBe(200);
+  });
+
+  it('counts the round that is running now', async () => {
+    holding(4);
+    seedBooking('running', { status: 'in_progress', start: '2026-10-05T02:00:00Z', end: '2026-10-05T04:00:00Z' });
+    expect((await book(ROUND)).status).toBe(409);
+  });
+
+  it.each([
+    ['ended an hour ago', '2026-10-05T02:00:00Z'],
+    ['ends at this very moment', NOW],
+  ])('does not count a round still marked confirmed that %s', async (_label, end) => {
+    holding(4);
+    seedBooking('past', { start: '2026-10-05T00:00:00Z', end });
+    expect((await book(ROUND)).status).toBe(200);
+  });
+
+  it('books again once one of the five is cancelled', async () => {
+    holding(5);
+    expect((await book(ROUND)).status).toBe(409);
+    seedBooking('held-0', { status: 'cancelled', start: '2026-10-10T10:00:00Z', end: '2026-10-10T12:00:00Z' });
+    expect((await book(ROUND)).status).toBe(200);
+  });
+
+  it('does not count the rounds of other users', async () => {
+    holding(4);
+    holding(5, { user: 'someone-else', lab: 'LAB9' }, 'theirs');
+    expect((await book(ROUND)).status).toBe(200);
+  });
+
+  it('counts the user\'s rounds in every lab together', async () => {
+    holding(3);
+    holding(2, { lab: 'LAB9' }, 'other-lab');
+    expect((await book(ROUND)).status).toBe(409);
+  });
+
+  it('does not count a stretch of time the user blocked as an admin', async () => {
+    holding(4);
+    holding(3, { lab: 'LAB9', blocked: true }, 'block');
+    expect((await book(ROUND)).status).toBe(200);
+  });
+
+  it('says the slot is taken, not that the limit is reached, when both are true', async () => {
+    holding(5);
+    existing('2026-10-06T10:00:00Z', '2026-10-06T12:00:00Z');
+    const res = await book(ROUND);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('ห้องนี้ถูกจองในช่วงเวลาดังกล่าวแล้ว');
+  });
+
+  // The stand-in's transaction is not isolated, so two requests sent together
+  // cannot be raced here. What can be checked is that the count is read through
+  // the transaction, which is what makes Firestore retry one of them.
+  it('counts the user\'s rounds through the transaction that stores the new one', async () => {
+    const run = db.runTransaction.bind(db);
+    let reads = 0;
+    jest.spyOn(db, 'runTransaction').mockImplementation(((fn: Parameters<typeof db.runTransaction>[0]) =>
+      run((tx) => fn({ ...tx, get: (q) => { reads++; return tx.get(q); } }))) as typeof db.runTransaction);
+    holding(5);
+    expect((await book(ROUND)).status).toBe(409);
+    expect(reads).toBe(2);
   });
 });

@@ -1,4 +1,7 @@
-import { describeEvent, difference, differencePercent, EVENT_KINDS, readingsCsv, readingsOf, summarise, toCsv, visitCsv, type LabEvent } from '@/lib/lab-activity';
+import {
+  describeEvent, difference, differencePercent, END_HEADLINE, endReasonOf, EVENT_KINDS, positionsOf, readingsCsv, readingsOf, summarise, toCsv, visitCsv,
+  type LabEvent,
+} from '@/lib/lab-activity';
 
 // 10:00:00 local time, so the clock column reads the same in any time zone.
 const T0 = new Date(2026, 9, 8, 10, 0, 0).getTime();
@@ -48,7 +51,7 @@ describe('summarise — the figures at the top of the summary', () => {
 
   it('is all zeroes for a visit in which nothing happened', () => {
     expect(summarise([])).toEqual({
-      background: null, rezeroed: 0, zero: null,
+      background: null, rezeroed: 0, zero: null, entries: 0,
       startedAt: null, endedAt: null, durationSeconds: 0, instruments: [], commands: 0, failedCommands: 0, questions: 0, readings: [],
     });
   });
@@ -294,5 +297,124 @@ describe('readingsCsv and visitCsv — the table of recorded values in the downl
 
   it('knows every kind of event', () => {
     expect([...EVENT_KINDS].sort()).toEqual(['background', 'end', 'move', 'power-off', 'power-on', 'question', 'reading', 'start', 'supply', 'zero']);
+  });
+});
+
+describe('how a visit ended', () => {
+  const closed: LabEvent = { at: at(300), kind: 'end', detail: 'round-closed' };
+
+  it('is read from the end event', () => {
+    expect(endReasonOf(VISIT)).toBe('finished');
+    expect(endReasonOf([{ at: at(0), kind: 'end', detail: 'time-up' }])).toBe('time-up');
+    expect(endReasonOf([closed])).toBe('round-closed');
+  });
+
+  it('is none for a record saved before the visit ended', () => {
+    expect(endReasonOf(VISIT.slice(0, -1))).toBeNull();
+    expect(endReasonOf([])).toBeNull();
+  });
+
+  it('is the last ending when the student came back after one', () => {
+    expect(endReasonOf([{ at: at(0), kind: 'end', detail: 'time-up' }, { at: at(5), kind: 'start' }, closed])).toBe('round-closed');
+  });
+
+  it('counts an ending with no reason, or one it does not know, as the finish button', () => {
+    expect(endReasonOf([{ at: at(0), kind: 'end' }])).toBe('finished');
+    expect(endReasonOf([{ at: at(0), kind: 'end', detail: 'something-else' }])).toBe('finished');
+  });
+
+  it('says a round ended from outside was ended by an admin or by the clock', () => {
+    expect(describeEvent(closed)).toBe('ผู้ดูแลระบบสิ้นสุดรอบ หรือหมดเวลา สิ้นสุดการทดลอง');
+    expect(toCsv([closed]).trimEnd().split('\r\n')[1]).toBe('2026-10-08,10:05:00,สิ้นสุดการทดลอง,,,,,,,,,ผู้ดูแลระบบสิ้นสุดรอบ หรือหมดเวลา');
+  });
+
+  it('has a headline for every way of ending', () => {
+    expect(END_HEADLINE).toEqual({
+      finished: 'การทดลองสิ้นสุดแล้ว',
+      'time-up': 'หมดเวลาของรอบนี้แล้ว',
+      'round-closed': 'รอบนี้สิ้นสุดแล้ว (ผู้ดูแลระบบสิ้นสุดรอบ หรือหมดเวลา)',
+    });
+  });
+});
+
+describe('a visit left and continued in the same round', () => {
+  const SOLENOID = 'โซลีนอยด์ 100 รอบ';
+  // Ten minutes in the room, twenty away, five more in the room.
+  const CONTINUED: LabEvent[] = [
+    { at: at(0), kind: 'start' },
+    { at: at(1), kind: 'background', ok: true, bMeasured: 0.0523 },
+    { at: at(30), kind: 'power-on', instrument: SOLENOID, ok: true },
+    { at: at(31), kind: 'move', instrument: SOLENOID, ok: true, zCm: 0, I: 0.3, bTheory: 0.4174, bMeasured: 0.41 },
+    { at: at(600), kind: 'move', instrument: SOLENOID, ok: true, zCm: 3, I: 0.3, bTheory: 0.35, bMeasured: 0.34 },
+    { at: at(1800), kind: 'start' },
+    { at: at(1801), kind: 'background', ok: true, bMeasured: 0.0611 },
+    { at: at(1830), kind: 'power-on', instrument: SOLENOID, ok: true },
+    { at: at(1831), kind: 'move', instrument: SOLENOID, ok: true, zCm: 0, I: 0.3, bTheory: 0.4174, bMeasured: 0.4 },
+    { at: at(2100), kind: 'end', detail: 'finished' },
+  ];
+
+  it('counts each entry, and the time in the room without the time away', () => {
+    const s = summarise(CONTINUED);
+    expect(s.entries).toBe(2);
+    expect(s.startedAt).toBe(at(0));
+    expect(s.endedAt).toBe(at(2100));
+    expect(s.durationSeconds).toBe(600 + 300);
+  });
+
+  it('counts one entry for a visit that was never left', () => {
+    expect(summarise(VISIT).entries).toBe(1);
+  });
+
+  it('holds the earlier part\'s values and the later part\'s, the later one where a position was measured in both', () => {
+    expect(readingsOf(CONTINUED)).toEqual([
+      { instrument: SOLENOID, zCm: 0, I: 0.3, bTheory: 0.4174, bMeasured: 0.4 },
+      { instrument: SOLENOID, zCm: 3, I: 0.3, bTheory: 0.35, bMeasured: 0.34 },
+    ]);
+  });
+
+  it('gives the background of the first entry, and the zero in force at the end', () => {
+    expect(summarise(CONTINUED)).toMatchObject({ background: 0.0523, rezeroed: 0, zero: 0.0611 });
+  });
+
+  it('has no zero in force when the background could not be read on coming back', () => {
+    const silent = CONTINUED.map((e, i): LabEvent => (i === 6 ? { at: e.at, kind: 'background', ok: false, bMeasured: null } : e));
+    expect(summarise(silent)).toMatchObject({ background: 0.0523, zero: null });
+  });
+
+  describe('positionsOf — the solenoid\'s table, from the record', () => {
+    it('gives each position reached its latest value, with the zero in force when it was read', () => {
+      expect(positionsOf(CONTINUED, SOLENOID)).toEqual([
+        { zCm: 0, bTheory: 0.4174, bMeasured: 0.4, zero: 0.0611 },
+        { zCm: 3, bTheory: 0.35, bMeasured: 0.34, zero: 0.0523 },
+      ]);
+    });
+
+    it('follows a Set 0, and keeps the old zero when one failed', () => {
+      const events: LabEvent[] = [
+        ...CONTINUED.slice(0, 4),
+        { at: at(100), kind: 'zero', ok: true, bMeasured: 0.048 },
+        { at: at(110), kind: 'zero', ok: false, bMeasured: null },
+        CONTINUED[4],
+      ];
+      expect(positionsOf(events, SOLENOID).map(p => p.zero)).toEqual([0.0523, 0.048]);
+    });
+
+    it('gives no zero for a position read when the background could not be', () => {
+      const events: LabEvent[] = [{ at: at(1), kind: 'background', ok: false, bMeasured: null }, CONTINUED[3]];
+      expect(positionsOf(events, SOLENOID)).toEqual([{ zCm: 0, bTheory: 0.4174, bMeasured: 0.41, zero: null }]);
+    });
+
+    it('keeps a position with no sensor value as no measurement', () => {
+      expect(positionsOf(VISIT, 'โซลีนอยด์ 75 รอบ')).toEqual([
+        { zCm: 4, bTheory: 0.5729, bMeasured: 0.55, zero: null },
+        { zCm: -8, bTheory: 0.2936, bMeasured: null, zero: null },
+      ]);
+    });
+
+    it('leaves out a position the probe never reached, a coil\'s reading and another instrument', () => {
+      expect(positionsOf(VISIT, 'โซลีนอยด์ 75 รอบ').some(p => p.zCm === 7)).toBe(false);
+      expect(positionsOf(VISIT, 'ขดลวดเดี่ยว 1 รอบ')).toEqual([]);
+      expect(positionsOf([], SOLENOID)).toEqual([]);
+    });
   });
 });

@@ -8,6 +8,7 @@ import { POST as stopRig } from '@/app/api/admin/rig/stop/route';
 import { POST as switchSupply } from '@/app/api/admin/rig/power/route';
 import { GET as me } from '@/app/api/auth/me/route';
 import { cutAllCircuits, feed, runRigScript } from '@/lib/rig';
+import { isHeld, resetPresence } from '@/lib/lab-presence';
 import { adminEmails, isAdmin } from '@/lib/admin';
 import { all, breakDb, LAB8, read, resetDb, seed, seedBooking, ts } from '../helpers/server/firestore';
 import { knownAccount, resetAuth } from '../helpers/server/auth';
@@ -56,6 +57,7 @@ beforeEach(() => {
   freezeTime(NOW);
   resetDb();
   resetAuth();
+  resetPresence();
   seed('labs', 'LAB8', LAB8);
   knownAccount('student-1', 'Student One', 'student@example.com');
   knownAccount('admin-1', 'Admin One', 'admin@example.com');
@@ -321,6 +323,23 @@ describe('POST /api/admin/blocks', () => {
     expect(res.status).toBe(409);
   });
 
+  it('is not held to the five rounds a user can book', async () => {
+    for (let i = 0; i < 5; i++)
+      seedBooking(`own-${i}`, { user: 'admin-1', start: NOW + (10 + i) * DAY, end: NOW + (10 + i) * DAY + 2 * HOUR });
+    for (let day = 10; day < 16; day++)
+      expect((await postBlock({ ...STRETCH, start_time: `2026-10-${day}T02:00:00Z`, end_time: `2026-10-${day}T09:00:00Z` })).status).toBe(200);
+    expect(all('bookings').filter((b) => b.blocked === true)).toHaveLength(6);
+  });
+
+  it('does not use up the admin\'s own five rounds', async () => {
+    for (let day = 10; day < 16; day++)
+      await postBlock({ ...STRETCH, start_time: `2026-10-${day}T02:00:00Z`, end_time: `2026-10-${day}T09:00:00Z` });
+    expect(all('bookings').filter((b) => b.blocked === true)).toHaveLength(6);
+    const { POST: book } = await import('@/app/api/bookings/route');
+    const res = await book(json('/api/bookings', 'POST', { room_id: 'LAB8', start_time: '2026-10-20 04:00:00', end_time: '2026-10-20 06:00:00' }));
+    expect(res.status).toBe(200);
+  });
+
   it.each([
     ['no lab', { ...STRETCH, lab_id: undefined }],
     ['a start that is not a date', { ...STRETCH, start_time: 'soon' }],
@@ -416,5 +435,29 @@ describe('POST /api/admin/rig/stop', () => {
     const res = await stopRig();
     expect(res.status).toBe(500);
     expect(await res.json()).toMatchObject({ ok: false, failed: ['coil_b.py'] });
+  });
+
+  it('holds the supply off afterwards, as an admin switching it off does', async () => {
+    expect(isHeld()).toBe(false);
+    await stopRig();
+    expect(isHeld()).toBe(true);
+  });
+
+  it('holds the supply off even when a script could not be run', async () => {
+    jest.mocked(cutAllCircuits).mockResolvedValue(['coil_b.py', 'sole_b.py', 'relay.py']);
+    expect((await stopRig()).status).toBe(500);
+    expect(isHeld()).toBe(true);
+  });
+
+  it('is let go of when an admin switches the supply on', async () => {
+    await stopRig();
+    await switchSupply(json('/api/admin/rig/power', 'POST', { on: true }));
+    expect(isHeld()).toBe(false);
+  });
+
+  it('holds nothing when the caller is not an admin', async () => {
+    signInAs(STUDENT);
+    expect((await stopRig()).status).toBe(403);
+    expect(isHeld()).toBe(false);
   });
 });

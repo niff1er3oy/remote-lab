@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 10 ตุลาคม 2569 เวลา 07:33
+- รันเมื่อ: 10 ตุลาคม 2569 เวลา 14:10
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1639 ข้อ ใน 52 ไฟล์ (ผ่าน 1639 ไม่ผ่าน 0)
-- เวลาที่ใช้: 9.8 วินาที
+- จำนวนเทสต์: 1701 ข้อ ใน 52 ไฟล์ (ผ่าน 1701 ไม่ผ่าน 0)
+- เวลาที่ใช้: 17.5 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -13,9 +13,9 @@
 
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
-| API ฝั่งเซิร์ฟเวอร์ | 19 | 669 | 669 | 0 |
-| หน้าเว็บและคอมโพเนนต์ | 15 | 514 | 514 | 0 |
-| ไลบรารีและตรรกะกลาง | 18 | 456 | 456 | 0 |
+| API ฝั่งเซิร์ฟเวอร์ | 19 | 709 | 709 | 0 |
+| หน้าเว็บและคอมโพเนนต์ | 15 | 520 | 520 | 0 |
+| ไลบรารีและตรรกะกลาง | 18 | 472 | 472 | 0 |
 
 ## สรุปตามไฟล์
 
@@ -23,11 +23,11 @@
 |---|---|---|---|
 | `api/active-session.test.ts` | การตรวจว่าผู้ใช้มีรอบกำลังดำเนินอยู่หรือรอบถัดไป | 19 | ผ่าน |
 | `api/admin-tests.test.ts` | API ที่ส่งผลการทดสอบให้หน้า admin: เฉพาะ admin เท่านั้น | 4 | ผ่าน |
-| `api/admin.test.ts` | API ของ admin: สิทธิ์ ภาพรวมการจอง การยกเลิกและสิ้นสุดรอบ การปิดช่วงเวลา การเปิดปิดแลป และแหล่งจ่ายไฟ | 80 | ผ่าน |
+| `api/admin.test.ts` | API ของ admin: สิทธิ์ ภาพรวมการจอง การยกเลิกและสิ้นสุดรอบ การปิดช่วงเวลา การเปิดปิดแลป และแหล่งจ่ายไฟ | 86 | ผ่าน |
 | `api/auth.test.ts` | การสร้าง session จากการล็อกอิน Google การอ่านผู้ใช้ปัจจุบัน และการออกจากระบบ | 22 | ผ่าน |
 | `api/availability.test.ts` | ตารางช่องเวลาว่าง 7 วัน | 21 | ผ่าน |
 | `api/bookings-id.test.ts` | การเริ่ม จบ และยกเลิกการจองของตัวเอง | 33 | ผ่าน |
-| `api/bookings.test.ts` | การจองรอบ: การตรวจข้อมูล การกันจองซ้อน และสิ่งที่ถูกบันทึก | 36 | ผ่าน |
+| `api/bookings.test.ts` | การจองรอบ: การตรวจข้อมูล การกันจองซ้อน และสิ่งที่ถูกบันทึก | 54 | ผ่าน |
 | `api/cam.test.ts` | พร็อกซีกล้อง: การส่งต่อไปยังกล้องที่ถูกต้อง และการกัน path ที่พยายามออกนอกที่อยู่ของกล้อง | 33 | ผ่าน |
 | `api/chat.test.ts` | API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ | 81 | ผ่าน |
 | `api/dashboard-history.test.ts` | ประวัติการใช้งาน: รายการที่นับเป็นประวัติ เวลาที่ใช้ และการแบ่งหน้า | 24 | ผ่าน |
@@ -36,8 +36,8 @@
 | `api/gaps.test.ts` | กรณีที่เหลือของ API ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม เช่น ฐานข้อมูลล้มเหลว | 24 | ผ่าน |
 | `api/hardware.test.ts` | API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว | 74 | ผ่าน |
 | `api/instruments.test.ts` | การเปิดปิดอุปกรณ์การทดลองโดย admin และผลต่อ API อุปกรณ์กับหน้าห้องแลป | 79 | ผ่าน |
-| `api/lab-presence.test.ts` |  | 38 | ผ่าน |
-| `api/lab-record.test.ts` | การเก็บบันทึกการทดลองลงฐานข้อมูลและเปิดดูย้อนหลัง: การตรวจข้อมูลทีละเหตุการณ์ สิทธิ์ของเจ้าของรอบและ admin ช่วงเวลาที่บันทึกได้ และการไม่ให้บันทึกที่สั้นกว่าทับของเดิม | 40 | ผ่าน |
+| `api/lab-presence.test.ts` |  | 43 | ผ่าน |
+| `api/lab-record.test.ts` | การเก็บบันทึกการทดลองลงฐานข้อมูลและเปิดดูย้อนหลัง: การตรวจข้อมูลทีละเหตุการณ์ สิทธิ์ของเจ้าของรอบและ admin ช่วงเวลาที่บันทึกได้ และการไม่ให้บันทึกที่สั้นกว่าทับของเดิม | 51 | ผ่าน |
 | `api/notifications.test.ts` | รายการแจ้งเตือนและการทำเครื่องหมายว่าอ่านแล้ว | 24 | ผ่าน |
 | `api/notify-upcoming.test.ts` | การแจ้งเตือนเมื่อถึงเวลาเข้าห้องแลปและก่อนเริ่ม 5 นาที โดยไม่ส่งซ้ำ | 23 | ผ่าน |
 | `auth-client.test.ts` | การล็อกอินด้วย Google ฝั่งเบราว์เซอร์ และข้อความ error ที่แสดงผู้ใช้ | 14 | ผ่าน |
@@ -50,7 +50,7 @@
 | `components/FieldDiagram.test.tsx` | ภาพเส้นสนามในหน้าแรก | 31 | ผ่าน |
 | `components/FieldViz.test.tsx` | แบบจำลองสนามแม่เหล็กในห้องแลป: ภาพตัด 2D หัววัดกับลูกศรทฤษฎีและค่าวัด การสลับ 2D/3D และกรณีเครื่องไม่มี WebGL | 35 | ผ่าน |
 | `components/GlobalNotifications.test.tsx` | กระดิ่ง แผงแจ้งเตือน และ toast: การแสดง การปิด การหายเอง และ reduced motion | 47 | ผ่าน |
-| `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 54 | ผ่าน |
+| `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 60 | ผ่าน |
 | `components/LoginPage.test.tsx` | หน้าเข้าสู่ระบบ | 10 | ผ่าน |
 | `components/PortraitGuard.test.tsx` | ข้อความให้หมุนจอเมื่อถือแนวตั้ง | 3 | ผ่าน |
 | `components/ReadinessCheck.test.tsx` | ปุ่มตรวจความพร้อมของเครื่องแลปในหน้า admin และรายการผลที่แสดง | 12 | ผ่าน |
@@ -59,7 +59,7 @@
 | `field-geometry.test.ts` | การอ่านแบบจำลองสนามไปวาด: เส้นของแต่ละอุปกรณ์ ความสว่างตามขนาดสนาม หัวลูกศร จำนวนเส้นในมุมมอง 3D และกรอบภาพ | 91 | ผ่าน |
 | `field-lines.test.ts` | ข้อมูลเส้นสนามที่ใช้วาดภาพในหน้าแรก: สมมาตร ไม่ตัดกัน และได้สัดส่วนจริงของอุปกรณ์ | 36 | ผ่าน |
 | `field-model.test.ts` | ข้อมูลเส้นสนามของแบบจำลองในห้องแลป: ตรวจทิศและขนาดสนามกับกฎบีโอต์-ซาวาร์โดยตรง ความสมมาตร ระยะห่างของเส้นตามความเข้มสนาม และจำนวนเส้นตามจำนวนรอบ | 39 | ผ่าน |
-| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 48 | ผ่าน |
+| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 64 | ผ่าน |
 | `lab-presence.test.ts` |  | 28 | ผ่าน |
 | `lab-readiness.test.ts` | การตรวจความพร้อมของเครื่องแลปจริง: ไฟล์สคริปต์ Python ไลบรารี ค่าจากเซนเซอร์ กล้อง ฐานข้อมูล และการไม่สั่งอุปกรณ์ทำงานระหว่างตรวจ | 22 | ผ่าน |
 | `lab-status.test.ts` | การตรวจว่ากล้องและเซนเซอร์ตอบสนองหรือไม่ และ API สถานะอุปกรณ์ของ admin | 12 | ผ่าน |
@@ -127,7 +127,7 @@ API ที่ส่งผลการทดสอบให้หน้า admin:
 
 API ของ admin: สิทธิ์ ภาพรวมการจอง การยกเลิกและสิ้นสุดรอบ การปิดช่วงเวลา การเปิดปิดแลป และแหล่งจ่ายไฟ
 
-ผล: ผ่านทั้ง 80 ข้อ
+ผล: ผ่านทั้ง 86 ข้อ
 
 **who is an admin**
 
@@ -195,6 +195,8 @@ API ของ admin: สิทธิ์ ภาพรวมการจอง ก
 - ผ่าน — refuses a stretch that someone has already booked into, and says how many
 - ผ่าน — ignores cancelled and finished rounds, and rounds that only touch the stretch
 - ผ่าน — keeps a student from booking into the stretch afterwards
+- ผ่าน — is not held to the five rounds a user can book
+- ผ่าน — does not use up the admin's own five rounds
 - ผ่าน — answers 400 for no lab
 - ผ่าน — answers 400 for a start that is not a date
 - ผ่าน — answers 400 for an end that is a number
@@ -227,6 +229,10 @@ API ของ admin: สิทธิ์ ภาพรวมการจอง ก
 
 - ผ่าน — cuts both circuits whether or not anyone has a round
 - ผ่าน — answers 500 and names the scripts when a circuit could not be cut
+- ผ่าน — holds the supply off afterwards, as an admin switching it off does
+- ผ่าน — holds the supply off even when a script could not be run
+- ผ่าน — is let go of when an admin switches the supply on
+- ผ่าน — holds nothing when the caller is not an admin
 
 #### `api/auth.test.ts`
 
@@ -351,7 +357,7 @@ API ของ admin: สิทธิ์ ภาพรวมการจอง ก
 
 การจองรอบ: การตรวจข้อมูล การกันจองซ้อน และสิ่งที่ถูกบันทึก
 
-ผล: ผ่านทั้ง 36 ข้อ
+ผล: ผ่านทั้ง 54 ข้อ
 
 **POST /api/bookings — what is accepted**
 
@@ -395,6 +401,26 @@ API ของ admin: สิทธิ์ ภาพรวมการจอง ก
 - ผ่าน — refuses a round that overlaps the user's own booking too
 - ผ่าน — does not let a booking of another lab hold the slot
 - ผ่าน — refuses the second of two identical requests
+**POST /api/bookings — at most five rounds at a time**
+
+- ผ่าน — lets a user hold five
+- ผ่าน — accepts the fifth round
+- ผ่าน — answers 409 with the reason and stores nothing for a sixth
+- ผ่าน — refuses the sixth of six requests in a row
+- ผ่าน — counts a pending round
+- ผ่าน — counts a confirmed round
+- ผ่าน — counts a in_progress round
+- ผ่าน — does not count a cancelled round
+- ผ่าน — does not count a completed round
+- ผ่าน — counts the round that is running now
+- ผ่าน — does not count a round still marked confirmed that ended an hour ago
+- ผ่าน — does not count a round still marked confirmed that ends at this very moment
+- ผ่าน — books again once one of the five is cancelled
+- ผ่าน — does not count the rounds of other users
+- ผ่าน — counts the user's rounds in every lab together
+- ผ่าน — does not count a stretch of time the user blocked as an admin
+- ผ่าน — says the slot is taken, not that the limit is reached, when both are true
+- ผ่าน — counts the user's rounds through the transaction that stores the new one
 
 #### `api/cam.test.ts`
 
@@ -849,7 +875,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 #### `api/lab-presence.test.ts`
 
-ผล: ผ่านทั้ง 38 ข้อ
+ผล: ผ่านทั้ง 43 ข้อ
 
 **POST /api/lab/presence**
 
@@ -895,12 +921,19 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — still lets the student switch off while an admin holds the supply off
 - ผ่าน — answers 500 without the script's output when the relay does not answer
 - ผ่าน — the supply a student switched on still goes off when they leave
+**POST /api/lab/presence — after the emergency stop**
+
+- ผ่าน — does not switch on for the student in the room, and says the supply is held
+- ผ่าน — staying reports the supply off and held, and does not switch it back on
+- ผ่าน — holds the supply even when none of the scripts could be run
+- ผ่าน — switches on again once an admin has switched the supply on
+- ผ่าน — switches on for the next student who walks in
 
 #### `api/lab-record.test.ts`
 
 การเก็บบันทึกการทดลองลงฐานข้อมูลและเปิดดูย้อนหลัง: การตรวจข้อมูลทีละเหตุการณ์ สิทธิ์ของเจ้าของรอบและ admin ช่วงเวลาที่บันทึกได้ และการไม่ให้บันทึกที่สั้นกว่าทับของเดิม
 
-ผล: ผ่านทั้ง 40 ข้อ
+ผล: ผ่านทั้ง 51 ข้อ
 
 **cleanEvents — a record fit to store**
 
@@ -917,6 +950,17 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — refuses a result that is not yes or no
 - ผ่าน — refuses one bad event among good ones
 - ผ่าน — refuses more events than any visit makes
+**fitToSave — what of a visit is sent to be kept**
+
+- ผ่าน — sends a visit whole while it is within the limit
+- ผ่าน — sends the first events that fit once it is over, and says how many are left out
+- ผ่าน — keeps the visit's ending in the last place when it is over the limit
+**createSaveQueue — one save at a time**
+
+- ผ่าน — runs a save at once when none is in flight, and gives its result
+- ผ่าน — does not start a second save while one is in flight
+- ผ่าน — runs one follow-up for however many were asked for meanwhile
+- ผ่าน — gives false for a save that threw, and still runs the next
 **POST /api/lab/record — keeping a visit**
 
 - ผ่าน — answers 401 to someone who is not signed in
@@ -936,6 +980,10 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — still keeps it shortly after the round's time ran out
 - ผ่าน — replaces an earlier save with a later, longer one
 - ผ่าน — does not let a shorter save, arriving late, replace a fuller one
+- ผ่าน — keeps the record of a round an admin ended, saved as the lab page finds out
+- ผ่าน — keeps the earlier part and the new one when a visit continues from what was kept
+- ผ่าน — does not let a visit that began again from nothing replace what was kept
+- ผ่าน — takes a save as long as the one kept, as a full record still gets its ending
 - ผ่าน — answers 500 without the database's own words when it cannot be reached
 **GET /api/lab/record — opening a visit again**
 
@@ -1607,12 +1655,14 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV
 
-ผล: ผ่านทั้ง 54 ข้อ
+ผล: ผ่านทั้ง 60 ข้อ
 
 **LabSummary › the heading**
 
 - ผ่าน — says the experiment has ended when the student finished it
 - ผ่าน — says the time ran out when the visit ended that way
+- ผ่าน — says the round was ended by an admin or by the clock when it was ended from outside
+- ผ่าน — goes by the last ending when the student came back after an earlier one
 - ผ่าน — names the experiment
 - ผ่าน — gives the date of the visit and the times it started and ended
 - ผ่าน — gives no date or times for a visit in which nothing happened
@@ -1675,6 +1725,12 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — says the measured values still include it when it could not be read
 - ผ่าน — says nothing about it for a visit in which it was never tried
 - ผ่าน — lists the reading of it in the timeline, and does not count it among the values recorded
+**LabSummary — a visit left and continued in the same round**
+
+- ผ่าน — holds the values of both parts in one table
+- ผ่าน — gives the time in the room, without the time away
+- ผ่าน — says the background was read again on coming back, so no one figure is true of every value
+- ผ่าน — says so when the background could not be read on coming back
 **LabSummary — Set 0**
 
 - ผ่าน — says each value has had the zero in force at the time taken off, when the zero was set again
@@ -2057,7 +2113,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV
 
-ผล: ผ่านทั้ง 48 ข้อ
+ผล: ผ่านทั้ง 64 ข้อ
 
 **summarise — the figures at the top of the summary**
 
@@ -2125,6 +2181,28 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — is only the header when nothing was recorded
 - ผ่าน — puts the readings first and the timeline after, each under its heading
 - ผ่าน — knows every kind of event
+**how a visit ended**
+
+- ผ่าน — is read from the end event
+- ผ่าน — is none for a record saved before the visit ended
+- ผ่าน — is the last ending when the student came back after one
+- ผ่าน — counts an ending with no reason, or one it does not know, as the finish button
+- ผ่าน — says a round ended from outside was ended by an admin or by the clock
+- ผ่าน — has a headline for every way of ending
+**a visit left and continued in the same round**
+
+- ผ่าน — counts each entry, and the time in the room without the time away
+- ผ่าน — counts one entry for a visit that was never left
+- ผ่าน — holds the earlier part's values and the later part's, the later one where a position was measured in both
+- ผ่าน — gives the background of the first entry, and the zero in force at the end
+- ผ่าน — has no zero in force when the background could not be read on coming back
+**a visit left and continued in the same round › positionsOf — the solenoid's table, from the record**
+
+- ผ่าน — gives each position reached its latest value, with the zero in force when it was read
+- ผ่าน — follows a Set 0, and keeps the old zero when one failed
+- ผ่าน — gives no zero for a position read when the background could not be
+- ผ่าน — keeps a position with no sensor value as no measurement
+- ผ่าน — leaves out a position the probe never reached, a coil's reading and another instrument
 
 #### `lab-presence.test.ts`
 

@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { NextRequest } from 'next/server';
 import { GET, POST } from '@/app/api/lab/record/route';
-import { cleanEvents, MAX_EVENTS } from '@/lib/lab-record';
+import { cleanEvents, createSaveQueue, fitToSave, MAX_EVENTS } from '@/lib/lab-record';
 import type { LabEvent } from '@/lib/lab-activity';
 import { breakDb, LAB8, read, resetDb, seed, seedBooking } from '../helpers/server/firestore';
 import { knownAccount, resetAuth } from '../helpers/server/auth';
@@ -85,6 +85,79 @@ describe('cleanEvents — a record fit to store', () => {
   });
 });
 
+describe('fitToSave — what of a visit is sent to be kept', () => {
+  const events = (n: number): LabEvent[] => Array.from({ length: n }, (_, i) => ({ at: i, kind: 'question', detail: String(i) }));
+
+  it('sends a visit whole while it is within the limit', () => {
+    expect(fitToSave(VISIT)).toEqual({ events: VISIT, left: 0 });
+    const full = events(MAX_EVENTS);
+    expect(fitToSave(full)).toEqual({ events: full, left: 0 });
+  });
+
+  it('sends the first events that fit once it is over, and says how many are left out', () => {
+    const { events: sent, left } = fitToSave(events(MAX_EVENTS + 7));
+    expect(sent).toHaveLength(MAX_EVENTS);
+    expect(sent[MAX_EVENTS - 1].detail).toBe(String(MAX_EVENTS - 1));
+    expect(left).toBe(7);
+    expect(cleanEvents(sent)).not.toBeNull();
+  });
+
+  it('keeps the visit\'s ending in the last place when it is over the limit', () => {
+    const end: LabEvent = { at: 9, kind: 'end', detail: 'finished' };
+    expect(fitToSave([...events(5), end], 4)).toEqual({ events: [...events(3), end], left: 2 });
+  });
+});
+
+describe('createSaveQueue — one save at a time', () => {
+  // A save that stays in flight until it is let go.
+  const held = () => {
+    const calls: Array<(ok: boolean) => void> = [];
+    const send = jest.fn(() => new Promise<boolean>((resolve) => { calls.push(resolve); }));
+    return { send, calls };
+  };
+
+  it('runs a save at once when none is in flight, and gives its result', async () => {
+    const run = createSaveQueue();
+    await expect(run(async () => true)).resolves.toBe(true);
+    await expect(run(async () => false)).resolves.toBe(false);
+  });
+
+  it('does not start a second save while one is in flight', async () => {
+    const run = createSaveQueue();
+    const { send, calls } = held();
+    const first = run(send);
+    const second = run(send);
+    expect(send).toHaveBeenCalledTimes(1);
+
+    calls[0](true);
+    await first;
+    await Promise.resolve();
+    expect(send).toHaveBeenCalledTimes(2);
+    calls[1](false);
+    await expect(second).resolves.toBe(false);
+  });
+
+  it('runs one follow-up for however many were asked for meanwhile', async () => {
+    const run = createSaveQueue();
+    const { send, calls } = held();
+    const first = run(send);
+    const waiting = [run(send), run(send), run(send)];
+
+    calls[0](true);
+    await first;
+    await Promise.resolve();
+    calls[1](true);
+    await expect(Promise.all(waiting)).resolves.toEqual([true, true, true]);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives false for a save that threw, and still runs the next', async () => {
+    const run = createSaveQueue();
+    await expect(run(async () => { throw new Error('network'); })).resolves.toBe(false);
+    await expect(run(async () => true)).resolves.toBe(true);
+  });
+});
+
 describe('POST /api/lab/record — keeping a visit', () => {
   it('answers 401 to someone who is not signed in', async () => {
     runningRound();
@@ -163,6 +236,39 @@ describe('POST /api/lab/record — keeping a visit', () => {
     await save({ booking_id: 'b1', events: VISIT });
     expect(await save({ booking_id: 'b1', events: VISIT.slice(0, 2) })).toEqual({ status: 200, body: { ok: true, events: VISIT.length } });
     expect(read('lab_records', 'b1')?.events).toHaveLength(VISIT.length);
+  });
+
+  it('keeps the record of a round an admin ended, saved as the lab page finds out', async () => {
+    runningRound('b1', { status: 'completed', ended_by: ADMIN.uid });
+    moveTimeTo(NOW + MINUTE);
+    const events: LabEvent[] = [...VISIT.slice(0, -1), { at: NOW + MINUTE, kind: 'end', detail: 'round-closed' }];
+    expect((await save({ booking_id: 'b1', events })).status).toBe(200);
+    expect(read('lab_records', 'b1')?.events).toEqual(events);
+  });
+
+  it('keeps the earlier part and the new one when a visit continues from what was kept', async () => {
+    runningRound();
+    const before = VISIT.slice(0, 4);
+    await save({ booking_id: 'b1', events: before });
+    const kept = (await open('b1')).body.events as LabEvent[];
+    const continued: LabEvent[] = [...kept, { at: NOW, kind: 'start' }, { at: NOW + 1000, kind: 'end', detail: 'finished' }];
+    expect(await save({ booking_id: 'b1', events: continued })).toEqual({ status: 200, body: { ok: true, events: continued.length } });
+    expect(read('lab_records', 'b1')?.events).toEqual(continued);
+  });
+
+  it('does not let a visit that began again from nothing replace what was kept', async () => {
+    runningRound();
+    await save({ booking_id: 'b1', events: VISIT });
+    await save({ booking_id: 'b1', events: [{ at: NOW, kind: 'start' }] });
+    expect(read('lab_records', 'b1')?.events).toEqual(VISIT);
+  });
+
+  it('takes a save as long as the one kept, as a full record still gets its ending', async () => {
+    runningRound();
+    const going: LabEvent[] = [...VISIT.slice(0, -1), { at: NOW - 1000, kind: 'question', detail: 'x' }];
+    await save({ booking_id: 'b1', events: going });
+    await save({ booking_id: 'b1', events: VISIT });
+    expect(read('lab_records', 'b1')?.events).toEqual(VISIT);
   });
 
   it('answers 500 without the database\'s own words when it cannot be reached', async () => {

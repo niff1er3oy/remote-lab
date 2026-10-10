@@ -5,7 +5,12 @@ import { getSessionUser } from '@/lib/session';
 
 const ACTIVE_STATUSES = ['pending', 'confirmed', 'in_progress'];
 
+// How many rounds one user can hold at a time: those still ahead of them or
+// running. An admin's blocked stretch is not a round and does not count.
+export const MAX_ACTIVE_BOOKINGS = 5;
+
 class OverlapError extends Error {}
+class LimitError extends Error {}
 
 // The calendar sends UTC as "YYYY-MM-DD HH:MM:SS". Null for anything else, so
 // a time that is no date is refused here instead of failing further down.
@@ -56,6 +61,20 @@ export async function POST(req: NextRequest) {
         );
         if (overlaps) throw new OverlapError();
 
+        // Counted inside the transaction, so that two requests sent together
+        // cannot both find room for one more.
+        const mineSnap = await tx.get(
+          adminDb.collection('bookings')
+            .where('user_id', '==', user.uid)
+            .where('status', 'in', ACTIVE_STATUSES)
+        );
+        const now = Date.now();
+        const held = mineSnap.docs.filter(d => {
+          const booking = d.data();
+          return booking.blocked !== true && (booking.end_time as Timestamp).toMillis() > now;
+        });
+        if (held.length >= MAX_ACTIVE_BOOKINGS) throw new LimitError();
+
         const ref = adminDb.collection('bookings').doc();
         tx.set(ref, {
           user_id: user.uid,
@@ -69,6 +88,8 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       if (err instanceof OverlapError)
         return NextResponse.json({ ok: false, error: 'ห้องนี้ถูกจองในช่วงเวลาดังกล่าวแล้ว' }, { status: 409 });
+      if (err instanceof LimitError)
+        return NextResponse.json({ ok: false, error: `จองได้ไม่เกิน ${MAX_ACTIVE_BOOKINGS} รอบพร้อมกัน ยกเลิกรอบที่ไม่ใช้ก่อนจึงจะจองเพิ่มได้` }, { status: 409 });
       throw err;
     }
 

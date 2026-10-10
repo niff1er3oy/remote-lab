@@ -11,7 +11,8 @@ import { cleanCurrents, DEFAULT_CURRENTS, type Currents } from '@/lib/instrument
 import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
 import { prefersReducedMotion, press } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
-import { clockTime, describeEvent, type LabEvent } from '@/lib/lab-activity';
+import { clockTime, describeEvent, positionsOf, type EndReason, type LabEvent } from '@/lib/lab-activity';
+import { createSaveQueue, fitToSave, MAX_EVENTS } from '@/lib/lab-record';
 import { aboveBackground, createAverager, fieldFromSensor } from '@/lib/sensor';
 import { FieldViz } from './FieldViz';
 import LabSummary, { type SaveState } from './LabSummary';
@@ -153,13 +154,65 @@ async function tellPresence(action: 'enter' | 'stay' | 'leave' | 'on' | 'off', i
   }
 }
 
+// ── The visit's record on the server ──────────────────────────────────────────
+// The record is saved as the visit goes, not only when it ends: a refresh, the
+// back button or a crash then leaves the latest of it on the server, and a
+// student who comes back in the same round continues from it.
+
+// How long after an event the record is saved. Events that come close together
+// go in one save.
+const AUTOSAVE_MS = 3000;
+// How long before a save that failed is tried again.
+const SAVE_RETRY_MS = 15_000;
+// A request the browser finishes after the page has gone (keepalive, a beacon)
+// may carry 64 KiB at most, shared among those in flight.
+const KEEPALIVE_MAX_BYTES = 60_000;
+
+// What is already kept of this round's visit: its events, none when there is
+// no record yet, or null when that could not be found out.
+async function loadKept(bookingId: string): Promise<LabEvent[] | null> {
+  try {
+    const res = await fetch(`/api/lab/record?booking=${encodeURIComponent(bookingId)}`);
+    if (res.status === 404) return [];
+    const data = res.ok ? await res.json() : null;
+    return data?.ok && Array.isArray(data.events) ? data.events : null;
+  } catch {
+    return null;
+  }
+}
+
+// The save made while the tab closes or reloads, when no reply can be waited
+// for. Only this one is left with the browser to finish: a long visit's record
+// is over the size such a request may carry, and it then goes as an ordinary
+// request, which may not arrive. The saves made during the visit have already
+// kept all but the last few seconds of it.
+function saveWhileLeaving(bookingId: string | null, events: LabEvent[]) {
+  if (!bookingId || !events.length) return;
+  const body = JSON.stringify({ booking_id: bookingId, events: fitToSave(events).events });
+  const small = new Blob([body]).size <= KEEPALIVE_MAX_BYTES;
+  if (small && navigator.sendBeacon?.('/api/lab/record', body)) return;
+  fetch('/api/lab/record', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    keepalive: small,
+  }).catch(() => { });
+}
+
 // ── Access Gate ───────────────────────────────────────────────────────────────
 
 type AccessState =
   | { status: 'loading' }
   | { status: 'denied'; reason: 'auth' }
   | { status: 'denied'; reason: 'no_booking'; next: { start_time: string; experiment_name: string } | null }
-  | { status: 'allowed'; end_time: string; experiment_name: string; disabled: string[]; currents: Currents };
+  | {
+    status: 'allowed'; end_time: string; experiment_name: string; disabled: string[]; currents: Currents;
+    /**
+     * What is already kept of this round's visit (the student was here before
+     * and left): empty when nothing is, null when it could not be loaded.
+     */
+    kept: LabEvent[] | null;
+  };
 
 function useAccessGate() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
@@ -167,6 +220,12 @@ function useAccessGate() {
   // The round this visit belongs to, kept after the round has been marked
   // complete: the visit's record is saved under it.
   const visitBooking = useRef<string | null>(null);
+  // Once the student has started, a round found over from outside does not
+  // turn the room into the "no booking" screen: the page ends the visit as
+  // the finish button does, so its record is closed, saved and shown.
+  const started = useRef(false);
+  const markStarted = useCallback(() => { started.current = true; }, []);
+  const [roundClosed, setRoundClosed] = useState(false);
 
   // keepalive: true ทำให้ request ส่งได้แม้ระหว่าง page unload
   function completeBooking(id: string) {
@@ -193,8 +252,12 @@ function useAccessGate() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'start' }),
           }).catch(() => { });
+          // Before the student can start: a visit that continues one begins
+          // from what was kept of it.
+          const kept = await loadKept(bookingId);
           setAccess({
             status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name,
+            kept,
             disabled: Array.isArray(d.disabled_instruments) ? d.disabled_instruments : [],
             // The current each instrument is set to, as the admin has it, for the whole visit.
             currents: cleanCurrents(d.currents),
@@ -207,18 +270,22 @@ function useAccessGate() {
   }, []);
 
   // Re-check ทุก 60 วินาที — ถ้าเวลาหมดให้ mark complete แล้ว kick out
+  // (หลังกดเริ่มแล้วไม่ kick out: หน้าแลปจบการทดลองเอง แล้วแสดงสรุป)
   useEffect(() => {
     if (access.status !== 'allowed') return;
     const intervalId = setInterval(() => {
       fetch('/api/bookings/active-session')
         .then(r => r.json())
         .then(d => {
-          if (!d.ok || !d.active) {
+          // An answer that failed (a server error, a dropped session) says
+          // nothing about the round: it is asked again in a minute.
+          if (d.ok && !d.active) {
             if (activeBookingId.current) {
               completeBooking(activeBookingId.current);
               activeBookingId.current = null;
             }
-            setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
+            if (started.current) setRoundClosed(true);
+            else setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
           }
         })
         .catch(() => { });
@@ -233,7 +300,7 @@ function useAccessGate() {
     }
   }
 
-  return { access, onComplete, visitBooking };
+  return { access, onComplete, visitBooking, roundClosed, markStarted };
 }
 
 function formatDateTime(iso: string) {
@@ -478,7 +545,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function RemoteLabPage() {
-  const { access, onComplete, visitBooking } = useAccessGate();
+  const { access, onComplete, visitBooking, roundClosed, markStarted } = useAccessGate();
   const [labStarted, setLabStarted] = useState(false);
   const [instrument, setInstrument] = useState(0);
   const [z, setZ] = useState(0); // Z position in metres (solenoid only, one of the probe's 21 positions)
@@ -499,23 +566,6 @@ export default function RemoteLabPage() {
     eventsNow.current = [...eventsNow.current, { ...e, at: Date.now() }];
     setEvents(eventsNow.current);
   }, []);
-  // The record is kept in the database, so the summary can be opened again
-  // from the dashboard's history.
-  const [save, setSave] = useState<SaveState>('saving');
-  const saveRecord = useCallback(async () => {
-    setSave('saving');
-    try {
-      const res = await fetch('/api/lab/record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ booking_id: visitBooking.current, events: eventsNow.current }),
-        keepalive: true,
-      });
-      setSave(res.ok ? 'saved' : 'failed');
-    } catch {
-      setSave('failed');
-    }
-  }, [visitBooking]);
   const [ended, setEnded] = useState(false);
   const ending = useRef(false);
   // The reading last taken for the record. Null when the sensor sent nothing
@@ -606,12 +656,21 @@ export default function RemoteLabPage() {
   const selectedScript = useRef(instruments[0].script);
   useEffect(() => { selectedScript.current = instruments[instrument].script; }, [instrument]);
 
+  // What was kept of this round's visit when the page was entered.
+  const keptEvents = access.status === 'allowed' ? access.kept ?? NO_EVENTS : NO_EVENTS;
+  const [tableRestored, setTableRestored] = useState(false);
+
   // Reset Z and measurement data when instrument changes
   const [prevInstrumentForReset, setPrevInstrumentForReset] = useState(instrument);
   if (instrument !== prevInstrumentForReset) {
     setPrevInstrumentForReset(instrument);
     setZ(0);
-    setMeasData(new Map());
+    // Back in the same round: the first time the solenoid is chosen, its table
+    // holds the positions measured before leaving.
+    const chosen = instruments[instrument];
+    const restore = labStarted && !tableRestored && chosen.type === 'solenoid';
+    setMeasData(restore ? keptTable(keptEvents, chosen) : new Map());
+    if (restore) setTableRestored(true);
   }
 
   // ── Rig control ───────────────────────────────────────────────────────────
@@ -625,9 +684,74 @@ export default function RemoteLabPage() {
   // by picking the position again.
   const [rigError, setRigError] = useState<{ text: string; canRetry: boolean } | null>(null);
   const [rigAttempt, setRigAttempt] = useState(0);
+
+  // ── Keeping the record ────────────────────────────────────────────────────
+  // The record is kept in the database, so the summary can be opened again
+  // from the dashboard's history, and so a visit that is left can be continued.
+  // `keptUnknown` is true while it is not known what the server already keeps
+  // of this round (it could not be loaded on entering). Nothing is saved until
+  // it is known: the server keeps the longer of two records, and this visit's
+  // part alone could outgrow the earlier part and replace it.
+  const keptUnknown = useRef(false);
+  const fullTold = useRef(false);
+  const [queueSave] = useState(() => createSaveQueue());
+  const sendRecord = useCallback(async (): Promise<boolean> => {
+    const bookingId = visitBooking.current;
+    if (!bookingId) return false;
+    if (keptUnknown.current) {
+      const kept = await loadKept(bookingId);
+      if (kept === null) return false;
+      keptUnknown.current = false;
+      if (kept.length) {
+        eventsNow.current = [...kept, ...eventsNow.current];
+        setEvents(eventsNow.current);
+      }
+    }
+    const { events: fit, left } = fitToSave(eventsNow.current);
+    if (left > 0 && !fullTold.current) {
+      fullTold.current = true;
+      setRigError({ text: `บันทึกเต็มแล้ว (${MAX_EVENTS} รายการ) รายการถัดจากนี้ไม่ถูกเก็บลงประวัติ ดาวน์โหลด CSV ตอนจบเพื่อเก็บให้ครบ`, canRetry: false });
+    }
+    try {
+      // Not keepalive: that caps the body at 64 KiB, which a long visit passes.
+      const res = await fetch('/api/lab/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_id: bookingId, events: fit }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }, [visitBooking]);
+  // One save at a time; one asked for meanwhile follows it with the events there are then.
+  const pushRecord = useCallback(() => queueSave(sendRecord), [queueSave, sendRecord]);
+  // The save the summary reports on, and its retry button.
+  const [save, setSave] = useState<SaveState>('saving');
+  const saveRecord = useCallback(async () => {
+    setSave('saving');
+    setSave(await pushRecord() ? 'saved' : 'failed');
+  }, [pushRecord]);
   // The student is in the room once the booking has been confirmed and they
   // have pressed start, until the visit ends.
   const inRoom = access.status === 'allowed' && labStarted && !ended;
+
+  // Saved a few seconds after each event, so that leaving in any way (refresh,
+  // back, a crash) loses those seconds at most. A save that failed is tried
+  // again, later, even if nothing more happens.
+  const saveFailed = useRef(false);
+  const [saveRetry, setSaveRetry] = useState(0);
+  useEffect(() => {
+    if (!inRoom || events.length === 0) return;
+    let gone = false;
+    const timer = setTimeout(() => {
+      pushRecord().then((ok) => {
+        saveFailed.current = !ok;
+        if (!ok && !gone) setSaveRetry(n => n + 1);
+      });
+    }, saveFailed.current ? SAVE_RETRY_MS : AUTOSAVE_MS);
+    return () => { gone = true; clearTimeout(timer); };
+  }, [events, inRoom, pushRecord, saveRetry]);
 
   // The power supply that feeds the coils and the solenoid. The student does
   // not switch it: the server switches it on when they enter the room and off
@@ -708,19 +832,22 @@ export default function RemoteLabPage() {
     const bye = () => {
       navigator.sendBeacon?.('/api/lab/presence', JSON.stringify({ action: 'leave' }));
       // A visit left without finishing still keeps what it had recorded.
-      if (!ending.current && eventsNow.current.length)
-        navigator.sendBeacon?.('/api/lab/record', JSON.stringify({ booking_id: visitBooking.current, events: eventsNow.current }));
+      if (!ending.current && !keptUnknown.current) saveWhileLeaving(visitBooking.current, eventsNow.current);
     };
     window.addEventListener('pagehide', bye);
     return () => {
       gone = true;
       clearInterval(beat);
       window.removeEventListener('pagehide', bye);
-      // Leaving by a link: the room is empty again. Ending the visit has
-      // already said so, and saying it twice does no harm.
+      // Leaving by the back button or a link changes the page without
+      // unloading it, so no pagehide fires: the record is saved from here, as
+      // an ordinary request. Ending the visit saves it itself.
+      if (!ending.current) void pushRecord();
+      // The room is empty again. Ending the visit has already said so, and
+      // saying it twice does no harm.
       void tellPresence('leave');
     };
-  }, [inRoom, record, freshReading, averager, visitBooking]);
+  }, [inRoom, record, freshReading, averager, visitBooking, pushRecord]);
 
   // Nothing is sent to the rig before the supply has been switched on.
   const rigReady = inRoom && entered;
@@ -763,7 +890,8 @@ export default function RemoteLabPage() {
           const I = ampsOf(inst);
           const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
           const reading = await freshReading();
-          setMeasData(prev => new Map(prev).set(0, { bMeasured: reading ?? bTheory, bTheory, zero: backgroundNow.current }));
+          // No value from the sensor is 0 on screen, never the theory value.
+          setMeasData(prev => new Map(prev).set(0, { bMeasured: reading ?? 0, bTheory, zero: backgroundNow.current }));
           record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured: reading });
         }
       } finally {
@@ -772,9 +900,10 @@ export default function RemoteLabPage() {
     })();
   }, [instrument, rigReady, rigAttempt, record, recordReading, freshReading, ampsOf]);
 
-  // The visit is over, by the finish button or by the clock: cut whatever is
+  // The visit is over, by the finish button, by the clock or because the round
+  // was ended from outside: cut whatever is
   // live, close the record and show the summary in place of the lab room.
-  const endVisit = useCallback(async (how: 'finished' | 'time-up') => {
+  const endVisit = useCallback(async (how: EndReason) => {
     if (ending.current) return;
     ending.current = true;
     const live = powered.current;
@@ -792,6 +921,14 @@ export default function RemoteLabPage() {
     setEnded(true);
     void saveRecord();
   }, [record, recordReading, saveRecord]);
+
+  // The round was ended from outside while the student was in the room (an
+  // admin ended it, or the server's clock passed its end before the countdown
+  // here did): the visit ends as it does by the finish button.
+  const endFromOutside = useEffectEvent(() => { void endVisit('round-closed'); });
+  useEffect(() => {
+    if (roundClosed) endFromOutside();
+  }, [roundClosed]);
 
   const reportMove = useCallback((text: string | null, zCm: number, bTheory: number) => {
     setRigError(text === null ? null : { text: `เลื่อนหัววัดไม่สำเร็จ ค่าที่ตำแหน่งนี้จึงไม่ถูกบันทึก: ${text}`, canRetry: false });
@@ -829,7 +966,14 @@ export default function RemoteLabPage() {
 
     connect();
 
+    // A sensor that has stopped sending has no value: its last one does not
+    // stay on screen as if it were still being read.
+    const watch = setInterval(() => {
+      if (Date.now() - lastValueAt.current > SENSOR_SILENT_MS) setRealSensorValue(null);
+    }, SENSOR_SILENT_MS);
+
     return () => {
+      clearInterval(watch);
       clearTimeout(reconnectTimeout);
       if (ws) {
         ws.onclose = null;
@@ -864,7 +1008,25 @@ export default function RemoteLabPage() {
     );
   }
   if (access.status === 'denied') return <AccessDeniedScreen access={access} />;
-  if (!labStarted) return <LabIntroScreen endTime={access.end_time} onStart={() => { setLabStarted(true); record({ kind: 'start' }); }} />;
+  if (!labStarted) {
+    const kept = access.kept;
+    const start = () => {
+      // A visit that continues one goes on from what was kept of it: the
+      // summary, the CSV and every save hold the earlier part, then this one.
+      keptUnknown.current = kept === null;
+      eventsNow.current = kept ?? [];
+      record({ kind: 'start' });
+      markStarted();
+      setLabStarted(true);
+      // The solenoid is already the one chosen when the coils are closed.
+      const chosen = instruments[instrument];
+      if (chosen.type === 'solenoid') {
+        setMeasData(keptTable(keptEvents, chosen));
+        setTableRestored(true);
+      }
+    };
+    return <LabIntroScreen endTime={access.end_time} onStart={start} />;
+  }
 
   const inst = instruments[instrument];
   // The rig does not measure current: I is the value each circuit is set to.
@@ -872,7 +1034,9 @@ export default function RemoteLabPage() {
   const bTheory = inst.type === 'coil'
     ? calcBCoil(inst.turns, I, inst.R)
     : calcBSolenoid(inst.N, I, inst.L, inst.R, z);
-  const bMeasured = realSensorValue ?? bTheory;
+  // No value from the sensor is shown as 0, never as the theory value: the two
+  // would then agree exactly when nothing was measured at all.
+  const bMeasured = realSensorValue ?? 0;
   // The theory field at the middle of the winding: the field model draws the
   // probe's two arrows against it.
   const bPeak = inst.type === 'coil' ? bTheory : calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
@@ -957,7 +1121,7 @@ export default function RemoteLabPage() {
                 <div className="shrink-0 h-[190px] short:h-[150px] flex flex-col">
                   <SolenoidDataPanel
                     z={z} setZ={setZ}
-                    bMeasured={bMeasured} bTheory={bTheory}
+                    bTheory={bTheory}
                     measData={measData} setMeasData={setMeasData}
                     N={inst.N}
                     isMoving={isMoving} setIsMoving={setIsMoving}
@@ -1042,7 +1206,7 @@ export default function RemoteLabPage() {
                 <div className="flex-1 min-h-[220px] flex flex-col">
                   <SolenoidDataPanel
                     z={z} setZ={setZ}
-                    bMeasured={bMeasured} bTheory={bTheory}
+                    bTheory={bTheory}
                     measData={measData} setMeasData={setMeasData}
                     N={inst.N}
                     isMoving={isMoving} setIsMoving={setIsMoving}
@@ -1879,11 +2043,22 @@ function SensorPanel({ inst, I, bTheory, bMeasured, background, z, zero }: {
   const measured = {
     label: 'B วัดจริง', value: fixed(bMeasured, 3), unit: 'mT', color: '#22d3ee',
     ...(background === undefined ? {}
-      : background === null ? { hint: '(ยังไม่หักพื้นหลัง)', tip: 'B วัดจริง ยังรวมสนามพื้นหลังอยู่ เพราะเซนเซอร์ไม่ส่งค่าตอนเข้าห้อง ปิดแหล่งจ่ายไฟแล้วกด Set 0 เพื่ออ่านใหม่' }
-        : { hint: '(หักพื้นหลัง)', tip: `B วัดจริง หักสนามพื้นหลัง ${fixed(background, 3)} mT ออกแล้ว (อ่านตอนเข้าห้อง หรือตอนกด Set 0 ครั้งล่าสุด)` }),
+      // The note is shown at every width, so in the narrow lg column it is cut
+      // to what fits beside the value: the word for the background drops out,
+      // and the unit too, which the row's own unit already gives.
+      : background === null ? {
+        hintAtLg: true,
+        hint: <>(ยังไม่หัก<span className="lg:hidden xl:inline">พื้นหลัง</span>)</>,
+        tip: 'B วัดจริง ยังรวมสนามพื้นหลังอยู่ เพราะเซนเซอร์ไม่ส่งค่าตอนเข้าห้อง ปิดแหล่งจ่ายไฟแล้วกด Set 0 เพื่ออ่านใหม่',
+      }
+        : {
+          hintAtLg: true,
+          hint: <>หัก<span className="lg:hidden">พื้นหลัง</span> {fixed(background, 3)}<span className="lg:hidden xl:inline"> mT</span></>,
+          tip: `B วัดจริง หักสนามพื้นหลัง ${fixed(background, 3)} mT ออกแล้ว (อ่านตอนเข้าห้อง หรือตอนกด Set 0 ครั้งล่าสุด)`,
+        }),
   };
 
-  const rows: Array<{ label: string; hint?: string; tip?: string; value: string; unit: string; color: string }> = inst.type === 'coil'
+  const rows: SensorRowProps[] = inst.type === 'coil'
     ? [
       { label: `จำนวนรอบ (n)`, value: String(inst.turns), unit: 'รอบ', color: '#a3e635' },
       { label: 'กระแส (I)', value: I.toFixed(2), unit: 'A', color: '#c8ff00' },
@@ -1925,7 +2100,11 @@ function SensorPanel({ inst, I, bTheory, bMeasured, background, z, zero }: {
   );
 }
 
-function SensorRow({ label, hint, tip, value, unit, color }: { label: string; hint?: string; tip?: string; value: string; unit: string; color: string }) {
+// `hint` is a note beside the label and `tip` its tooltip. In the narrow lg
+// column a note is left to the tooltip unless `hintAtLg` says it fits there.
+type SensorRowProps = { label: string; hint?: ReactNode; hintAtLg?: boolean; tip?: string; value: string; unit: string; color: string };
+
+function SensorRow({ label, hint, hintAtLg, tip, value, unit, color }: SensorRowProps) {
   const valRef = useRef<HTMLSpanElement>(null);
   const prevRef = useRef(value);
   useEffect(() => {
@@ -1936,12 +2115,13 @@ function SensorRow({ label, hint, tip, value, unit, color }: { label: string; hi
   }, [value]);
   return (
     <div className="s-card grow-0 shrink basis-[42px] min-h-[32px] flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-gray-950/60 px-2.5">
-      <span title={tip ?? (hint ? `${label} ${hint}` : undefined)} className="min-w-0 text-sm lg:text-[13px] xl:text-sm leading-tight text-gray-400 line-clamp-2">
+      <span title={tip ?? (typeof hint === 'string' ? `${label} ${hint}` : undefined)} className="min-w-0 text-sm lg:text-[13px] xl:text-sm leading-tight text-gray-400 line-clamp-2">
         {/* The label and its note each stay whole; the space between them is
             where the note drops to a line of its own when the two do not fit. */}
         <span className="whitespace-nowrap">{label}</span>{' '}
-        {/* No room beside the value in the narrow lg column; the tooltip carries it there. */}
-        {hint && <span className="text-[11px] text-gray-500 whitespace-nowrap lg:hidden xl:inline">{hint}</span>}
+        {/* No room beside the value in the narrow lg column: the tooltip carries
+            the note there, unless it was made to fit. */}
+        {hint && <span className={`text-[11px] text-gray-500 whitespace-nowrap ${hintAtLg ? '' : 'lg:hidden xl:inline'}`}>{hint}</span>}
       </span>
       <div className="shrink-0 flex items-baseline gap-1">
         <span ref={valRef} className="text-sm xl:text-base font-mono font-bold tabular-nums" style={{ color }}>{value}</span>
@@ -2514,9 +2694,20 @@ function FormulaPanel({ inst, I, z, widthClassName = 'w-[200px]' }: { inst: Inst
 // bMeasured when it was read (null when no zero had been read).
 type MeasRecord = { bMeasured: number; bTheory: number; zero: number | null };
 
-function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, freshReading, background, disabled }: {
+const NO_EVENTS: LabEvent[] = [];
+
+// The table as a kept record has it: the positions the probe reached, each
+// with its latest value and the zero in force then. A position with no value
+// from the sensor reads 0, as it does when it is measured.
+function keptTable(events: LabEvent[], inst: Inst): Map<number, MeasRecord> {
+  return new Map(positionsOf(events, inst.name)
+    .filter(p => PROBE_POSITIONS.includes(p.zCm))
+    .map(p => [p.zCm, { bMeasured: p.bMeasured ?? 0, bTheory: p.bTheory, zero: p.zero }]));
+}
+
+function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, freshReading, background, disabled }: {
   z: number; setZ: (v: number) => void;
-  bMeasured: number; bTheory: number;
+  bTheory: number;
   measData: Map<number, MeasRecord>;
   setMeasData: React.Dispatch<React.SetStateAction<Map<number, MeasRecord>>>;
   N: number;
@@ -2540,8 +2731,8 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
   const COL_W = 64; // px per Z column
   const LABEL_W = 100; // px for row-label column
 
-  const liveRef = useRef({ bMeasured, bTheory });
-  useEffect(() => { liveRef.current = { bMeasured, bTheory }; }, [bMeasured, bTheory]);
+  const liveRef = useRef({ bTheory });
+  useEffect(() => { liveRef.current = { bTheory }; }, [bTheory]);
 
   useEffect(() => {
     if (panelRef.current) animate(panelRef.current, { opacity: [0, 1], translateY: [12, 0], duration: 400, ease: 'outCubic' });
@@ -2569,8 +2760,10 @@ function SolenoidDataPanel({ z, setZ, bMeasured, bTheory, measData, setMeasData,
     } else {
       // The probe is in place: only values taken from here on count.
       const reading = await freshReading();
-      const { bMeasured: bM, bTheory: bT } = liveRef.current;
-      setMeasData(prev => new Map(prev).set(zVal, { bMeasured: reading ?? bM, bTheory: bT, zero: background ?? null }));
+      // No reading here is 0: not the theory value, and not the value last
+      // seen, which may be from the position the probe has just left.
+      const { bTheory: bT } = liveRef.current;
+      setMeasData(prev => new Map(prev).set(zVal, { bMeasured: reading ?? 0, bTheory: bT, zero: background ?? null }));
     }
     onMoveError(failed, +cmText(probeZ(zVal)), liveRef.current.bTheory);
     setIsMoving(false);

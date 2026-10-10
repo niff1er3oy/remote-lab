@@ -5,7 +5,7 @@ import { animate, stagger } from 'animejs';
 import { prefersReducedMotion } from '@/lib/motion';
 import { fixed, signedFixed } from '@/lib/physics';
 import {
-  clockTime, describeEvent, difference, differencePercent, summarise, visitCsv,
+  clockTime, describeEvent, difference, differencePercent, END_HEADLINE, endReasonOf, summarise, visitCsv,
   type LabEvent, type LabReading,
 } from '@/lib/lab-activity';
 
@@ -48,7 +48,11 @@ export default function LabSummary({ events, experimentName, onLeave, save, onRe
   const rootRef = useRef<HTMLDivElement>(null);
   const summary = summarise(events);
   const backgroundTried = events.some((e) => e.kind === 'background' || e.kind === 'zero');
-  const timedOut = events.some((e) => e.kind === 'end' && e.detail === 'time-up');
+  // A record saved before the visit ended (the page was left) has no ending.
+  const headline = END_HEADLINE[endReasonOf(events) ?? 'finished'];
+  // The zero changed part-way, by a Set 0 or by coming back into the room: no
+  // one figure is true of every value.
+  const zeroChanged = summary.rezeroed > 0 || summary.entries > 1;
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -78,7 +82,7 @@ export default function LabSummary({ events, experimentName, onLeave, save, onRe
     <div ref={rootRef} className="h-screen overflow-y-auto bg-[#030712] text-white">
       <div className="mx-auto flex max-w-4xl flex-col gap-5 px-4 py-8 short:gap-4 short:py-5">
         <header data-rise>
-          <p className="text-sm text-gray-400">{timedOut ? 'หมดเวลาของรอบนี้แล้ว' : 'การทดลองสิ้นสุดแล้ว'}</p>
+          <p className="text-sm text-gray-400">{headline}</p>
           <h1 className="mt-1 text-2xl font-bold text-[#c8ff00] short:text-xl">สรุปการทดลอง</h1>
           <p className="mt-1 text-sm text-gray-300">{experimentName}</p>
           {summary.startedAt !== null && summary.endedAt !== null && (
@@ -104,9 +108,16 @@ export default function LabSummary({ events, experimentName, onLeave, save, onRe
           {/* What the measured values are measured from. */}
           {backgroundTried && (
             <p data-background className="border-b border-white/5 px-4 py-2 text-xs text-gray-400">
-              {summary.rezeroed > 0 && summary.zero !== null
-                // The zero changed part-way: no one figure is true of every value.
-                ? <>ค่า B วัดจริงแต่ละค่าหักค่าศูนย์ที่ใช้อยู่ขณะวัดออกแล้ว รอบนี้ตั้งศูนย์ใหม่ด้วย Set 0 {summary.rezeroed} ครั้ง ค่าล่าสุด <span className="font-mono text-gray-200">{fixed(summary.zero, 3)} mT</span> (ดูเวลาและค่าของแต่ละครั้งในลำดับเหตุการณ์)</>
+              {zeroChanged
+                ? <>
+                  ค่า B วัดจริงแต่ละค่าหักค่าศูนย์ที่ใช้อยู่ขณะวัดออกแล้ว{' '}
+                  {summary.entries > 1 && <>รอบนี้เข้าห้อง {summary.entries} ครั้ง และอ่านสนามพื้นหลังใหม่ทุกครั้งที่เข้า{' '}</>}
+                  {summary.rezeroed > 0 && <>รอบนี้ตั้งศูนย์ใหม่ด้วย Set 0 {summary.rezeroed} ครั้ง{' '}</>}
+                  {summary.zero !== null
+                    ? <>ค่าล่าสุด <span className="font-mono text-gray-200">{fixed(summary.zero, 3)} mT</span></>
+                    : 'ครั้งล่าสุดอ่านไม่ได้ ค่าที่วัดหลังจากนั้นจึงยังรวมสนามพื้นหลัง'}
+                  {' '}(ดูเวลาและค่าของแต่ละครั้งในลำดับเหตุการณ์)
+                </>
                 : summary.background !== null
                   ? <>ค่า B วัดจริงทุกค่าหักสนามพื้นหลัง <span className="font-mono text-gray-200">{fixed(summary.background, 3)} mT</span> ออกแล้ว (อ่านตอนเข้าห้อง ก่อนเปิดอุปกรณ์)</>
                   : 'ค่า B วัดจริงยังรวมสนามพื้นหลัง เพราะเซนเซอร์ไม่ส่งค่าตอนเข้าห้อง จึงอ่านค่าพื้นหลังไม่ได้'}

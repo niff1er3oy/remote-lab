@@ -31,8 +31,37 @@ export type LabEvent = {
    * 'background' or 'zero' event before it that worked.
    */
   bMeasured?: number | null;
-  /** The rig's error, the question asked, or how the visit ended. */
+  /** The rig's error, the question asked, or how the visit ended (an EndReason). */
   detail?: string;
+};
+
+/**
+ * How a visit ended: the finish button, the page's own countdown, or the round
+ * being found over from outside (an admin ended it, or the server's clock
+ * passed its end before the countdown did).
+ */
+export type EndReason = 'finished' | 'time-up' | 'round-closed';
+
+const ROUND_CLOSED_TEXT = 'ผู้ดูแลระบบสิ้นสุดรอบ หรือหมดเวลา';
+
+/**
+ * How the visit ended, from its last 'end' event; null while it has none. A
+ * record can hold more than one: the student came back in the same round.
+ */
+export function endReasonOf(events: LabEvent[]): EndReason | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
+    if (e.kind !== 'end') continue;
+    return e.detail === 'time-up' || e.detail === 'round-closed' ? e.detail : 'finished';
+  }
+  return null;
+}
+
+/** The summary's opening line for each way a visit ends. */
+export const END_HEADLINE: Record<EndReason, string> = {
+  finished: 'การทดลองสิ้นสุดแล้ว',
+  'time-up': 'หมดเวลาของรอบนี้แล้ว',
+  'round-closed': `รอบนี้สิ้นสุดแล้ว (${ROUND_CLOSED_TEXT})`,
 };
 
 export type LabReading = {
@@ -82,8 +111,52 @@ export function describeEvent(e: LabEvent): string {
     case 'question':
       return `ถามผู้ช่วย: ${e.detail}`;
     case 'end':
-      return e.detail === 'time-up' ? 'หมดเวลา สิ้นสุดการทดลอง' : 'สิ้นสุดการทดลอง';
+      return e.detail === 'time-up' ? 'หมดเวลา สิ้นสุดการทดลอง'
+        : e.detail === 'round-closed' ? `${ROUND_CLOSED_TEXT} สิ้นสุดการทดลอง`
+          : 'สิ้นสุดการทดลอง';
   }
+}
+
+// The zero in force after an event. Entering the room reads it anew, and a
+// reading that failed then leaves none; a Set 0 that failed leaves the old one.
+const zeroAfter = (zero: number | null, e: LabEvent): number | null => {
+  const read = e.ok && typeof e.bMeasured === 'number' ? e.bMeasured : null;
+  if (e.kind === 'background') return read;
+  return e.kind === 'zero' && read !== null ? read : zero;
+};
+
+// Time in the room, in milliseconds. A record continued after the student
+// left and came back has a 'start' for each entry: the time away, between the
+// last event of one entry and the start of the next, is not counted.
+function timeInRoom(events: LabEvent[]): number {
+  let total = 0;
+  let from: number | null = null;
+  let last = 0;
+  for (const e of events) {
+    if (from === null) from = e.at;
+    else if (e.kind === 'start') { total += last - from; from = e.at; }
+    last = e.at;
+  }
+  return from === null ? 0 : total + (last - from);
+}
+
+/** One position of the solenoid's table: `zero` is what had been taken off bMeasured (null when no zero had been read). */
+export type MeasuredPosition = { zCm: number; bTheory: number; bMeasured: number | null; zero: number | null };
+
+/**
+ * The solenoid's table as the record has it: the latest value at each probe
+ * position `instrument` reached, in the order first reached, with the zero
+ * that was in force when it was read.
+ */
+export function positionsOf(events: LabEvent[], instrument: string): MeasuredPosition[] {
+  const latest = new Map<number, MeasuredPosition>();
+  let zero: number | null = null;
+  for (const e of events) {
+    zero = zeroAfter(zero, e);
+    if (e.kind !== 'move' || !e.ok || e.instrument !== instrument || e.zCm === undefined || e.bTheory === undefined) continue;
+    latest.set(e.zCm, { zCm: e.zCm, bTheory: e.bTheory, bMeasured: e.bMeasured ?? null, zero });
+  }
+  return [...latest.values()];
 }
 
 const fieldText = (b: number | null | undefined) => (b === null || b === undefined ? 'ไม่มีสัญญาณเซนเซอร์' : `${fixed(b, 3)} mT`);
@@ -112,10 +185,17 @@ export type LabSummary = {
    * none, the values measured after each have that zero taken off instead.
    */
   rezeroed: number;
-  /** The zero in force when the visit ended, mT; null when none was ever read. */
+  /** The zero in force when the visit ended, mT; null when there was none. */
   zero: number | null;
+  /**
+   * How many times the student entered the room (pressed start). More than
+   * one when they left without finishing and came back in the same round;
+   * the background is read anew at each entry.
+   */
+  entries: number;
   startedAt: number | null;
   endedAt: number | null;
+  /** Time in the room: the time away between two entries is not counted. */
   durationSeconds: number;
   instruments: string[];
   commands: number;
@@ -131,14 +211,14 @@ export function summarise(events: LabEvent[]): LabSummary {
   const endedAt = events.length ? events[events.length - 1].at : null;
   const commands = events.filter((e) => COMMANDS.includes(e.kind));
   const background = events.find((e) => e.kind === 'background' && e.ok);
-  const zeros = events.filter((e) => (e.kind === 'background' || e.kind === 'zero') && e.ok && typeof e.bMeasured === 'number');
   return {
     background: typeof background?.bMeasured === 'number' ? background.bMeasured : null,
-    rezeroed: zeros.filter((e) => e.kind === 'zero').length,
-    zero: zeros.length ? zeros[zeros.length - 1].bMeasured ?? null : null,
+    rezeroed: events.filter((e) => e.kind === 'zero' && e.ok && typeof e.bMeasured === 'number').length,
+    zero: events.reduce<number | null>(zeroAfter, null),
+    entries: events.filter((e) => e.kind === 'start').length,
     startedAt,
     endedAt,
-    durationSeconds: startedAt !== null && endedAt !== null ? Math.max(0, Math.round((endedAt - startedAt) / 1000)) : 0,
+    durationSeconds: Math.max(0, Math.round(timeInRoom(events) / 1000)),
     instruments: [...new Set(events.filter((e) => e.kind === 'power-on' && e.ok).map((e) => e.instrument ?? ''))],
     commands: commands.length,
     failedCommands: commands.filter((e) => e.ok === false).length,
@@ -198,7 +278,7 @@ export function toCsv(events: LabEvent[]): string {
       values ? num(differencePercent(values), 2) : '',
       e.ok === undefined ? '' : e.ok ? 'สำเร็จ' : 'ไม่สำเร็จ',
       cell(
-        e.kind === 'end' ? (e.detail === 'time-up' ? 'หมดเวลา' : 'กดเสร็จสิ้น')
+        e.kind === 'end' ? (e.detail === 'time-up' ? 'หมดเวลา' : e.detail === 'round-closed' ? ROUND_CLOSED_TEXT : 'กดเสร็จสิ้น')
           : e.kind === 'supply' ? (e.detail === 'on' ? 'เปิด' : 'ปิด')
             : e.kind === 'background' ? (e.ok ? 'ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว' : 'เซนเซอร์ไม่ส่งค่า ค่าที่วัดได้ยังรวมสนามพื้นหลัง')
               : e.kind === 'zero' ? (e.ok ? 'ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว' : 'เซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่')

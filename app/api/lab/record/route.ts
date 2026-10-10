@@ -12,7 +12,9 @@ import { cleanEvents } from '@/lib/lab-record';
 // GET  /api/lab/record?booking=<id>              its owner (or an admin) reads it back
 
 // A round's record can be saved from when it starts until this long after it
-// ends: the page saves on finishing, and once more if the tab is closed.
+// ends: the page saves as the visit goes, on finishing, and when it is left.
+// A round an admin ended is 'completed' with its end time unchanged, so the
+// visit it cut short can still be saved.
 const SAVE_GRACE_MS = 60 * 60 * 1000;
 
 const bookingIdOf = (v: unknown) => (typeof v === 'string' && /^[\w-]{1,128}$/.test(v) ? v : null);
@@ -37,7 +39,8 @@ export async function POST(request: Request) {
     if (booking.status === 'cancelled' || booking.start_time.toMillis() > now || booking.end_time.toMillis() + SAVE_GRACE_MS < now)
       return NextResponse.json({ ok: false, error: 'บันทึกได้เฉพาะรอบที่กำลังทดลองหรือเพิ่งจบ' }, { status: 403 });
 
-    // A later save holds everything an earlier one did and more. One that
+    // A later save holds everything an earlier one did and more: the page
+    // loads what is kept before a visit continues, and adds to it. One that
     // holds less (an old tab, a request arriving late) does not replace it.
     const recordRef = adminDb.collection('lab_records').doc(bookingId);
     const existing = await recordRef.get();
