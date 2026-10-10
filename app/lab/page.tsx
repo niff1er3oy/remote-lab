@@ -803,14 +803,9 @@ export default function RemoteLabPage() {
   const [supplyOffShown, setSupplyOffShown] = useState(0);
   const supplyOnNow = useRef<boolean | null>(null);
   useEffect(() => { supplyOnNow.current = supplyOn; }, [supplyOn]);
-  // The supply going off ends the point's calibration: the solenoid is then
-  // read as a coil is, and when the supply comes back the value is shown as
-  // read until the point is chosen again.
-  const [supplyWas, setSupplyWas] = useState(supplyOn);
-  if (supplyWas !== supplyOn) {
-    setSupplyWas(supplyOn);
-    if (supplyOn === false) setPointAdjust(0);
-  }
+  // The supply going off leaves the point's calibration as it is: it is not
+  // used while the supply is off, and when the supply comes back the value at
+  // the point is the one shown before, with nothing measured again.
   const adjustAt = useCallback((reading: number | null, bTheory: number) => {
     // No value from the sensor is no measurement, and unless the supply is
     // known to be on there is no field of the instrument's to speak of: in
