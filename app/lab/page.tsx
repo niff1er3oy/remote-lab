@@ -832,6 +832,8 @@ export default function RemoteLabPage() {
   // (sole_b.py), clear of the solenoid, the background is read there, and
   // then the supply goes back on and the probe back to the middle of the
   // solenoid, which is measured as it is when the solenoid is first switched on.
+  // When the supply was already off, it is switched on once the probe is back
+  // at the middle, and the measuring follows.
   const [zeroing, setZeroing] = useState(false);
   const setZero = useCallback(async (): Promise<boolean> => {
     const inst = instruments[instrument];
@@ -863,7 +865,7 @@ export default function RemoteLabPage() {
         if (vector !== null) record({ kind: 'zero', ok: true, bMeasured: takeAsBackground(vector) });
         else record({ kind: 'zero', ok: false, bMeasured: null, detail: failed ?? undefined });
         // The supply the page switched off goes back on, whatever became of the zero.
-        const back = wasOn ? await supplyTo(true) : null;
+        let back = wasOn ? await supplyTo(true) : null;
         // The arm is home with the solenoid cut: the probe goes back to the
         // middle, as it does when the solenoid is switched on.
         let restart: string | null = null;
@@ -873,8 +875,16 @@ export default function RemoteLabPage() {
           if (!restart) {
             powered.current = inst;
             setZ(0);
+            // A supply that was off when Set 0 was pressed is switched on
+            // here, with the probe at the measuring point and the zero
+            // read: the measuring starts only after that.
+            let on = wasOn && !back;
+            if (!wasOn && !failed) {
+              back = await supplyTo(true);
+              on = !back;
+            }
             // Measured only with current in the winding.
-            if (wasOn && !back) {
+            if (on) {
               const I = ampsOf(inst);
               const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
               await armSettled();
