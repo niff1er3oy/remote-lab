@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
   const backgroundLine = context.background === undefined ? ''
     : context.background === null
       ? '\n- ค่าวัดจริงยังรวมสนามพื้นหลัง (สนามโลกและสิ่งรอบชุดทดลอง) เพราะยังอ่านค่าพื้นหลังไม่ได้'
-      : `\n- ค่าวัดจริงหักสนามพื้นหลัง ${fixed(context.background, 3)} mT ออกแล้วแบบเวกเตอร์ (อ่านด้วยเซนเซอร์ขณะแหล่งจ่ายไฟปิด)`;
+      : `\n- ค่าวัดจริงหักสนามพื้นหลัง ${fixed(context.background, 3)} mT ออกแล้วแบบขนาดลบขนาด ก่อนคาลิเบรต (อ่านด้วยเซนเซอร์ขณะแหล่งจ่ายไฟปิด)`;
 
   // The current to the milliampere an admin can set it to, without trailing zeros.
   const amps = (I: number) => String(+I.toFixed(3));

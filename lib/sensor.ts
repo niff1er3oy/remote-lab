@@ -5,8 +5,8 @@
 //   {"bx": 12.34, "by": -5.6, "bz": 1120.01}
 //
 // The lab room works with one number in millitesla: the size of the field
-// once the room's own field has been taken off it, component by component
-// (`fieldAbove`).
+// less the size of the room's own field, with the calibration on what is
+// left (`fieldAbove`).
 
 /** Which part of the reading is "the field" the experiment compares with theory. */
 export type SensorAxis = 'magnitude' | 'bx' | 'by' | 'bz';
@@ -18,10 +18,9 @@ export const SENSOR_AXIS: SensorAxis = 'magnitude';
 
 // The sensor's reading against the true field: true field = GAIN x reading +
 // OFFSET, both in mT, applied to the size of the field. This is the line
-// fitted on the rig, in use by the lab owner's decision. It was fitted with
-// the background taken off size from size; with the background taken off as a
-// vector (`fieldAbove`) its offset does not cancel unless the reading and the
-// background point the same way.
+// fitted on the rig, in use by the lab owner's decision. It goes on the size
+// of the reading once the size of the background has been taken off it
+// (`fieldAbove`).
 export const CALIBRATION = { gain: 1.1076, offset: 0.0692 };
 
 /** The true field in mT for a size of field the sensor read, in mT. */
@@ -66,43 +65,31 @@ export function vectorFromSensor(message: unknown): FieldVector | null {
 }
 
 /**
- * The size of a field in mT, calibrated, with the room's own calibrated field
- * taken off it component by component. The background is the vector the sensor
- * read with nothing switched on: the Earth's field and whatever else is near
- * the rig. Taking it off as a vector leaves the instrument's own field
- * whichever way the background points; taking size from size (as
- * `aboveBackground` does) is right only when the two are parallel, and read
- * up to 60 % low along the solenoid's tails on this rig. Null when the
- * background could not be read: the reading is then left as it is.
+ * The field in mT for a reading with the room's own field taken off it: the
+ * raw size of the background is taken from the raw size of the reading, and
+ * the calibration goes on what is left. The background is what the sensor read
+ * with nothing switched on (on entering the lab room, or at Set 0): the
+ * Earth's field and whatever else is near the rig. Null when it could not be
+ * read: nothing is taken off then.
  *
- * Each of the two is calibrated first (`calibratedVector`) and the background
- * taken off after, by the lab owner's order of work: what is shown is the
- * calibrated reading less the calibrated background.
+ * This is the lab owner's order of work, and the one the calibration line was
+ * fitted with. Two things follow from it. Taking size from size is right only
+ * when the background is parallel to the instrument's field, and read up to
+ * 60 % low along the solenoid's tails on this rig. And the line's offset is in
+ * every value: where the sensor reads only the background, the result is the
+ * offset, not zero.
  */
 export function fieldAbove(reading: FieldVector, background: FieldVector | null, calibration = CALIBRATION): number {
-  const r = calibratedVector(reading, calibration);
-  const b = background ? calibratedVector(background, calibration) : { x: 0, y: 0, z: 0 };
-  return Math.hypot(r.x - b.x, r.y - b.y, r.z - b.z);
+  const above = fieldSize(reading) - (background ? fieldSize(background) : 0);
+  return calibration.gain * above + calibration.offset;
 }
 
-/**
- * A field the sensor read with the calibration on it: the same direction, and
- * the size the calibration gives for the size read. A field of no size has no
- * direction to keep, and stays as it is.
- */
-export function calibratedVector(v: FieldVector, calibration = CALIBRATION): FieldVector {
-  const size = fieldSize(v);
-  if (size === 0) return v;
-  const k = (calibration.gain * size + calibration.offset) / size;
-  return { x: v.x * k, y: v.y * k, z: v.z * k };
-}
-
-/** The size in mT of the background as it is taken off: the calibrated size of what the sensor read. */
-export const backgroundSize = (background: FieldVector) => fieldSize(calibratedVector(background));
+/** The size in mT of the background as it is taken off: the raw size the sensor read. */
+export const backgroundSize = (background: FieldVector) => fieldSize(background);
 
 /**
  * A reading with a background taken off it, size from size, both calibrated
- * sizes in mT. The lab room no longer does this (see `fieldAbove`). The background is what the sensor read on entering the lab room,
+ * sizes in mT. The lab room does not use this (see `fieldAbove`). The background is what the sensor read on entering the lab room,
  * before anything was switched on: the Earth's field and whatever else is near
  * the rig. Null when it could not be read; the reading is then left as it is.
  * The result can be a little below zero: a difference of two readings is.

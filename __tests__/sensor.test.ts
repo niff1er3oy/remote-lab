@@ -1,4 +1,4 @@
-import { aboveBackground, backgroundSize, calibrated, calibratedVector, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
+import { aboveBackground, backgroundSize, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
@@ -230,60 +230,45 @@ describe('vectorFromSensor — the three components of one message', () => {
   });
 });
 
-describe('fieldAbove — the background taken off as a vector', () => {
-  // A background of 0.0325 mT at 125 degrees to the axis, as the rig's own
-  // readings were fitted, and the solenoid's field along the axis.
-  const background = { x: 0.0325 * Math.cos((125 * Math.PI) / 180), y: 0.0325 * Math.sin((125 * Math.PI) / 180), z: 0 };
-  const withCoil = (b: number) => ({ x: background.x + b, y: background.y, z: background.z });
-  // The taking off itself, with no line on the readings.
-  const AS_READ = { gain: 1, offset: 0 };
+describe('fieldAbove — the background taken off size from size, then calibrated', () => {
+  const { gain, offset } = CALIBRATION;
 
-  it.each([0.4172, 0.2279, 0.0384, 0.0106])('gives the instrument\'s own field of %p mT back, whichever way the background points', (b) => {
-    expect(fieldAbove(withCoil(b), background, AS_READ)).toBeCloseTo(b, 12);
+  it('takes the raw size of the background from the raw size of the reading and calibrates what is left', () => {
+    // Sizes of 0.5 and 0.05 mT: 1.1076 x 0.45 + 0.0692.
+    expect(fieldAbove({ x: 0.3, y: 0.4, z: 0 }, { x: 0.03, y: 0.04, z: 0 })).toBeCloseTo(gain * 0.45 + offset, 12);
+    expect(fieldAbove({ x: 0.3, y: 0.4, z: 0 }, { x: 0.03, y: 0.04, z: 0 })).toBeCloseTo(0.56762, 12);
   });
 
-  it('is what taking size from size got wrong: 60 % low at 0.0384 mT with this background', () => {
-    const sizeFromSize = fieldSize(withCoil(0.0384)) - fieldSize(background);
-    expect((sizeFromSize - 0.0384) / 0.0384).toBeLessThan(-0.5);
-    expect(fieldAbove(withCoil(0.0384), background, AS_READ)).toBeCloseTo(0.0384, 12);
+  it('goes by size alone, whichever way the two point', () => {
+    expect(fieldAbove({ x: 0.5, y: 0, z: 0 }, { x: 0, y: 0, z: -0.05 })).toBeCloseTo(gain * 0.45 + offset, 12);
   });
 
-  it('reads zero where there is only the background', () => {
-    expect(fieldAbove(background, background)).toBe(0);
+  it('reads the offset of the line, not zero, where there is only the background', () => {
+    const background = { x: 0.03, y: 0.04, z: 0 };
+    expect(fieldAbove(background, background)).toBeCloseTo(offset, 12);
   });
 
-  it('is never below zero: it is the size of what is left', () => {
-    expect(fieldAbove({ x: -0.2, y: 0, z: 0 }, { x: 0.1, y: 0, z: 0 }, AS_READ)).toBeCloseTo(0.3, 12);
+  it('can go under the offset: a reading smaller than the background', () => {
+    expect(fieldAbove({ x: 0.02, y: 0, z: 0 }, { x: 0.05, y: 0, z: 0 })).toBeCloseTo(gain * -0.03 + offset, 12);
   });
 
-  it('leaves the reading as it is, as a size, when no background could be read', () => {
+  it('only calibrates the reading when no background could be read', () => {
     expect(fieldAbove({ x: 0.3, y: 0.4, z: 0 }, null)).toBeCloseTo(calibrated(0.5), 12);
   });
 
-  it('calibrates the reading and the background first, and takes the one off the other after', () => {
-    const line = { gain: 2, offset: 0.1 };
-    // Along one axis: (2 x 0.5 + 0.1) - (2 x 0.1 + 0.1) = 0.8, the offset cancelling.
-    expect(fieldAbove({ x: 0.5, y: 0, z: 0 }, { x: 0.1, y: 0, z: 0 }, line)).toBeCloseTo(0.8, 12);
-    // With no background the reading is only calibrated.
-    expect(fieldAbove({ x: 0.3, y: 0.4, z: 0 }, null, line)).toBeCloseTo(1.1, 12);
-    // Where there is only the background, nothing is left.
-    expect(fieldAbove({ x: 0.03, y: 0.04, z: 0 }, { x: 0.03, y: 0.04, z: 0 }, line)).toBeCloseTo(0, 12);
-  });
-});
-
-describe('calibratedVector — the calibration on a field of three components', () => {
-  it('keeps the direction and gives the size the calibration gives', () => {
-    const v = calibratedVector({ x: 0.3, y: 0.4, z: 0 }, { gain: 2, offset: 0.1 });
-    expect(fieldSize(v)).toBeCloseTo(1.1, 12);
-    expect(v.y / v.x).toBeCloseTo(4 / 3, 12);
+  it('takes another line when given one', () => {
+    expect(fieldAbove({ x: 0.5, y: 0, z: 0 }, { x: 0.1, y: 0, z: 0 }, { gain: 2, offset: 0.1 })).toBeCloseTo(0.9, 12);
   });
 
-  it('leaves a field of no size as it is', () => {
-    expect(calibratedVector({ x: 0, y: 0, z: 0 }, { gain: 2, offset: 0.1 })).toEqual({ x: 0, y: 0, z: 0 });
+  it('is low along the tails of the solenoid when the background is not along the axis', () => {
+    // A background of 0.0325 mT at 125 degrees to the axis, and 0.0384 mT of the solenoid's along it.
+    const background = { x: 0.0325 * Math.cos((125 * Math.PI) / 180), y: 0.0325 * Math.sin((125 * Math.PI) / 180), z: 0 };
+    const sizeFromSize = fieldSize({ x: background.x + 0.0384, y: background.y, z: 0 }) - fieldSize(background);
+    expect((sizeFromSize - 0.0384) / 0.0384).toBeLessThan(-0.5);
   });
 
-  it('gives the background its calibrated size', () => {
-    expect(backgroundSize({ x: 0.03, y: 0.04, z: 0 })).toBeCloseTo(calibrated(0.05), 12);
+  it('gives the background the raw size the sensor read', () => {
+    expect(backgroundSize({ x: 0.03, y: 0.04, z: 0 })).toBeCloseTo(0.05, 12);
   });
 });
 
