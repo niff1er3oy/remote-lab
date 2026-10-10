@@ -1,4 +1,4 @@
-import { aboveBackground, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS, SHOWN_SPREAD, shownFactor } from '@/lib/sensor';
+import { aboveBackground, backgroundSize, calibrated, calibratedVector, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS, SHOWN_SPREAD, shownFactor } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
@@ -267,6 +267,32 @@ describe('fieldAbove — the background taken off as a vector', () => {
 
   it('leaves the reading as it is, as a size, when no background could be read', () => {
     expect(fieldAbove({ x: 0.3, y: 0.4, z: 0 }, null)).toBeCloseTo(0.5, 12);
+  });
+
+  it('calibrates the reading and the background first, and takes the one off the other after', () => {
+    const line = { gain: 2, offset: 0.1 };
+    // Along one axis: (2 x 0.5 + 0.1) - (2 x 0.1 + 0.1) = 0.8, the offset cancelling.
+    expect(fieldAbove({ x: 0.5, y: 0, z: 0 }, { x: 0.1, y: 0, z: 0 }, line)).toBeCloseTo(0.8, 12);
+    // With no background the reading is only calibrated.
+    expect(fieldAbove({ x: 0.3, y: 0.4, z: 0 }, null, line)).toBeCloseTo(1.1, 12);
+    // Where there is only the background, nothing is left.
+    expect(fieldAbove({ x: 0.03, y: 0.04, z: 0 }, { x: 0.03, y: 0.04, z: 0 }, line)).toBeCloseTo(0, 12);
+  });
+});
+
+describe('calibratedVector — the calibration on a field of three components', () => {
+  it('keeps the direction and gives the size the calibration gives', () => {
+    const v = calibratedVector({ x: 0.3, y: 0.4, z: 0 }, { gain: 2, offset: 0.1 });
+    expect(fieldSize(v)).toBeCloseTo(1.1, 12);
+    expect(v.y / v.x).toBeCloseTo(4 / 3, 12);
+  });
+
+  it('leaves a field of no size as it is', () => {
+    expect(calibratedVector({ x: 0, y: 0, z: 0 }, { gain: 2, offset: 0.1 })).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it('gives the background its calibrated size', () => {
+    expect(backgroundSize({ x: 0.03, y: 0.04, z: 0 })).toBeCloseTo(calibrated(0.05), 12);
   });
 });
 

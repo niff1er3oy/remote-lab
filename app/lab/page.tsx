@@ -14,7 +14,7 @@ import { prefersReducedMotion, press } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { clockTime, describeEvent, positionsOf, readingsOf, type EndReason, type LabEvent, type LabReading } from '@/lib/lab-activity';
 import { createSaveQueue, fitToSave, MAX_EVENTS } from '@/lib/lab-record';
-import { createVectorAverager, fieldAbove, fieldSize, vectorFromSensor, type FieldVector } from '@/lib/sensor';
+import { backgroundSize, createVectorAverager, fieldAbove, vectorFromSensor, type FieldVector } from '@/lib/sensor';
 import { FieldViz } from './FieldViz';
 import LabSummary, { type SaveState } from './LabSummary';
 
@@ -612,8 +612,8 @@ export default function RemoteLabPage() {
   // Makes `vector` the background from here on.
   const takeAsBackground = useCallback((vector: FieldVector) => {
     backgroundNow.current = vector;
-    setBackground(fieldSize(vector));
-    return fieldSize(vector);
+    setBackground(backgroundSize(vector));
+    return backgroundSize(vector);
   }, []);
   const chat = useChat(useCallback((question: string) => record({ kind: 'question', detail: question }), [record]));
   const topRowRef = useRef<HTMLDivElement>(null);
@@ -867,7 +867,7 @@ export default function RemoteLabPage() {
               const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
               await armSettled();
               const at = adjustAt(await freshReading(), bTheory);
-              setMeasData(prev => new Map(prev).set(0, { bMeasured: at.value ?? 0, bTheory, zero: backgroundNow.current && fieldSize(backgroundNow.current) }));
+              setMeasData(prev => new Map(prev).set(0, { bMeasured: at.value ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
               record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured: at.value });
             }
           }
@@ -994,7 +994,7 @@ export default function RemoteLabPage() {
           await armSettled();
           const at = adjustAt(await freshReading(), bTheory);
           // No value from the sensor is 0 on screen, never the theory value.
-          setMeasData(prev => new Map(prev).set(0, { bMeasured: at.value ?? 0, bTheory, zero: backgroundNow.current && fieldSize(backgroundNow.current) }));
+          setMeasData(prev => new Map(prev).set(0, { bMeasured: at.value ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
           record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured: at.value });
         } else {
           // A coil has one measuring point, the one its probe is at: the
@@ -2889,8 +2889,10 @@ function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMovin
     c.scrollTo({ left: idx * COL_W - c.clientWidth / 2 + COL_W / 2, behavior: 'smooth' });
   }, [zCm]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Choosing the position the probe is already at starts over there: the arm
+  // is sent to it again, and the value is read and its calibration set anew.
   async function moveToPosition(zVal: number) {
-    if (disabled || zVal === zCm) return;
+    if (disabled || isMoving) return;
     const from = zCm;
     setIsMoving(true);
     setZ(probeZ(zVal));
@@ -3027,10 +3029,11 @@ function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMovin
                   {/* Z value header — click to move arm */}
                   <button
                     onClick={() => moveToPosition(zVal)}
-                    disabled={disabled || isCurrent}
+                    disabled={disabled}
+                    title={isCurrent ? 'วัดซ้ำที่ตำแหน่งนี้' : undefined}
                     className={`shrink-0 h-[30px] w-full flex items-center justify-center text-sm font-mono font-semibold border-b border-white/5 transition-colors
                       ${isCurrent && isMoving ? 'text-violet-400 animate-pulse' : ''}
-                      ${isCurrent && !isMoving ? 'text-[#c8ff00]' : ''}
+                      ${isCurrent && !isMoving ? 'text-[#c8ff00] hover:bg-white/5 cursor-pointer' : ''}
                       ${!isCurrent && !isMoving ? 'text-gray-600 hover:text-gray-300 hover:bg-white/5 cursor-pointer' : ''}
                       ${!isCurrent && isMoving ? 'text-gray-700 cursor-not-allowed' : ''}
                     `}

@@ -65,19 +65,39 @@ export function vectorFromSensor(message: unknown): FieldVector | null {
 }
 
 /**
- * The size of a field in mT with the room's own field taken off it, component
- * by component, and then calibrated. The background is the vector the sensor
+ * The size of a field in mT, calibrated, with the room's own calibrated field
+ * taken off it component by component. The background is the vector the sensor
  * read with nothing switched on: the Earth's field and whatever else is near
  * the rig. Taking it off as a vector leaves the instrument's own field
  * whichever way the background points; taking size from size (as
  * `aboveBackground` does) is right only when the two are parallel, and read
  * up to 60 % low along the solenoid's tails on this rig. Null when the
  * background could not be read: the reading is then left as it is.
+ *
+ * Each of the two is calibrated first (`calibratedVector`) and the background
+ * taken off after, by the lab owner's order of work: what is shown is the
+ * calibrated reading less the calibrated background.
  */
-export function fieldAbove(reading: FieldVector, background: FieldVector | null): number {
-  const b = background ?? { x: 0, y: 0, z: 0 };
-  return calibrated(Math.hypot(reading.x - b.x, reading.y - b.y, reading.z - b.z));
+export function fieldAbove(reading: FieldVector, background: FieldVector | null, calibration = CALIBRATION): number {
+  const r = calibratedVector(reading, calibration);
+  const b = background ? calibratedVector(background, calibration) : { x: 0, y: 0, z: 0 };
+  return Math.hypot(r.x - b.x, r.y - b.y, r.z - b.z);
 }
+
+/**
+ * A field the sensor read with the calibration on it: the same direction, and
+ * the size the calibration gives for the size read. A field of no size has no
+ * direction to keep, and stays as it is.
+ */
+export function calibratedVector(v: FieldVector, calibration = CALIBRATION): FieldVector {
+  const size = fieldSize(v);
+  if (size === 0) return v;
+  const k = (calibration.gain * size + calibration.offset) / size;
+  return { x: v.x * k, y: v.y * k, z: v.z * k };
+}
+
+/** The size in mT of the background as it is taken off: the calibrated size of what the sensor read. */
+export const backgroundSize = (background: FieldVector) => fieldSize(calibratedVector(background));
 
 /**
  * A reading with a background taken off it, size from size, both calibrated
