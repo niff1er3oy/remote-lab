@@ -1,13 +1,13 @@
-import { aboveBackground, calibrated, CALIBRATION, createAverager, fieldFromSensor, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
+import { aboveBackground, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
-    // sqrt(300^2 + 400^2 + 1200^2) = 1300 uT = 1.3 mT; 1.1076 x 1.3 + 0.0692 = 1.50908
-    expect(fieldFromSensor({ bx: 300, by: 400, bz: 1200 })).toBeCloseTo(1.50908, 12);
+    // sqrt(300^2 + 400^2 + 1200^2) = 1300 uT = 1.3 mT
+    expect(fieldFromSensor({ bx: 300, by: 400, bz: 1200 })).toBeCloseTo(1.3, 12);
   });
 
   it('reads the message as the service sends it, as JSON text', () => {
-    expect(fieldFromSensor('{"bx": 0, "by": 0, "bz": 1000}')).toBeCloseTo(1.1768, 12);
+    expect(fieldFromSensor('{"bx": 0, "by": 0, "bz": 1000}')).toBeCloseTo(1, 12);
   });
 
   it('uses the size of the field unless told to use one component', () => {
@@ -22,13 +22,13 @@ describe('fieldFromSensor — one message from the magnetometer', () => {
   });
 
   it('reads a field of zero as a reading, not as no reading', () => {
-    expect(fieldFromSensor({ bx: 0, by: 0, bz: 0 })).toBe(0.0692);
+    expect(fieldFromSensor({ bx: 0, by: 0, bz: 0 })).toBe(0);
     expect(fieldFromSensor({ bx: 0, by: 0, bz: 0 }, 'bz')).toBe(0);
   });
 
-  it('calibrates with the line fitted on the rig', () => {
-    expect(CALIBRATION).toEqual({ gain: 1.1076, offset: 0.0692 });
-    expect(calibrated(0.5)).toBeCloseTo(0.623, 12);
+  it('calibrates with the identity until a line is fitted again on the rig', () => {
+    expect(CALIBRATION).toEqual({ gain: 1, offset: 0 });
+    expect(calibrated(0.5)).toBeCloseTo(0.5, 12);
   });
 
   it('still reads the earlier form, one value already in millitesla', () => {
@@ -192,5 +192,78 @@ describe('pointAdjustment — the calibration set again at a measuring point', (
 
   it('takes another tolerance when given one', () => {
     expect(0.25 + pointAdjustment(0.25, 0.417, 0.05)).toBeCloseTo(0.417 * 0.95, 10);
+  });
+});
+
+describe('vectorFromSensor — the three components of one message', () => {
+  it('gives them in millitesla', () => {
+    expect(vectorFromSensor({ bx: 300, by: -400, bz: 1200 })).toEqual({ x: 0.3, y: -0.4, z: 1.2 });
+    expect(vectorFromSensor('{"bx": 12.5, "by": 0, "bz": -30}')).toEqual({ x: 0.0125, y: 0, z: -0.03 });
+  });
+
+  it('takes the earlier one-value form of the feed to lie along one axis', () => {
+    expect(vectorFromSensor({ value: 0.42 })).toEqual({ x: 0.42, y: 0, z: 0 });
+  });
+
+  it.each([[null], [undefined], ['not json'], [7], [{}], [{ bx: 1, by: 2 }], [{ bx: '1', by: 2, bz: 3 }], [{ bx: NaN, by: 0, bz: 0 }]])('is nothing for %p', (message) => {
+    expect(vectorFromSensor(message)).toBeNull();
+  });
+
+  it('has a size', () => {
+    expect(fieldSize({ x: 0.3, y: 0.4, z: 1.2 })).toBeCloseTo(1.3, 12);
+  });
+});
+
+describe('fieldAbove — the background taken off as a vector', () => {
+  // A background of 0.0325 mT at 125 degrees to the axis, as the rig's own
+  // readings were fitted, and the solenoid's field along the axis.
+  const background = { x: 0.0325 * Math.cos((125 * Math.PI) / 180), y: 0.0325 * Math.sin((125 * Math.PI) / 180), z: 0 };
+  const withCoil = (b: number) => ({ x: background.x + b, y: background.y, z: background.z });
+
+  it.each([0.4172, 0.2279, 0.0384, 0.0106])('gives the instrument\'s own field of %p mT back, whichever way the background points', (b) => {
+    expect(fieldAbove(withCoil(b), background)).toBeCloseTo(b, 12);
+  });
+
+  it('is what taking size from size got wrong: 60 % low at 0.0384 mT with this background', () => {
+    const sizeFromSize = fieldSize(withCoil(0.0384)) - fieldSize(background);
+    expect((sizeFromSize - 0.0384) / 0.0384).toBeLessThan(-0.5);
+    expect(fieldAbove(withCoil(0.0384), background)).toBeCloseTo(0.0384, 12);
+  });
+
+  it('reads zero where there is only the background', () => {
+    expect(fieldAbove(background, background)).toBe(0);
+  });
+
+  it('is never below zero: it is the size of what is left', () => {
+    expect(fieldAbove({ x: -0.2, y: 0, z: 0 }, { x: 0.1, y: 0, z: 0 })).toBeCloseTo(0.3, 12);
+  });
+
+  it('leaves the reading as it is, as a size, when no background could be read', () => {
+    expect(fieldAbove({ x: 0.3, y: 0.4, z: 0 }, null)).toBeCloseTo(0.5, 12);
+  });
+});
+
+describe('createVectorAverager — a reading of the three components', () => {
+  it('is the mean of each component over the block', () => {
+    const averager = createVectorAverager(4);
+    expect(averager.add({ x: 1, y: 0, z: -2 })).toBeNull();
+    averager.add({ x: 3, y: 0, z: -2 });
+    averager.add({ x: 1, y: 4, z: -2 });
+    expect(averager.add({ x: 3, y: 4, z: -2 })).toEqual({ x: 2, y: 2, z: -2 });
+  });
+
+  it('averages the noise out before a size is taken: opposite kicks across the axis cancel', () => {
+    const averager = createVectorAverager(2);
+    averager.add({ x: 0.1, y: 0.05, z: 0 });
+    const reading = averager.add({ x: 0.1, y: -0.05, z: 0 });
+    expect(fieldSize(reading!)).toBeCloseTo(0.1, 12);
+  });
+
+  it('takes twenty values to a reading unless told otherwise, and a fresh one starts from now', async () => {
+    const averager = createVectorAverager();
+    for (let i = 0; i < SAMPLES_PER_READING - 1; i++) expect(averager.add({ x: 9, y: 9, z: 9 })).toBeNull();
+    const fresh = averager.fresh(1000);
+    for (let i = 0; i < SAMPLES_PER_READING; i++) averager.add({ x: 1, y: 2, z: 3 });
+    expect(await fresh).toEqual({ x: 1, y: 2, z: 3 });
   });
 });
