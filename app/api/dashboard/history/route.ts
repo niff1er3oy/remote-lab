@@ -19,6 +19,8 @@ export async function GET(req: NextRequest) {
       booking_id: string; lab_code: string | undefined; lab_name: string | undefined;
       start_time: string; end_time: string; status: string;
       duration_seconds: number | null; session_id: string | null;
+      /** Whether the visit's record was kept, so its summary can be opened. */
+      has_record: boolean;
     }> = [];
 
     // Where the next raw batch picks up. A document rather than its start time:
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
 
       for (const doc of snap.docs) {
         last = doc;
-        const b = doc.data() as { lab_id: string; start_time: Timestamp; end_time: Timestamp; status: string };
+        const b = doc.data() as { lab_id: string; start_time: Timestamp; end_time: Timestamp; status: string; has_record?: boolean };
 
         const isHistory = ['completed', 'cancelled'].includes(b.status) || b.end_time.toMillis() < now;
         if (!isHistory) continue;
@@ -83,6 +85,7 @@ export async function GET(req: NextRequest) {
           status: b.status,
           duration_seconds: durationSeconds,
           session_id: sessionSnap.exists ? doc.id : null,
+          has_record: b.has_record === true,
         });
       }
     }

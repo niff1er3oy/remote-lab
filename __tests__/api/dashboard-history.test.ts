@@ -69,7 +69,15 @@ describe('GET /api/dashboard/history — what counts as history', () => {
       status: 'completed',
       duration_seconds: null,
       session_id: null,
+      has_record: false,
     }]);
+  });
+
+  it('says which rounds have a record kept, so their summary can be opened', async () => {
+    seedBooking('with', { status: 'completed', start: '2026-10-04T03:00:00Z', end: '2026-10-04T05:00:00Z', has_record: true });
+    seedBooking('without', { status: 'completed', start: '2026-10-03T03:00:00Z', end: '2026-10-03T05:00:00Z' });
+    const items = (await ask()).body.items as unknown as Array<{ booking_id: string; has_record: boolean }>;
+    expect(items.map(i => [i.booking_id, i.has_record])).toEqual([['with', true], ['without', false]]);
   });
 
   it('lists completed and cancelled rounds, and any round whose slot is over', async () => {

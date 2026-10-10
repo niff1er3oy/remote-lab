@@ -28,7 +28,7 @@ const SENSOR = 'เซนเซอร์สนามแม่เหล็ก';
 const CIRCUIT_LABELS = ['1 รอบ', '2 รอบ', '3 รอบ', 'โซลีนอยด์'];
 
 type Reach = 'online' | 'offline' | 'unset';
-type Rig = { busy: boolean; circuit: string | null; position: number | null; supply: boolean | null; last: { command: string; ok: boolean; at: number } | null };
+type Rig = { busy: boolean; circuit: string | null; position: number | null; supply: boolean | null; relay?: string | null; last: { command: string; ok: boolean; at: number } | null };
 type Status = { ok: boolean; checked_at: string; rig: Rig; cameras: Array<{ key: string; state: Reach }>; sensor: Reach };
 
 const sent = (command: string, ok = true) => ({ command, ok, at: NOW.getTime() - 60_000 });
@@ -217,6 +217,24 @@ describe('EquipmentStatus', () => {
     ])('says whether the supply is on: %p', async (state, text) => {
       await showRig({ supply: state });
       expect(supply()).toHaveTextContent(new RegExp(`^${text}$`));
+    });
+
+    it.each([
+      ['solenoid', 'แหล่งจ่ายไฟ เปิดอยู่ (โซลีนอยด์)'],
+      ['coil1', 'แหล่งจ่ายไฟ เปิดอยู่ (ขดลวด 1 รอบ)'],
+      ['coil2', 'แหล่งจ่ายไฟ เปิดอยู่ (ขดลวด 2 รอบ)'],
+      ['coil3', 'แหล่งจ่ายไฟ เปิดอยู่ (ขดลวด 3 รอบ)'],
+      ['all', 'แหล่งจ่ายไฟ เปิดอยู่ (ทุกอุปกรณ์)'],
+      ['psu9', 'แหล่งจ่ายไฟ เปิดอยู่'],
+    ])('says which relay is on: %s', async (relay, text) => {
+      await showRig({ supply: true, relay });
+      expect(supply()).toHaveTextContent(text, { normalizeWhitespace: true });
+      expect(supply().textContent).toBe(text);
+    });
+
+    it('names no relay once the supply is off', async () => {
+      await showRig({ supply: false, relay: null });
+      expect(supply().textContent).toBe('แหล่งจ่ายไฟ ปิดอยู่');
     });
 
     it('makes the supply being on look different from it being off', async () => {
@@ -499,5 +517,44 @@ describe('EquipmentStatus', () => {
       expect(marker().style.transform).toBe('translateX(-32px)');
       expect(anime.animate).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('EquipmentStatus — asked to read again', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(NOW);
+    installMatchMedia();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
+  });
+
+  it('reads the status again at once when the page says a command was sent, without waiting for the next round', async () => {
+    const answers = [status(), status({ rig: rig({ supply: true, relay: 'all' }) })];
+    const net = mockFetch(() => ({ body: answers.shift() ?? status() }));
+    const { rerender } = render(<EquipmentStatus refresh={0} />);
+    await advance();
+    expect(net.requests()).toEqual(['GET /api/admin/status']);
+
+    rerender(<EquipmentStatus refresh={1} />);
+    await advance();
+
+    expect(net.requests()).toEqual(['GET /api/admin/status', 'GET /api/admin/status']);
+    expect(screen.getByText('เปิดอยู่ (ทุกอุปกรณ์)')).toBeInTheDocument();
+  });
+
+  it('keeps reading every ten seconds after that, one round at a time', async () => {
+    const net = mockFetch(() => ({ body: status() }));
+    const { rerender } = render(<EquipmentStatus refresh={0} />);
+    await advance();
+    rerender(<EquipmentStatus refresh={1} />);
+    await advance();
+    net.clear();
+
+    await advance(POLL);
+    expect(net.requests()).toEqual(['GET /api/admin/status']);
   });
 });

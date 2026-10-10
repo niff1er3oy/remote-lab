@@ -173,19 +173,72 @@ describe('POST /api/hardware — the accepted commands', () => {
   it('reports whether the power supply was last switched on or off', async () => {
     resetRigState();
     expect(await (await GET()).json()).toEqual({ busy: false, supply: null });
-    await runRigScript(['relay_on.py']);
+    await runRigScript(['relay.py', '--status', 'on', '--name', 'solenoid']);
     expect(await (await GET()).json()).toEqual({ busy: false, supply: true });
-    await runRigScript(['relay_off.py']);
+    await runRigScript(['relay.py', '--status', 'off', '--name', 'all']);
     expect(await (await GET()).json()).toEqual({ busy: false, supply: false });
   });
 
+  describe('the relay follows the instrument being started', () => {
+    const ran = () => runScript.mock.calls.map(([, args]) => (args as string[]).join(' '));
+    afterEach(() => resetRigState());
+
+    it('moves a supply that is on to the instrument, before starting it', async () => {
+      await runRigScript(['relay.py', '--status', 'on', '--name', 'coil1']);
+      runScript.mockClear();
+      expect((await send({ script: 'sole.py', position: 0 })).status).toBe(200);
+      expect(ran()).toEqual(['relay.py --status off --name all', 'relay.py --status on --name solenoid', 'sole.py --position 0']);
+    });
+
+    it('leaves the relay alone when it already feeds that instrument', async () => {
+      await runRigScript(['relay.py', '--status', 'on', '--name', 'coil2']);
+      runScript.mockClear();
+      await send({ script: 'coil_2.py' });
+      expect(ran()).toEqual(['coil_2.py']);
+    });
+
+    it('leaves the relays alone when all of them are on', async () => {
+      await runRigScript(['relay.py', '--status', 'on', '--name', 'all']);
+      runScript.mockClear();
+      await send({ script: 'coil_1.py' });
+      expect(ran()).toEqual(['coil_1.py']);
+    });
+
+    it.each([[false, ['relay.py', '--status', 'off', '--name', 'all']], [null, null]])('does not switch on a supply that is %s', async (_supply, before) => {
+      resetRigState();
+      if (before) await runRigScript(before);
+      runScript.mockClear();
+      await send({ script: 'coil_1.py' });
+      expect(ran()).toEqual(['coil_1.py']);
+    });
+
+    it('does not touch the relay for a break script', async () => {
+      await runRigScript(['relay.py', '--status', 'on', '--name', 'coil1']);
+      runScript.mockClear();
+      await send({ script: 'sole_b.py' });
+      expect(ran()).toEqual(['sole_b.py']);
+    });
+
+    it('answers 500 and does not start the instrument when the relay cannot be moved', async () => {
+      await runRigScript(['relay.py', '--status', 'on', '--name', 'coil1']);
+      runScript.mockClear();
+      runScript.mockRejectedValueOnce(new Error('Traceback: /home/admin/Documents/relay.py'));
+      const res = await send({ script: 'sole.py', position: 0 });
+      expect(res.status).toBe(500);
+      expect((await res.json()).error).toBe('สลับแหล่งจ่ายไฟมายังอุปกรณ์นี้ไม่สำเร็จ');
+      expect(ran()).toEqual(['relay.py --status off --name all']);
+      // The arm is not left marked busy.
+      expect((await send({ script: 'coil_b.py' })).status).toBe(200);
+    });
+  });
+
   // The supply follows who is in the room; a student has no switch for it.
-  it.each(['relay_on.py', 'relay_off.py'])('refuses %s: students do not switch the power supply', async (script) => {
+  it.each(['relay.py', 'relay_on.py', 'relay_off.py'])('refuses %s: students do not switch the power supply', async (script) => {
     expect((await send({ script })).status).toBe(400);
     expect(runScript).not.toHaveBeenCalled();
   });
 
-  it.each(['psu_on.py', '/home/admin/Documents/relay_on.py', '../relay_on.py'])('refuses %s: a script is named, never given by path', async (script) => {
+  it.each(['psu_on.py', '/home/admin/Documents/relay.py', '../relay.py'])('refuses %s: a script is named, never given by path', async (script) => {
     expect((await send({ script })).status).toBe(400);
     expect(runScript).not.toHaveBeenCalled();
   });

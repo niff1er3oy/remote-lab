@@ -32,8 +32,9 @@ function serve(server: Server) {
     if (call.url === '/api/auth/me') return server.signedIn ? { body: { ok: true } } : { status: 401, body: { ok: false } };
     if (call.url === '/api/bookings/notify-upcoming') return { body: { ok: true } };
     if (call.url === '/api/notifications' && call.method === 'PATCH') {
-      server.feed = server.feed.map(n => ({ ...n, is_read: 1 }));
-      server.unread = 0;
+      const only = (call.body as { id?: string } | undefined)?.id;
+      server.feed = server.feed.map(n => (only && n.notification_id !== only ? n : { ...n, is_read: 1 }));
+      server.unread = only ? undefined : 0;
       return { body: { ok: true } };
     }
     if (call.url === '/api/notifications') {
@@ -158,17 +159,39 @@ describe('GlobalNotifications', () => {
       expect(screen.getAllByRole('listitem').map(li => within(li).getByText(/^title /).textContent)).toEqual(['title c', 'title a', 'title b']);
     });
 
-    it('marks everything as read on the server and clears the count', async () => {
-      const { net } = await show({ signedIn: true, feed: [note('a', { is_read: 1 }), note('b', { is_read: 1 })], unread: 2 });
-      fireEvent.click(bell());
+    it('marks everything as read on the server and clears the count, just by being opened', async () => {
+      const { net } = await show({ signedIn: true, feed: [note('a'), note('b')] });
+      expect(bell()).toHaveTextContent('2');
       net.clear();
 
-      fireEvent.click(screen.getByRole('button', { name: 'อ่านทั้งหมด' }));
+      fireEvent.click(bell());
       await advance();
 
-      expect(net.requests()).toEqual(['PATCH /api/notifications']);
+      expect(net.calls).toEqual([{ method: 'PATCH', url: '/api/notifications', body: undefined }]);
       expect(bell()).toHaveTextContent('');
       expect(screen.queryByRole('button', { name: 'อ่านทั้งหมด' })).not.toBeInTheDocument();
+    });
+
+    it('keeps what was unread picked out while the panel stays open, and shows it as read the next time', async () => {
+      await show({ signedIn: true, feed: [note('a'), note('b', { is_read: 1 })] });
+      fireEvent.click(bell());
+      await advance();
+
+      const [a, b] = screen.getAllByRole('listitem');
+      expect(within(a).getByRole('img', { name: 'ใหม่' })).toBeInTheDocument();
+      expect(within(b).queryByRole('img')).not.toBeInTheDocument();
+
+      fireEvent.click(bell());
+      fireEvent.click(bell());
+      expect(within(screen.getAllByRole('listitem')[0]).queryByRole('img')).not.toBeInTheDocument();
+    });
+
+    it('asks the server for nothing when it is opened with nothing unread', async () => {
+      const { net } = await show({ signedIn: true, feed: [note('a', { is_read: 1 })] });
+      net.clear();
+      fireEvent.click(bell());
+      await advance();
+      expect(net.requests()).toEqual([]);
     });
   });
 
@@ -225,6 +248,26 @@ describe('GlobalNotifications', () => {
 
       await show({ signedIn: true, feed: [note('b')] });
       expect(within(toast()).queryByRole('link')).not.toBeInTheDocument();
+    });
+
+    it('marks that one notification as read when its close button is clicked, and leaves the others unread', async () => {
+      const { net } = await show({ signedIn: true, feed: [note('a'), note('b')] });
+      net.clear();
+
+      fireEvent.click(within(toast()).getByRole('button', { name: 'ปิดการแจ้งเตือนนี้' }));
+      await advance();
+
+      expect(net.calls).toEqual([{ method: 'PATCH', url: '/api/notifications', body: { id: 'a' } }]);
+      expect(bell()).toHaveTextContent('1');
+    });
+
+    it('does not mark a toast as read when it only goes away by itself', async () => {
+      const { net } = await show({ signedIn: true, feed: [note('a')] });
+      net.clear();
+      await advance(20_000);
+      expect(screen.queryByText('title a')).not.toBeInTheDocument();
+      expect(net.requests().filter(r => r.startsWith('PATCH'))).toEqual([]);
+      expect(bell()).toHaveTextContent('1');
     });
 
     it('gives way to the next one when its close button is clicked', async () => {
@@ -387,14 +430,26 @@ describe('NotifPanel', () => {
     expect(within(without).queryByRole('link')).not.toBeInTheDocument();
   });
 
-  it('shows the unread count and a mark-all-read button that calls back', () => {
+  it('calls back to mark everything read as soon as it is shown with something unread', () => {
+    const onMarkAllRead = jest.fn();
+    render(<NotifPanel notifications={[note('a'), note('b')]} unread={2} onMarkAllRead={onMarkAllRead} />);
+    expect(onMarkAllRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call back when nothing is unread', () => {
+    const onMarkAllRead = jest.fn();
+    render(<NotifPanel notifications={[note('a', { is_read: 1 })]} unread={0} onMarkAllRead={onMarkAllRead} />);
+    expect(onMarkAllRead).not.toHaveBeenCalled();
+  });
+
+  it('shows the unread count and a mark-all-read button, for when marking them read did not go through', () => {
     const onMarkAllRead = jest.fn();
     render(<NotifPanel notifications={[note('a'), note('b')]} unread={2} onMarkAllRead={onMarkAllRead} />);
 
     expect(screen.getByText('2')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'อ่านทั้งหมด' }));
 
-    expect(onMarkAllRead).toHaveBeenCalledTimes(1);
+    expect(onMarkAllRead).toHaveBeenCalledTimes(2);
   });
 
   it('caps the unread count at 9+', () => {

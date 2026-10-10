@@ -320,14 +320,32 @@ describe('LabSummary', () => {
       expect(blob.type).toBe('text/csv;charset=utf-8');
     });
 
-    it('holds a header and one row for every event of the visit', async () => {
+    it('opens with the table of recorded values, one row per reading', async () => {
+      show(VISIT);
+      download();
+
+      const { bytes } = await handedOver();
+      const lines = bytes.subarray(3).toString('utf8').split('\r\n');
+      expect(lines.slice(0, 6)).toEqual([
+        'ค่าที่บันทึก',
+        'อุปกรณ์,Z (cm),I (A),B ทฤษฎี (mT),B วัดจริง (mT),ΔB (mT),ΔB (%)',
+        `${COIL},,5.00,0.2417,0.2300,-0.0117,-4.84`,
+        `${SOLENOID},4,1.00,0.5729,0.5500,-0.0229,-4.00`,
+        `${SOLENOID},-8,1.00,0.2936,,,`,
+        '',
+      ]);
+    });
+
+    it('then holds a header and one row for every event of the visit', async () => {
       show(VISIT);
       download();
 
       const { bytes } = await handedOver();
       const text = bytes.subarray(3).toString('utf8');
       expect(text.endsWith('\r\n')).toBe(true);
-      const lines = text.trimEnd().split('\r\n');
+      const all = text.trimEnd().split('\r\n');
+      expect(all[6]).toBe('ลำดับเหตุการณ์');
+      const lines = all.slice(7);
       expect(lines).toHaveLength(VISIT.length + 1);
       expect(lines[0]).toBe('วันที่,เวลา,เหตุการณ์,อุปกรณ์,Z (cm),I (A),B ทฤษฎี (mT),B วัดจริง (mT),ΔB (mT),ΔB (%),ผล,รายละเอียด');
       expect(lines[1]).toBe('2026-10-08,10:00:00,เริ่มการทดลอง,,,,,,,,,');
@@ -370,7 +388,7 @@ describe('LabSummary', () => {
       expect(clicked.map(c => c.download)).toEqual(['lab8_2026-10-08_1000.csv', 'lab8_2026-10-08_1000.csv']);
     });
 
-    it('gives a visit with no events a header-only file named after the present moment', async () => {
+    it('gives a visit with no events a file of headings only, named after the present moment', async () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date(2026, 2, 4, 14, 30, 0));
       show([]);
@@ -381,7 +399,13 @@ describe('LabSummary', () => {
       expect(clicked[0].download).toBe('lab8_2026-03-04_1430.csv');
       const { bytes } = await handedOver();
       expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-      expect(bytes.subarray(3).toString('utf8').trimEnd().split('\r\n')).toHaveLength(1);
+      expect(bytes.subarray(3).toString('utf8').trimEnd().split('\r\n')).toEqual([
+        'ค่าที่บันทึก',
+        'อุปกรณ์,Z (cm),I (A),B ทฤษฎี (mT),B วัดจริง (mT),ΔB (mT),ΔB (%)',
+        '',
+        'ลำดับเหตุการณ์',
+        'วันที่,เวลา,เหตุการณ์,อุปกรณ์,Z (cm),I (A),B ทฤษฎี (mT),B วัดจริง (mT),ΔB (mT),ΔB (%),ผล,รายละเอียด',
+      ]);
     });
 
     it('does not leave the page', () => {
@@ -404,9 +428,27 @@ describe('LabSummary', () => {
       expect(onLeave).toHaveBeenCalledTimes(1);
     });
 
-    it('comes with a warning that the record is not kept', () => {
+    it('says the record is kept and can be opened again, for a summary opened from history', () => {
       show(VISIT);
-      expect(screen.getByText(/บันทึกนี้ไม่ถูกเก็บไว้ในระบบ/)).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('บันทึกนี้เก็บไว้ในประวัติแล้ว เปิดดูย้อนหลังได้จากแดชบอร์ด');
+    });
+
+    it('says the record is being kept while it is', () => {
+      render(<LabSummary events={VISIT} experimentName={EXPERIMENT} onLeave={() => {}} save="saving" />);
+      expect(screen.getByRole('status')).toHaveTextContent('กำลังเก็บบันทึกนี้ลงประวัติ');
+    });
+
+    it('says so once it has been kept', () => {
+      render(<LabSummary events={VISIT} experimentName={EXPERIMENT} onLeave={() => {}} save="saved" />);
+      expect(screen.getByRole('status')).toHaveTextContent('บันทึกนี้เก็บไว้ในประวัติแล้ว');
+    });
+
+    it('warns when it could not be kept, and offers to try again', () => {
+      const onRetry = jest.fn();
+      render(<LabSummary events={VISIT} experimentName={EXPERIMENT} onLeave={() => {}} save="failed" onRetrySave={onRetry} />);
+      expect(screen.getByRole('alert')).toHaveTextContent('เก็บบันทึกนี้ลงประวัติไม่สำเร็จ ดาวน์โหลด CSV ไว้ก่อนออกจากหน้านี้');
+      fireEvent.click(screen.getByRole('button', { name: 'ลองเก็บอีกครั้ง' }));
+      expect(onRetry).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -11,10 +11,14 @@ export const SCRIPT_DIR = (fromEnv('RIG_SCRIPT_DIR') ?? '/home/admin/Documents')
 export const PYTHON = fromEnv('RIG_PYTHON') ?? `${SCRIPT_DIR}/venv/bin/python`;
 
 export const BREAK_SCRIPTS = ['coil_b.py', 'sole_b.py']; // cut a circuit
-// The relay that switches the supply feeding the coils and the solenoid. Its
-// two scripts sit in the same folder as the rest.
-export const SUPPLY_ON = 'relay_on.py';
-export const SUPPLY_OFF = 'relay_off.py';
+// The relays that switch the supply feeding the coils and the solenoid, one
+// per instrument: relay.py --status on|off --name <relay>. It sits in the same
+// folder as the rest. RELAY_ALL is every relay at once.
+export const RELAY_SCRIPT = 'relay.py';
+export const RELAY_ALL = 'all';
+export const RELAY_NAMES = ['solenoid', 'coil1', 'coil2', 'coil3', RELAY_ALL];
+export const supplyCommand = (on: boolean, name: string) => [RELAY_SCRIPT, '--status', on ? 'on' : 'off', '--name', name];
+export const SUPPLY_OFF = supplyCommand(false, RELAY_ALL);
 
 // What the rig should be doing, going by the commands this server has sent it.
 // The rig reports nothing back, so this is a record of commands, not a reading:
@@ -28,6 +32,8 @@ export type RigState = {
   position: number | null;
   /** Whether the power supply was last switched on (true) or off (false). Null until either has been sent. */
   supply: boolean | null;
+  /** The relay that is on while the supply is: an instrument's own, or RELAY_ALL. */
+  relay: string | null;
   /** `error` is why the last command failed, for the admin page only: it can hold paths. */
   last: { command: string; ok: boolean; at: number; error?: string } | null;
 };
@@ -36,7 +42,7 @@ type Tracked = Omit<RigState, 'busy'> & { running: number };
 // On globalThis so that every route handler sees the same record, however the
 // bundler splits them.
 const holder = globalThis as typeof globalThis & { __rigState?: Tracked };
-const tracked = (): Tracked => (holder.__rigState ??= { running: 0, circuit: null, position: null, supply: null, last: null });
+const tracked = (): Tracked => (holder.__rigState ??= { running: 0, circuit: null, position: null, supply: null, relay: null, last: null });
 
 export function rigState(): RigState {
   const { running, ...rest } = tracked();
@@ -62,8 +68,16 @@ function note(argv: string[], ok: boolean, err?: unknown) {
   state.last = { command: argv.join(' '), ok, at: Date.now(), ...(ok ? {} : { error: reason(err) }) };
   if (!ok) return;
   const [script] = argv;
-  if (script === SUPPLY_ON || script === SUPPLY_OFF) {
-    state.supply = script === SUPPLY_ON;
+  if (script === RELAY_SCRIPT) {
+    const name = argv[4];
+    if (argv[2] === 'on') {
+      state.supply = true;
+      state.relay = name;
+    } else if (name === RELAY_ALL || name === state.relay || state.supply === null) {
+      // Switching off a relay other than the one that is on changes nothing.
+      state.supply = false;
+      state.relay = null;
+    }
   } else if (script === 'sole.py') {
     state.circuit = script;
     state.position = Number(argv[2]);
@@ -94,18 +108,36 @@ export async function runRigScript(argv: string[]) {
   }
 }
 
+/** Whether the relay `name` is on, going by the commands sent. */
+export function isFeeding(name: string): boolean {
+  const { supply, relay } = tracked();
+  return supply === true && (relay === name || relay === RELAY_ALL);
+}
+
 /**
- * Cuts both circuits and switches the power supply off, whatever is on.
+ * Switches the supply on for one relay. Only one instrument is fed at a time:
+ * unless everything is known to be off, every relay is switched off first
+ * (not for RELAY_ALL, which leaves none out). Does nothing when that relay is
+ * already on. Throws when relay.py fails.
+ */
+export async function feed(name: string): Promise<void> {
+  if (isFeeding(name)) return;
+  if (name !== RELAY_ALL && tracked().supply !== false) await runRigScript(SUPPLY_OFF);
+  await runRigScript(supplyCommand(true, name));
+}
+
+/**
+ * Cuts both circuits and switches every relay off, whatever is on.
  * Returns the scripts that could not be run.
  */
 export async function cutAllCircuits(): Promise<string[]> {
   const failed: string[] = [];
-  for (const script of [...BREAK_SCRIPTS, SUPPLY_OFF]) {
+  for (const argv of [...BREAK_SCRIPTS.map(script => [script]), SUPPLY_OFF]) {
     try {
-      await runRigScript([script]);
+      await runRigScript(argv);
     } catch (err) {
-      console.error(`[rig] ${script} failed`, err);
-      failed.push(script);
+      console.error(`[rig] ${argv.join(' ')} failed`, err);
+      failed.push(argv[0]);
     }
   }
   return failed;

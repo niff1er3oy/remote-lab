@@ -166,6 +166,9 @@ const KIND_LABEL: Record<LabEvent['kind'], string> = {
   end: 'สิ้นสุดการทดลอง',
 };
 
+/** Every kind of event there is, for checking a record that comes back from outside. */
+export const EVENT_KINDS = Object.keys(KIND_LABEL) as LabEvent['kind'][];
+
 // A text cell is quoted when it holds a comma, a quote or a line break. One
 // that a spreadsheet would run as a formula (the question to the assistant is
 // free text) is made plain text with a leading apostrophe.
@@ -204,4 +207,28 @@ export function toCsv(events: LabEvent[]): string {
     ].join(',');
   });
   return [header.join(','), ...rows].join('\r\n') + '\r\n';
+}
+
+/** The values that came out of the visit as CSV: the table the summary shows, one row per reading. */
+export function readingsCsv(events: LabEvent[]): string {
+  const header = ['อุปกรณ์', 'Z (cm)', 'I (A)', 'B ทฤษฎี (mT)', 'B วัดจริง (mT)', 'ΔB (mT)', 'ΔB (%)'];
+  const rows = readingsOf(events).map((r) => [
+    cell(r.instrument),
+    r.zCm === null ? '' : String(r.zCm),
+    num(r.I, 2),
+    num(r.bTheory, 4),
+    num(r.bMeasured, 4),
+    num(difference(r), 4),
+    num(differencePercent(r), 2),
+  ].join(','));
+  return [header.join(','), ...rows].join('\r\n') + '\r\n';
+}
+
+/**
+ * The file the summary hands over: the table of recorded values first, then
+ * the whole visit event by event, each under its own heading with an empty
+ * line between them.
+ */
+export function visitCsv(events: LabEvent[]): string {
+  return `ค่าที่บันทึก\r\n${readingsCsv(events)}\r\nลำดับเหตุการณ์\r\n${toCsv(events)}`;
 }

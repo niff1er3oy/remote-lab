@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
 import { rigAccess } from '@/lib/rig-access';
 import { PROBE_MAX, PROBE_MIN } from '@/lib/physics';
-import { INSTRUMENT_SCRIPTS } from '@/lib/instruments';
+import { INSTRUMENT_SCRIPTS, relayOf } from '@/lib/instruments';
 import { disabledInstruments } from '@/lib/rig-settings';
-import { BREAK_SCRIPTS, rigState, runRigScript } from '@/lib/rig';
+import { BREAK_SCRIPTS, feed, rigState, runRigScript } from '@/lib/rig';
 
 // The rig's whole command set. Nothing else is ever run, and nothing from the
 // request reaches a shell: the script name is matched against these lists and
 // the only argument, the probe position, is a checked integer. The power supply
-// is not among them: it follows who is in the room (lib/lab-presence.ts).
+// is not among them: it follows who is in the room (lib/lab-presence.ts), and
+// while it is on, its relay follows the instrument being started.
 const COIL_SCRIPTS = ['coil_1.py', 'coil_2.py', 'coil_3.py']; // switch a single coil on
 const SOLENOID_SCRIPT = 'sole.py';                            // solenoid on, probe to --position
 // The probe's measuring positions, as sole.py takes them.
@@ -85,6 +86,17 @@ export async function POST(request: Request) {
 
   armBusy = true;
   try {
+    // A supply that is on is moved to the instrument being started. One that
+    // is off stays off: switching it on is not this route's to do.
+    const relay = relayOf(script);
+    if (relay && rigState().supply === true) {
+      try {
+        await feed(relay);
+      } catch (err) {
+        console.error(`[Hardware API] Could not switch the supply to ${relay}`, err);
+        return NextResponse.json({ error: 'สลับแหล่งจ่ายไฟมายังอุปกรณ์นี้ไม่สำเร็จ' }, { status: 500 });
+      }
+    }
     const { stdout, stderr } = await runRigScript(command.argv);
     console.log(`[Hardware API] Success: ${stdout}`);
     if (stderr) console.error(`[Hardware API] Stderr: ${stderr}`);

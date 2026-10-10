@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/lab/presence/route';
 import { POST as switchSupply } from '@/app/api/admin/rig/power/route';
 import { isInRoom, resetPresence } from '@/lib/lab-presence';
-import { resetRigState } from '@/lib/rig';
+import { resetRigState, runRigScript } from '@/lib/rig';
 import { breakDb, resetDb, seedBooking } from '../helpers/server/firestore';
 import { knownAccount, resetAuth } from '../helpers/server/auth';
 import { ADMIN, signInAs, signOut, STUDENT } from '../helpers/server/session';
@@ -24,10 +24,12 @@ jest.mock('child_process', () => {
 });
 const { runScript } = jest.requireMock<{ runScript: jest.MockedFunction<RunScript> }>('child_process');
 const ran = () => runScript.mock.calls.map(([, args]) => args.join(' '));
+const ON = 'relay.py --status on --name all';
+const OFF = 'relay.py --status off --name all';
 
 const NOW = Date.parse('2026-10-08T03:00:00Z');
-const tell = async (action: unknown) => {
-  const res = await POST(new Request('http://localhost/api/lab/presence', { method: 'POST', body: JSON.stringify({ action }) }));
+const tell = async (action: unknown, instrument?: unknown) => {
+  const res = await POST(new Request('http://localhost/api/lab/presence', { method: 'POST', body: JSON.stringify({ action, instrument }) }));
   return { status: res.status, body: await res.json() };
 };
 const adminPower = (on: boolean) =>
@@ -62,7 +64,7 @@ describe('POST /api/lab/presence', () => {
     expect(ran()).toEqual([]);
   });
 
-  it.each(['toggle', 'relay_on.py', '', null, 1])('answers 400 for the action %j', async (action) => {
+  it.each(['toggle', ON, '', null, 1])('answers 400 for the action %j', async (action) => {
     round(30 * MINUTE);
     expect((await tell(action)).status).toBe(400);
     expect(ran()).toEqual([]);
@@ -71,7 +73,7 @@ describe('POST /api/lab/presence', () => {
   it('entering during a running round switches the supply on', async () => {
     round(30 * MINUTE);
     expect(await tell('enter')).toEqual({ status: 200, body: { ok: true, supply: true, held: false } });
-    expect(ran()).toEqual(['relay_on.py']);
+    expect(ran()).toEqual([ON]);
   });
 
   it.each([
@@ -98,7 +100,7 @@ describe('POST /api/lab/presence', () => {
     round(30 * MINUTE);
     await tell('enter');
     expect(await tell('leave')).toEqual({ status: 200, body: { ok: true, supply: false, held: false } });
-    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+    expect(ran()).toEqual([ON, OFF]);
   });
 
   it('leaving is accepted after the round has ended', async () => {
@@ -106,7 +108,7 @@ describe('POST /api/lab/presence', () => {
     await tell('enter');
     moveTimeTo(NOW + 3 * HOUR);
     expect((await tell('leave')).status).toBe(200);
-    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+    expect(ran()).toEqual([ON, OFF]);
   });
 
   it('staying does not run the relay again', async () => {
@@ -114,7 +116,7 @@ describe('POST /api/lab/presence', () => {
     await tell('enter');
     await tell('stay');
     await tell('stay');
-    expect(ran()).toEqual(['relay_on.py']);
+    expect(ran()).toEqual([ON]);
   });
 
   it('a page still open after its round ended is put out, and the supply goes off', async () => {
@@ -123,7 +125,7 @@ describe('POST /api/lab/presence', () => {
     moveTimeTo(NOW + 2 * HOUR + MINUTE);
     expect((await tell('stay')).status).toBe(403);
     expect(isInRoom(STUDENT.uid)).toBe(false);
-    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+    expect(ran()).toEqual([ON, OFF]);
   });
 
   it('a page heard from for the first time by "stay" is let in and the supply comes on', async () => {
@@ -140,7 +142,7 @@ describe('POST /api/lab/presence', () => {
     expect((await adminPower(false)).status).toBe(200);
     signInAs(STUDENT);
     expect(await tell('stay')).toEqual({ status: 200, body: { ok: true, supply: false, held: true } });
-    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+    expect(ran()).toEqual([ON, OFF]);
   });
 
   it('after an admin switches off, walking in anew switches the supply on again', async () => {
@@ -149,7 +151,41 @@ describe('POST /api/lab/presence', () => {
     await adminPower(false);
     signInAs(STUDENT);
     expect((await tell('enter')).body.supply).toBe(true);
-    expect(ran()).toEqual(['relay_off.py', 'relay_on.py']);
+    expect(ran()).toEqual([OFF, ON]);
+  });
+});
+
+describe('POST /api/lab/presence — the instrument selected on the page', () => {
+  it('entering switches on the relay of that instrument', async () => {
+    round(30 * MINUTE);
+    expect((await tell('enter', 'sole.py')).body.supply).toBe(true);
+    expect(ran()).toEqual([OFF, 'relay.py --status on --name solenoid']);
+  });
+
+  it('the student\'s switch switches on the relay of the instrument now selected', async () => {
+    round(30 * MINUTE);
+    await tell('enter', 'coil_1.py');
+    await tell('off', 'coil_3.py');
+    runScript.mockClear();
+    expect((await tell('on', 'coil_3.py')).body.supply).toBe(true);
+    expect(ran()).toEqual(['relay.py --status on --name coil3']);
+  });
+
+  it.each(['coil_b.py', 'relay.py', '../sole.py', 'all', 7, { script: 'sole.py' }])('takes the instrument %j as not said: nothing from the request reaches the command', async (instrument) => {
+    round(30 * MINUTE);
+    expect((await tell('enter', instrument)).status).toBe(200);
+    expect(ran()).toEqual([ON]);
+  });
+
+  it('an admin switching on feeds the instrument whose circuit is on', async () => {
+    round(30 * MINUTE);
+    await tell('enter', 'coil_2.py');
+    await runRigScript(['coil_2.py']);
+    signInAs(ADMIN);
+    await adminPower(false);
+    runScript.mockClear();
+    expect((await adminPower(true)).status).toBe(200);
+    expect(ran()).toEqual(['relay.py --status on --name coil2']);
   });
 });
 
@@ -159,7 +195,7 @@ describe('POST /api/lab/presence — the student\'s own switch', () => {
     await tell('enter');
     expect(await tell('off')).toEqual({ status: 200, body: { ok: true, supply: false, held: false } });
     expect(await tell('on')).toEqual({ status: 200, body: { ok: true, supply: true, held: false } });
-    expect(ran()).toEqual(['relay_on.py', 'relay_off.py', 'relay_on.py']);
+    expect(ran()).toEqual([ON, OFF, ON]);
   });
 
   it('staying does not switch back on what the student switched off', async () => {
@@ -167,7 +203,7 @@ describe('POST /api/lab/presence — the student\'s own switch', () => {
     await tell('enter');
     await tell('off');
     expect((await tell('stay')).body.supply).toBe(false);
-    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+    expect(ran()).toEqual([ON, OFF]);
   });
 
   it.each(['on', 'off'])('refuses "%s" without a running round', async (action) => {
@@ -192,7 +228,7 @@ describe('POST /api/lab/presence — the student\'s own switch', () => {
     const { status, body } = await tell('on');
     expect(status).toBe(409);
     expect(body).toMatchObject({ ok: false, supply: false, held: true });
-    expect(ran()).toEqual(['relay_on.py', 'relay_off.py']);
+    expect(ran()).toEqual([ON, OFF]);
   });
 
   it('switches on again once the admin has switched the supply back on', async () => {
@@ -218,7 +254,7 @@ describe('POST /api/lab/presence — the student\'s own switch', () => {
   it('answers 500 without the script\'s output when the relay does not answer', async () => {
     round(30 * MINUTE);
     await tell('enter');
-    runScript.mockRejectedValueOnce(new Error('Traceback: /home/admin/Documents/relay_off.py'));
+    runScript.mockRejectedValueOnce(new Error('Traceback: /home/admin/Documents/relay.py'));
     const { status, body } = await tell('off');
     expect(status).toBe(500);
     expect(JSON.stringify(body)).not.toMatch(/Traceback|home\/admin/);
@@ -231,6 +267,6 @@ describe('POST /api/lab/presence — the student\'s own switch', () => {
     await tell('off');
     await tell('on');
     await tell('leave');
-    expect(ran().slice(-1)).toEqual(['relay_off.py']);
+    expect(ran().slice(-1)).toEqual([OFF]);
   });
 });

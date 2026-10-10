@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '@/lib/firebase-admin';
 import { getSessionUser } from '@/lib/session';
-import { disabledInstruments } from '@/lib/rig-settings';
+import { rigSettings } from '@/lib/rig-settings';
 
 const ACTIVE_STATUSES = ['confirmed', 'pending', 'in_progress'];
 
@@ -28,8 +28,9 @@ export async function GET() {
       return NextResponse.json({
         ok: true,
         active: true,
-        // What the lab room must not offer: instruments an admin has closed.
-        disabled_instruments: await disabledInstruments(),
+        // What the lab room must not offer (instruments an admin has closed),
+        // and the current each instrument is set to.
+        ...await rigSettings(),
         booking: {
           booking_id:      active.booking_id,
           experiment_code: lab?.code,

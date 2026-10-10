@@ -1,5 +1,8 @@
 /** @jest-environment node */
-import { cutAllCircuits, resetRigState, rigState, runRigScript, SUPPLY_OFF, SUPPLY_ON } from '@/lib/rig';
+import { cutAllCircuits, feed, isFeeding, RELAY_NAMES, resetRigState, rigState, runRigScript, SUPPLY_OFF, supplyCommand } from '@/lib/rig';
+
+const SUPPLY_ON = supplyCommand(true, 'all');
+const OFF_ALL = ['relay.py', '--status', 'off', '--name', 'all'];
 
 type RunScript = (file: string, args: string[], options: { cwd?: string; shell?: unknown }) => Promise<{ stdout: string; stderr: string }>;
 
@@ -55,10 +58,10 @@ describe('where the scripts are', () => {
     expect(rig.PYTHON).toBe('/usr/bin/python3');
   });
 
-  it('runs the relay scripts from that same folder', async () => {
+  it('runs the relay script from that same folder', async () => {
     const rig = load({ RIG_SCRIPT_DIR: '/opt/lab8' });
-    await rig.runRigScript([rig.SUPPLY_OFF]);
-    expect(runScript).toHaveBeenCalledWith('/opt/lab8/venv/bin/python', ['relay_off.py'], { cwd: '/opt/lab8' });
+    await rig.runRigScript(rig.SUPPLY_OFF);
+    expect(runScript).toHaveBeenCalledWith('/opt/lab8/venv/bin/python', OFF_ALL, { cwd: '/opt/lab8' });
   });
 
   it('runs the scripts from the folder and with the Python that were set', async () => {
@@ -71,7 +74,7 @@ describe('where the scripts are', () => {
 describe('cutAllCircuits', () => {
   it('cuts both circuits and then switches the power supply off', async () => {
     expect(await cutAllCircuits()).toEqual([]);
-    expect(runScript.mock.calls.map(([, args]) => args)).toEqual([['coil_b.py'], ['sole_b.py'], ['relay_off.py']]);
+    expect(runScript.mock.calls.map(([, args]) => args)).toEqual([['coil_b.py'], ['sole_b.py'], OFF_ALL]);
   });
 
   it('carries on with the rest when the first script fails, and reports the one that failed', async () => {
@@ -82,7 +85,7 @@ describe('cutAllCircuits', () => {
 
   it('reports every script when none could be run', async () => {
     runScript.mockRejectedValue(new Error('no rig'));
-    expect(await cutAllCircuits()).toEqual(['coil_b.py', 'sole_b.py', 'relay_off.py']);
+    expect(await cutAllCircuits()).toEqual(['coil_b.py', 'sole_b.py', 'relay.py']);
   });
 });
 
@@ -95,13 +98,13 @@ describe('rigState — what the rig was last told to do', () => {
   });
 
   it('knows nothing before any command has been sent', () => {
-    expect(rigState()).toEqual({ busy: false, circuit: null, position: null, supply: null, last: null });
+    expect(rigState()).toEqual({ busy: false, circuit: null, position: null, supply: null, relay: null, last: null });
   });
 
   it('records the coil that was switched on, and the command with its time', async () => {
     await runRigScript(['coil_2.py']);
     expect(rigState()).toEqual({
-      busy: false, circuit: 'coil_2.py', position: null, supply: null,
+      busy: false, circuit: 'coil_2.py', position: null, supply: null, relay: null,
       last: { command: 'coil_2.py', ok: true, at: NOW },
     });
   });
@@ -129,20 +132,46 @@ describe('rigState — what the rig was last told to do', () => {
   it('is cleared by cutting both circuits', async () => {
     await runRigScript(['sole.py', '--position', '5']);
     await cutAllCircuits();
-    expect(rigState()).toMatchObject({ circuit: null, position: null, supply: false, last: { command: 'relay_off.py', ok: true } });
+    expect(rigState()).toMatchObject({ circuit: null, position: null, supply: false, last: { command: 'relay.py --status off --name all', ok: true } });
   });
 
   it('records the power supply being switched on and off, leaving the circuit as it was', async () => {
     await runRigScript(['coil_1.py']);
-    await runRigScript([SUPPLY_ON]);
-    expect(rigState()).toMatchObject({ supply: true, circuit: 'coil_1.py' });
-    await runRigScript([SUPPLY_OFF]);
-    expect(rigState()).toMatchObject({ supply: false, circuit: 'coil_1.py' });
+    await runRigScript(SUPPLY_ON);
+    expect(rigState()).toMatchObject({ supply: true, relay: 'all', circuit: 'coil_1.py' });
+    await runRigScript(SUPPLY_OFF);
+    expect(rigState()).toMatchObject({ supply: false, relay: null, circuit: 'coil_1.py' });
+  });
+
+  it('builds the relay command as relay.py --status on|off --name <relay>', () => {
+    expect(supplyCommand(true, 'solenoid')).toEqual(['relay.py', '--status', 'on', '--name', 'solenoid']);
+    expect(supplyCommand(false, 'coil2')).toEqual(['relay.py', '--status', 'off', '--name', 'coil2']);
+    expect(SUPPLY_OFF).toEqual(OFF_ALL);
+    expect(RELAY_NAMES).toEqual(['solenoid', 'coil1', 'coil2', 'coil3', 'all']);
+  });
+
+  it('records which relay is on', async () => {
+    await runRigScript(supplyCommand(true, 'solenoid'));
+    expect(rigState()).toMatchObject({ supply: true, relay: 'solenoid' });
+    expect([isFeeding('solenoid'), isFeeding('coil1')]).toEqual([true, false]);
+  });
+
+  it('counts every instrument as fed while all the relays are on', async () => {
+    await runRigScript(SUPPLY_ON);
+    expect(['solenoid', 'coil1', 'coil2', 'coil3'].map(isFeeding)).toEqual([true, true, true, true]);
+  });
+
+  it('keeps the supply on when a relay other than the one that is on is switched off', async () => {
+    await runRigScript(supplyCommand(true, 'solenoid'));
+    await runRigScript(supplyCommand(false, 'coil1'));
+    expect(rigState()).toMatchObject({ supply: true, relay: 'solenoid' });
+    await runRigScript(supplyCommand(false, 'solenoid'));
+    expect(rigState()).toMatchObject({ supply: false, relay: null });
   });
 
   it('does not count the supply as switched when the script fails', async () => {
     runScript.mockRejectedValueOnce(new Error('no answer'));
-    await expect(runRigScript([SUPPLY_ON])).rejects.toThrow();
+    await expect(runRigScript(SUPPLY_ON)).rejects.toThrow();
     expect(rigState().supply).toBeNull();
   });
 
@@ -182,5 +211,49 @@ describe('rigState — what the rig was last told to do', () => {
     finish({ stdout: 'Path finished.\n', stderr: '' });
     await running;
     expect(rigState().busy).toBe(false);
+  });
+});
+
+describe('feed — the supply moved to one instrument', () => {
+  const ran = () => runScript.mock.calls.map(([, args]) => args.join(' '));
+  beforeEach(() => resetRigState());
+
+  it('switches every relay off first when it is not known what is on', async () => {
+    await feed('coil1');
+    expect(ran()).toEqual(['relay.py --status off --name all', 'relay.py --status on --name coil1']);
+  });
+
+  it('moves from one instrument to another by switching everything off in between', async () => {
+    await feed('coil1');
+    runScript.mockClear();
+    await feed('solenoid');
+    expect(ran()).toEqual(['relay.py --status off --name all', 'relay.py --status on --name solenoid']);
+    expect(rigState().relay).toBe('solenoid');
+  });
+
+  it('runs nothing when that relay is already on', async () => {
+    await feed('coil2');
+    runScript.mockClear();
+    await feed('coil2');
+    expect(ran()).toEqual([]);
+  });
+
+  it('switches on only, when the supply is known to be off', async () => {
+    await runRigScript(SUPPLY_OFF);
+    runScript.mockClear();
+    await feed('coil3');
+    expect(ran()).toEqual(['relay.py --status on --name coil3']);
+  });
+
+  it('switches every relay on in one command', async () => {
+    await feed('all');
+    expect(ran()).toEqual(['relay.py --status on --name all']);
+  });
+
+  it('does not switch on when switching off failed', async () => {
+    runScript.mockRejectedValueOnce(new Error('no relay'));
+    await expect(feed('coil1')).rejects.toThrow('no relay');
+    expect(ran()).toEqual(['relay.py --status off --name all']);
+    expect(rigState().supply).toBeNull();
   });
 });

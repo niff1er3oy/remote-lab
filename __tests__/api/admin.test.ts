@@ -7,7 +7,7 @@ import { PATCH as changeLab } from '@/app/api/admin/labs/[id]/route';
 import { POST as stopRig } from '@/app/api/admin/rig/stop/route';
 import { POST as switchSupply } from '@/app/api/admin/rig/power/route';
 import { GET as me } from '@/app/api/auth/me/route';
-import { cutAllCircuits, runRigScript } from '@/lib/rig';
+import { cutAllCircuits, feed, runRigScript } from '@/lib/rig';
 import { adminEmails, isAdmin } from '@/lib/admin';
 import { all, breakDb, LAB8, read, resetDb, seed, seedBooking, ts } from '../helpers/server/firestore';
 import { knownAccount, resetAuth } from '../helpers/server/auth';
@@ -24,6 +24,7 @@ jest.mock('@/lib/rig', () => ({
   ...jest.requireActual<typeof import('@/lib/rig')>('@/lib/rig'),
   cutAllCircuits: jest.fn(),
   runRigScript: jest.fn(),
+  feed: jest.fn(),
 }));
 
 // Thursday 8 October 2026, 10:00 in Thailand.
@@ -60,6 +61,7 @@ beforeEach(() => {
   knownAccount('admin-1', 'Admin One', 'admin@example.com');
   jest.mocked(cutAllCircuits).mockReset().mockResolvedValue([]);
   jest.mocked(runRigScript).mockReset().mockResolvedValue({ stdout: '', stderr: '' });
+  jest.mocked(feed).mockReset().mockResolvedValue(undefined);
   signInAs(ADMIN);
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -376,9 +378,16 @@ describe('POST /api/admin/rig/power', () => {
     return { status: res.status, body: await res.json() };
   };
 
-  it.each([[true, 'relay_on.py'], [false, 'relay_off.py']])('with on: %s runs %s, whether or not anyone has a round', async (on, script) => {
-    expect(await power({ on })).toEqual({ status: 200, body: { ok: true, on } });
-    expect(jest.mocked(runRigScript).mock.calls).toEqual([[[script]]]);
+  it('with on: true switches every relay on, whether or not anyone has a round', async () => {
+    expect(await power({ on: true })).toEqual({ status: 200, body: { ok: true, on: true } });
+    expect(jest.mocked(feed).mock.calls).toEqual([['all']]);
+    expect(runRigScript).not.toHaveBeenCalled();
+  });
+
+  it('with on: false switches every relay off, whether or not anyone has a round', async () => {
+    expect(await power({ on: false })).toEqual({ status: 200, body: { ok: true, on: false } });
+    expect(jest.mocked(runRigScript).mock.calls).toEqual([[['relay.py', '--status', 'off', '--name', 'all']]]);
+    expect(feed).not.toHaveBeenCalled();
   });
 
   it.each([[{ on: 'true' }], [{ on: 1 }], [{}], [null]])('answers 400 for the body %j and runs nothing', async (body) => {
@@ -387,7 +396,7 @@ describe('POST /api/admin/rig/power', () => {
   });
 
   it('answers 500 without the script\'s output when the supply does not respond', async () => {
-    jest.mocked(runRigScript).mockRejectedValue(new Error('Traceback: /home/admin/Documents/relay_on.py'));
+    jest.mocked(feed).mockRejectedValue(new Error('Traceback: /home/admin/Documents/relay.py'));
     const { status, body } = await power({ on: true });
     expect(status).toBe(500);
     expect(JSON.stringify(body)).not.toMatch(/Traceback|home\/admin/);

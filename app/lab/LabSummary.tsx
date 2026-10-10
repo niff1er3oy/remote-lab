@@ -5,7 +5,7 @@ import { animate, stagger } from 'animejs';
 import { prefersReducedMotion } from '@/lib/motion';
 import { fixed, signedFixed } from '@/lib/physics';
 import {
-  clockTime, describeEvent, difference, differencePercent, summarise, toCsv,
+  clockTime, describeEvent, difference, differencePercent, summarise, visitCsv,
   type LabEvent, type LabReading,
 } from '@/lib/lab-activity';
 
@@ -22,7 +22,7 @@ function downloadCsv(events: LabEvent[]) {
   const d = new Date(events[0]?.at ?? Date.now());
   const two = (n: number) => String(n).padStart(2, '0');
   // The byte-order mark makes Excel read the Thai text as UTF-8.
-  const blob = new Blob(['﻿' + toCsv(events)], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['﻿' + visitCsv(events)], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -31,12 +31,19 @@ function downloadCsv(events: LabEvent[]) {
   URL.revokeObjectURL(url);
 }
 
-// Shown in place of the lab room once the visit is over: what was done, the
-// values that came out of it, and the whole record to take away as CSV.
-export default function LabSummary({ events, experimentName, onLeave }: {
+/** How keeping the record in the student's history is going. */
+export type SaveState = 'saving' | 'saved' | 'failed';
+
+// Shown in place of the lab room once the visit is over, and again from the
+// dashboard's history: what was done, the values that came out of it, and the
+// whole record to take away as CSV. `save` is given only on finishing, while
+// the record is being kept; a summary opened from history is already kept.
+export default function LabSummary({ events, experimentName, onLeave, save, onRetrySave }: {
   events: LabEvent[];
   experimentName: string;
   onLeave: () => void;
+  save?: SaveState;
+  onRetrySave?: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const summary = summarise(events);
@@ -165,7 +172,21 @@ export default function LabSummary({ events, experimentName, onLeave }: {
           >
             กลับหน้าหลัก
           </button>
-          <p className="text-xs text-gray-500">บันทึกนี้ไม่ถูกเก็บไว้ในระบบ ดาวน์โหลดก่อนออกจากหน้านี้</p>
+          {save === 'failed' ? (
+            <p role="alert" className="flex flex-wrap items-center gap-2 text-xs text-red-300">
+              เก็บบันทึกนี้ลงประวัติไม่สำเร็จ ดาวน์โหลด CSV ไว้ก่อนออกจากหน้านี้
+              <button
+                onClick={onRetrySave}
+                className="h-6 rounded-full border border-red-400/40 px-3 font-semibold text-red-200 transition-colors hover:bg-red-500/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+              >
+                ลองเก็บอีกครั้ง
+              </button>
+            </p>
+          ) : (
+            <p role="status" className="text-xs text-gray-500">
+              {save === 'saving' ? 'กำลังเก็บบันทึกนี้ลงประวัติ' : 'บันทึกนี้เก็บไว้ในประวัติแล้ว เปิดดูย้อนหลังได้จากแดชบอร์ด'}
+            </p>
+          )}
         </div>
       </div>
     </div>

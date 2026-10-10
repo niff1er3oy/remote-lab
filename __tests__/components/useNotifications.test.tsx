@@ -247,6 +247,44 @@ describe('useNotifications', () => {
       expect(net.requests()).toEqual([]);
     });
 
+    it('marks one notification as read when its toast is closed by hand', async () => {
+      const net = serve({ signedIn: true, feed: [note('a'), note('b'), note('c', 1)] });
+      const { result } = renderHook(() => useNotifications());
+      await advance();
+      net.clear();
+
+      await act(async () => { await result.current.readToast('a'); });
+
+      expect(net.calls).toEqual([{ method: 'PATCH', url: '/api/notifications', body: { id: 'a' } }]);
+      expect(ids(result.current.toasts)).toEqual(['b']);
+      expect(result.current.unread).toBe(1);
+      expect(result.current.notifications.map(n => n.is_read)).toEqual([1, 0, 1]);
+    });
+
+    it('takes the toast away but leaves the notification unread when the server refuses', async () => {
+      serve({ signedIn: true, feed: [note('a')], override: call => (call.method === 'PATCH' ? { status: 500 } : undefined) });
+      const { result } = renderHook(() => useNotifications());
+      await advance();
+
+      await act(async () => { await result.current.readToast('a'); });
+
+      expect(result.current.toasts).toEqual([]);
+      expect(result.current.unread).toBe(1);
+      expect(result.current.notifications[0].is_read).toBe(0);
+    });
+
+    it('leaves a toast that is only dismissed unread', async () => {
+      const net = serve({ signedIn: true, feed: [note('a')] });
+      const { result } = renderHook(() => useNotifications());
+      await advance();
+      net.clear();
+
+      act(() => { result.current.dismissToast('a'); });
+
+      expect(net.requests()).toEqual([]);
+      expect(result.current.unread).toBe(1);
+    });
+
     it('marks everything as read on the server and on screen', async () => {
       const net = serve({ signedIn: true, feed: [note('a'), note('b'), note('c', 1)] });
       const { result } = renderHook(() => useNotifications());

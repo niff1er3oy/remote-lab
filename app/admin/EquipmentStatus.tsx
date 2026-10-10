@@ -7,7 +7,7 @@ import { prefersReducedMotion } from '@/lib/motion';
 type Reach = 'online' | 'offline' | 'unset';
 type Status = {
   checked_at: string;
-  rig: { busy: boolean; circuit: string | null; position: number | null; supply: boolean | null; last: { command: string; ok: boolean; at: number; error?: string } | null };
+  rig: { busy: boolean; circuit: string | null; position: number | null; supply: boolean | null; relay?: string | null; last: { command: string; ok: boolean; at: number; error?: string } | null };
   cameras: Array<{ key: string; state: Reach }>;
   sensor: Reach;
 };
@@ -23,6 +23,8 @@ const REACH: Record<Reach, { label: string; dot: string; text: string }> = {
   offline: { label: 'ไม่ตอบสนอง', dot: 'bg-red-500', text: 'text-red-300' },
   unset: { label: 'ยังไม่ได้ตั้งค่า', dot: 'bg-gray-600', text: 'text-gray-500' },
 };
+// Which supply relay is on, as relay.py names them.
+const RELAY_NAME: Record<string, string> = { coil1: 'ขดลวด 1 รอบ', coil2: 'ขดลวด 2 รอบ', coil3: 'ขดลวด 3 รอบ', solenoid: 'โซลีนอยด์', all: 'ทุกอุปกรณ์' };
 const CIRCUITS = [
   { script: 'coil_1.py', label: 'ขดลวด 1 รอบ', turns: 1 },
   { script: 'coil_2.py', label: 'ขดลวด 2 รอบ', turns: 2 },
@@ -31,8 +33,10 @@ const CIRCUITS = [
 ];
 const clock = (at: number | string) => new Date(at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Bangkok' });
 
-// The state of the equipment in the lab room, asked again every ten seconds.
-export default function EquipmentStatus() {
+// The state of the equipment in the lab room, asked again every ten seconds,
+// and at once whenever `refresh` changes (the admin has just sent the rig a
+// command from this page).
+export default function EquipmentStatus({ refresh = 0 }: { refresh?: number }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [failed, setFailed] = useState(false);
   const sweepRef = useRef<HTMLDivElement>(null);
@@ -52,7 +56,7 @@ export default function EquipmentStatus() {
     const first = setTimeout(read, 0);
     const timer = setInterval(read, POLL_MS);
     return () => { stopped = true; clearTimeout(first); clearInterval(timer); };
-  }, []);
+  }, [refresh]);
 
   // A bar that fills until the next check, so the page is seen to be watching.
   const checkedAt = status?.checked_at;
@@ -165,7 +169,7 @@ function RigTile({ rig }: { rig: Status['rig'] | null }) {
         <span className={`h-1.5 w-1.5 rounded-full ${rig?.supply ? 'bg-[#c8ff00]' : rig?.supply === false ? 'bg-gray-500' : 'bg-gray-700'}`} />
         แหล่งจ่ายไฟ{' '}
         <span className={rig?.supply ? 'text-[#c8ff00]' : 'text-gray-300'}>
-          {rig?.supply === true ? 'เปิดอยู่' : rig?.supply === false ? 'ปิดอยู่' : 'ยังไม่ทราบสถานะ'}
+          {rig?.supply === true ? `เปิดอยู่${rig.relay && RELAY_NAME[rig.relay] ? ` (${RELAY_NAME[rig.relay]})` : ''}` : rig?.supply === false ? 'ปิดอยู่' : 'ยังไม่ทราบสถานะ'}
         </span>
       </p>
 

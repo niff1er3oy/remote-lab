@@ -36,7 +36,7 @@ describe('disabledInstruments', () => {
   });
 
   it('drops anything in the document that is not an instrument, so a hand-edited value cannot close a break script', async () => {
-    seed('settings', 'rig', { disabled_instruments: ['coil_b.py', 'relay_off.py', 'coil_2.py', 'coil_2.py', 5, null] });
+    seed('settings', 'rig', { disabled_instruments: ['coil_b.py', 'relay.py', 'coil_2.py', 'coil_2.py', 5, null] });
     expect(await disabledInstruments()).toEqual(['coil_2.py']);
   });
 
@@ -58,7 +58,7 @@ describe('setDisabledInstruments', () => {
   });
 
   it('stores only real instruments, once each, in the rig\'s order', async () => {
-    await setDisabledInstruments(['sole.py', 'relay_on.py', 'coil_2.py', 'sole.py'], 'admin-1');
+    await setDisabledInstruments(['sole.py', 'relay.py', 'coil_2.py', 'sole.py'], 'admin-1');
     expect(read('settings', 'rig')?.disabled_instruments).toEqual(['coil_2.py', 'sole.py']);
   });
 

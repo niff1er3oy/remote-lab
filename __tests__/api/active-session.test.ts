@@ -45,6 +45,7 @@ describe('GET /api/bookings/active-session — a round running now', () => {
         ok: true,
         active: true,
         disabled_instruments: [],
+        currents: { 'coil_1.py': 5, 'coil_2.py': 5, 'coil_3.py': 5, 'sole.py': 0.3 },
         booking: {
           booking_id: 'b1',
           experiment_code: 'LAB8',

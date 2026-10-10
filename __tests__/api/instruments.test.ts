@@ -1,11 +1,12 @@
 /** @jest-environment node */
 import { NextRequest } from 'next/server';
 import { PATCH as setInstruments } from '@/app/api/admin/rig/instruments/route';
+import { PATCH as setCurrents } from '@/app/api/admin/rig/currents/route';
 import { GET as overview } from '@/app/api/admin/overview/route';
 import { GET as activeSession } from '@/app/api/bookings/active-session/route';
 import { POST as command } from '@/app/api/hardware/route';
-import { cleanDisabled, INSTRUMENT_SCRIPTS } from '@/lib/instruments';
-import { disabledInstruments } from '@/lib/rig-settings';
+import { cleanCurrents, cleanDisabled, DEFAULT_CURRENTS, INSTRUMENT_SCRIPTS, isCurrent, relayOf } from '@/lib/instruments';
+import { disabledInstruments, instrumentCurrents } from '@/lib/rig-settings';
 import { runRigScript } from '@/lib/rig';
 import { breakDb, LAB8, read, resetDb, seed, seedBooking } from '../helpers/server/firestore';
 import { resetAuth } from '../helpers/server/auth';
@@ -85,7 +86,7 @@ describe('PATCH /api/admin/rig/instruments', () => {
     expect(await disabledInstruments()).toEqual([]);
   });
 
-  it.each([['coil_1.py'], [['coil_1.py', 'coil_b.py']], [['relay_on.py']], [[1]], [null], [undefined]])('answers 400 for %j and changes nothing', async (disabled) => {
+  it.each([['coil_1.py'], [['coil_1.py', 'coil_b.py']], [['relay.py']], [[1]], [null], [undefined]])('answers 400 for %j and changes nothing', async (disabled) => {
     await close(['coil_3.py']);
     expect((await close(disabled)).status).toBe(400);
     expect(await disabledInstruments()).toEqual(['coil_3.py']);
@@ -155,5 +156,103 @@ describe('what a closed instrument means', () => {
     breakDb();
     expect((await send({ script: 'sole.py', position: 1 })).status).toBe(500);
     expect(runRigScript).not.toHaveBeenCalled();
+  });
+});
+
+describe('the relay of each instrument', () => {
+  it('is the name relay.py knows its supply by', () => {
+    expect(INSTRUMENT_SCRIPTS.map(relayOf)).toEqual(['coil1', 'coil2', 'coil3', 'solenoid']);
+  });
+
+  it.each([['coil_b.py'], ['sole_b.py'], ['relay.py'], ['all'], [null], [undefined], [3]])('is nothing for %j', (script) => {
+    expect(relayOf(script)).toBeUndefined();
+  });
+});
+
+describe('the current of each instrument', () => {
+  const DEFAULTS = { 'coil_1.py': 5, 'coil_2.py': 5, 'coil_3.py': 5, 'sole.py': 0.3 };
+  const set = async (currents: unknown) => {
+    const res = await setCurrents(new NextRequest('http://localhost/api/admin/rig/currents', { method: 'PATCH', body: JSON.stringify({ currents }) }));
+    return { status: res.status, body: await res.json() };
+  };
+
+  it('is 5 A for each single coil and 0.3 A for the solenoid until an admin sets another', async () => {
+    expect(DEFAULT_CURRENTS).toEqual(DEFAULTS);
+    expect(await instrumentCurrents()).toEqual(DEFAULTS);
+  });
+
+  it.each([0.001, 0.3, 0.25, 4.999, 10])('accepts %p A', (value) => {
+    expect(isCurrent(value)).toBe(true);
+  });
+
+  it.each([0, -0.3, 10.001, 0.0005, 0.3001, NaN, Infinity, '0.3', null, undefined])('refuses %p as a current', (value) => {
+    expect(isCurrent(value)).toBe(false);
+  });
+
+  it('keeps usable values for known instruments and falls back to the default for the rest', () => {
+    expect(cleanCurrents({ 'sole.py': 0.45, 'coil_1.py': -1, 'coil_2.py': '3', 'evil.py': 2 })).toEqual({ ...DEFAULTS, 'sole.py': 0.45 });
+  });
+
+  it.each([[undefined], [null], ['sole.py'], [[0.3]], [7]])('reads %j as every default', (raw) => {
+    expect(cleanCurrents(raw)).toEqual(DEFAULTS);
+  });
+
+  describe('PATCH /api/admin/rig/currents', () => {
+    it('sets the current of the instruments named and leaves the others as they were', async () => {
+      expect(await set({ 'sole.py': 0.45 })).toEqual({ status: 200, body: { ok: true, currents: { ...DEFAULTS, 'sole.py': 0.45 } } });
+      expect(await set({ 'coil_2.py': 4 })).toEqual({ status: 200, body: { ok: true, currents: { ...DEFAULTS, 'sole.py': 0.45, 'coil_2.py': 4 } } });
+      expect(await instrumentCurrents()).toEqual({ ...DEFAULTS, 'sole.py': 0.45, 'coil_2.py': 4 });
+    });
+
+    it('records who changed it and when', async () => {
+      await set({ 'sole.py': 0.45 });
+      expect(read('settings', 'rig')).toMatchObject({ updated_by: ADMIN.uid, updated_at: new Date(NOW).toISOString() });
+    });
+
+    it('keeps the instruments an admin has closed, and closing keeps the currents', async () => {
+      await close(['coil_3.py']);
+      await set({ 'sole.py': 0.45 });
+      expect(await disabledInstruments()).toEqual(['coil_3.py']);
+      await close(['coil_1.py']);
+      expect((await instrumentCurrents())['sole.py']).toBe(0.45);
+    });
+
+    it.each([
+      [{ 'sole.py': 0 }], [{ 'sole.py': -0.3 }], [{ 'sole.py': 10.5 }], [{ 'sole.py': '0.3' }], [{ 'sole.py': 0.3001 }], [{ 'sole.py': null }],
+      [{ 'coil_1.py': 5, 'sole.py': 0 }],
+    ])('answers 400 for the value in %j and changes nothing', async (currents) => {
+      const { status, body } = await set(currents);
+      expect(status).toBe(400);
+      expect(body.error).toMatch(/มากกว่า 0 และไม่เกิน 10 A/);
+      expect(await instrumentCurrents()).toEqual(DEFAULTS);
+    });
+
+    it.each([[{ 'coil_b.py': 1 }], [{ 'relay.py': 1 }], [{}], [[0.3]], ['sole.py'], [null], [undefined]])('answers 400 for %j: only instruments have a current', async (currents) => {
+      expect((await set(currents)).status).toBe(400);
+      expect(read('settings', 'rig')).toBeUndefined();
+    });
+
+    it('is for admins only', async () => {
+      signInAs(STUDENT);
+      expect((await set({ 'sole.py': 0.45 })).status).toBe(403);
+      signOut();
+      expect((await set({ 'sole.py': 0.45 })).status).toBe(403);
+      expect(read('settings', 'rig')).toBeUndefined();
+    });
+
+    it('answers 500 without details when the database fails', async () => {
+      breakDb();
+      const { status, body } = await set({ 'sole.py': 0.45 });
+      expect(status).toBe(500);
+      expect(body).toEqual({ ok: false, error: 'เกิดข้อผิดพลาด กรุณาลองใหม่' });
+    });
+  });
+
+  it('reaches the lab room with the running round, and the admin page', async () => {
+    await set({ 'sole.py': 0.45 });
+    expect((await (await overview(new NextRequest('http://localhost/api/admin/overview'))).json()).currents).toEqual({ ...DEFAULTS, 'sole.py': 0.45 });
+    seedBooking('mine', { user: STUDENT.uid, start: NOW - HOUR, end: NOW + HOUR });
+    signInAs(STUDENT);
+    expect((await (await activeSession()).json()).currents).toEqual({ ...DEFAULTS, 'sole.py': 0.45 });
   });
 });

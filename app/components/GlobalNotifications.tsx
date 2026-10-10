@@ -15,7 +15,8 @@ const TOAST_MS = 20_000;
 // One toast at a time, small and short-lived: it sits over the booking
 // calendar, and everything it says stays in the bell's panel. `waiting` is how
 // many more are queued behind it.
-function Toast({ notif, waiting, onDismiss }: { notif: Notification; waiting: number; onDismiss: () => void }) {
+// `onDismiss` is the toast going away on its own; `onClose` is the reader closing it, which counts as reading it.
+function Toast({ notif, waiting, onDismiss, onClose }: { notif: Notification; waiting: number; onDismiss: () => void; onClose: () => void }) {
   const ref  = useRef<HTMLDivElement>(null);
   const s    = TYPE_ICON[notif.type] ?? TYPE_ICON.info;
   const isSuccess = notif.type === 'success';
@@ -64,7 +65,7 @@ function Toast({ notif, waiting, onDismiss }: { notif: Notification; waiting: nu
           {waiting > 0 && <span className="text-[11px] text-gray-500">และอีก {waiting} รายการ</span>}
         </div>
       </div>
-      <button onClick={onDismiss} aria-label="ปิดการแจ้งเตือนนี้"
+      <button onClick={onClose} aria-label="ปิดการแจ้งเตือนนี้"
         className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-white/5 hover:text-white transition-colors focus-visible:outline-2 focus-visible:outline-cyan-400">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -78,7 +79,7 @@ function Toast({ notif, waiting, onDismiss }: { notif: Notification; waiting: nu
 
 export default function GlobalNotifications() {
   const pathname   = usePathname();
-  const { loggedIn, notifications, unread, toasts, markAllRead, dismissToast } = useNotifications();
+  const { loggedIn, notifications, unread, toasts, markAllRead, dismissToast, readToast } = useNotifications();
   const [panelOpen, setPanelOpen] = useState(false);
   const bellRef    = useRef<HTMLButtonElement>(null);
   const prevUnread = useRef(0);
@@ -113,7 +114,7 @@ export default function GlobalNotifications() {
       {/* Toast — bottom-left */}
       {toast && (
         <div className="fixed bottom-6 left-6 z-[60]">
-          <Toast key={toast.notification_id} notif={toast} waiting={toasts.length - 1} onDismiss={() => dismissToast(toast.notification_id)} />
+          <Toast key={toast.notification_id} notif={toast} waiting={toasts.length - 1} onDismiss={() => dismissToast(toast.notification_id)} onClose={() => readToast(toast.notification_id)} />
         </div>
       )}
 
@@ -172,6 +173,13 @@ export function NotifPanel({ notifications, unread, onMarkAllRead, maxH = '400px
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Opening the panel (pressing the bell) is reading everything in it: all of
+  // it is marked read at once. What was unread at that moment stays picked
+  // out for as long as the panel is open, so the reader can see what is new.
+  const [fresh] = useState(() => new Set(notifications.filter(n => !n.is_read).map(n => n.notification_id)));
+  const markRead = useEffectEvent(() => { if (unread > 0) onMarkAllRead(); });
+  useEffect(() => { markRead(); }, []);
+
   // The panel slides up and its items follow one by one. Everything is
   // visible without this, so reduced motion simply shows the panel.
   useLayoutEffect(() => {
@@ -213,14 +221,14 @@ export function NotifPanel({ notifications, unread, onMarkAllRead, maxH = '400px
               const s = TYPE_ICON[n.type] ?? TYPE_ICON.info;
               return (
                 <li key={n.notification_id}
-                  className={`notif-item flex items-start gap-3 px-4 py-3 ${!n.is_read ? 'bg-white/[0.03]' : ''}`}>
+                  className={`notif-item flex items-start gap-3 px-4 py-3 ${!n.is_read || fresh.has(n.notification_id) ? 'bg-white/[0.03]' : ''}`}>
                   <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${s.bg} ${s.text}`}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                       <path d={s.path} />
                     </svg>
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-medium leading-snug ${n.is_read ? 'text-gray-400' : 'text-white'}`}>{n.title}</p>
+                    <p className={`text-xs font-medium leading-snug ${n.is_read && !fresh.has(n.notification_id) ? 'text-gray-400' : 'text-white'}`}>{n.title}</p>
                     <p className="mt-0.5 text-[11px] text-gray-500 leading-relaxed">{n.message}</p>
                     <p className="mt-1 text-[10px] text-gray-600">{formatRelative(n.created_at)}</p>
                     {n.action_url && (
@@ -234,7 +242,7 @@ export function NotifPanel({ notifications, unread, onMarkAllRead, maxH = '400px
                       </a>
                     )}
                   </div>
-                  {!n.is_read && <span role="img" aria-label="ยังไม่ได้อ่าน" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#c8ff00]" />}
+                  {(!n.is_read || fresh.has(n.notification_id)) && <span role="img" aria-label={n.is_read ? 'ใหม่' : 'ยังไม่ได้อ่าน'} className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#c8ff00]" />}
                 </li>
               );
             })}

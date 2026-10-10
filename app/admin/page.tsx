@@ -7,8 +7,10 @@ import { animate, scrambleText, stagger } from 'animejs';
 import DashboardNav from '@/app/components/DashboardNav';
 import SlideIn from '@/app/components/SlideIn';
 import EquipmentStatus from './EquipmentStatus';
+import ReadinessCheck from './ReadinessCheck';
+import CurrentSettings from './CurrentSettings';
 import { prefersReducedMotion, press } from '@/lib/motion';
-import { INSTRUMENTS } from '@/lib/instruments';
+import { cleanCurrents, INSTRUMENTS, type Currents } from '@/lib/instruments';
 
 type Me = { name: string; email: string; role: string; is_admin?: boolean };
 type Lab = { lab_id: string; code: string; name_th: string; is_active: boolean };
@@ -18,7 +20,7 @@ type Booking = {
   blocked: boolean; note: string;
   user: { uid: string; name: string; email: string };
 };
-type Overview = { labs: Lab[]; running: Booking[]; bookings: Booking[]; disabled_instruments: string[] };
+type Overview = { labs: Lab[]; running: Booking[]; bookings: Booking[]; disabled_instruments: string[]; currents?: Currents };
 type Notice = { ok: boolean; text: string };
 
 const STATUS: Record<string, { label: string; tone: string }> = {
@@ -67,6 +69,9 @@ export default function AdminPage() {
   const [from, setFrom] = useState(todayThai);
   const [days, setDays] = useState(7);
   const [status, setStatus] = useState('active');
+  // Goes up each time this page sends the rig a command, so that the equipment
+  // status is read again at once instead of at its next round.
+  const [rigCommands, setRigCommands] = useState(0);
 
   const load = useCallback(async () => {
     const res = await call(`/api/admin/overview?from=${from}&days=${days}`, 'GET');
@@ -160,13 +165,17 @@ export default function AdminPage() {
             <p className="mt-0.5 text-sm text-gray-400">ดูแลการจอง ห้องแลป และอุปกรณ์</p>
           </div>
           {loadError && <p role="alert" className="text-sm text-red-300">{loadError}</p>}
+          <Link href="/admin/tests" className={`rounded-full border border-white/10 px-4 py-1.5 text-sm text-gray-200 transition-colors hover:border-cyan-500/30 hover:text-white ${FOCUS}`}>
+            ผลการทดสอบ unit test
+          </Link>
         </header>
 
-        <EquipmentStatus />
+        <EquipmentStatus refresh={rigCommands} />
+        <ReadinessCheck />
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <RunningPanel running={data.running} onChanged={load} />
-          <RigPanel />
+          <RunningPanel running={data.running} onChanged={async () => { setRigCommands(n => n + 1); await load(); }} />
+          <RigPanel currents={cleanCurrents(data.currents)} onChanged={load} onCommand={() => setRigCommands(n => n + 1)} />
           <LabsPanel labs={data.labs} disabled={data.disabled_instruments ?? []} onChanged={load} />
         </div>
 
@@ -284,7 +293,7 @@ function RunningPanel({ running, onChanged }: { running: Booking[]; onChanged: (
   );
 }
 
-function RigPanel() {
+function RigPanel({ currents, onChanged, onCommand }: { currents: Currents; onChanged: () => Promise<void>; onCommand: () => void }) {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
   return (
@@ -300,6 +309,7 @@ function RigPanel() {
                 press(e.currentTarget);
                 setBusy(true);
                 const res = await call('/api/admin/rig/power', 'POST', { on });
+                onCommand();
                 setNotice(res.ok ? { ok: true, text: on ? 'เปิดแหล่งจ่ายไฟแล้ว' : 'ปิดแหล่งจ่ายไฟแล้ว' } : { ok: false, text: res.text || 'สั่งแหล่งจ่ายไฟไม่สำเร็จ' });
                 setBusy(false);
               }}
@@ -316,11 +326,13 @@ function RigPanel() {
           label="ตัดวงจรทั้งหมด" confirmLabel="ตัดวงจรเดี๋ยวนี้" question="การทดลองที่กำลังทำอยู่จะหยุด"
           onConfirm={async () => {
             const res = await call('/api/admin/rig/stop', 'POST');
+            onCommand();
             setNotice(res.ok ? { ok: true, text: 'ตัดวงจรและปิดแหล่งจ่ายไฟแล้ว' } : { ok: false, text: res.text || 'ตัดวงจรไม่สำเร็จ' });
           }}
         />
       </div>
       <Message notice={notice} />
+      <CurrentSettings currents={currents} onChanged={onChanged} />
     </section>
   );
 }

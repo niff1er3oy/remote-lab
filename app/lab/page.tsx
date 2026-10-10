@@ -7,13 +7,14 @@ import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 import MathSource from '@/app/components/MathSource';
+import { cleanCurrents, DEFAULT_CURRENTS, type Currents } from '@/lib/instruments';
 import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
 import { prefersReducedMotion, press } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { clockTime, describeEvent, type LabEvent } from '@/lib/lab-activity';
 import { aboveBackground, createAverager, fieldFromSensor } from '@/lib/sensor';
 import { FieldViz } from './FieldViz';
-import LabSummary from './LabSummary';
+import LabSummary, { type SaveState } from './LabSummary';
 
 // KaTeX is only needed once the assistant writes a formula, so it is fetched
 // then rather than with the page.
@@ -42,7 +43,7 @@ const instruments: Inst[] = [
   // ตอนที่ 1 — ขดลวดเดี่ยว  I₀ = 5 A
   {
     id: 0, type: 'coil', name: 'ขดลวดเดี่ยว 1 รอบ', sub: 'n=1 · R=13 มม.',
-    script: 'coil_1.py', I0: 5, turns: 1, R: 0.013,
+    script: 'coil_1.py', I0: DEFAULT_CURRENTS['coil_1.py'], turns: 1, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" />
@@ -51,7 +52,7 @@ const instruments: Inst[] = [
   },
   {
     id: 1, type: 'coil', name: 'ขดลวดเดี่ยว 2 รอบ', sub: 'n=2 · R=13 มม.',
-    script: 'coil_2.py', I0: 5, turns: 2, R: 0.013,
+    script: 'coil_2.py', I0: DEFAULT_CURRENTS['coil_2.py'], turns: 2, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5.5" /><circle cx="12" cy="12" r="2" />
@@ -60,7 +61,7 @@ const instruments: Inst[] = [
   },
   {
     id: 2, type: 'coil', name: 'ขดลวดเดี่ยว 3 รอบ', sub: 'n=3 · R=13 มม.',
-    script: 'coil_3.py', I0: 5, turns: 3, R: 0.013,
+    script: 'coil_3.py', I0: DEFAULT_CURRENTS['coil_3.py'], turns: 3, R: 0.013,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="6.5" />
@@ -68,7 +69,7 @@ const instruments: Inst[] = [
       </svg>
     ),
   },
-  // ตอนที่ 2 — โซลีนอยด์  L=80 mm · R=21 mm · I₀ = 0.5 A
+  // ตอนที่ 2 — โซลีนอยด์  L=80 mm · R=21 mm · I₀ = 0.3 A (ผู้ดูแลระบบปรับได้)
   // ชุดทดลองจริงมีโซลีนอยด์อันเดียวคือ 100 รอบ (ใบแลปกล่าวถึง 150 รอบด้วย แต่ไม่มีบนเครื่อง)
   {
     id: 3, type: 'solenoid', name: 'โซลีนอยด์ 100 รอบ', sub: 'n=100 · L=80 มม.',
@@ -131,12 +132,14 @@ type SupplyAnswer = { supply: boolean | null; held: boolean; error: string | nul
 
 // Tells the server this page has entered, is still in, or is leaving the lab
 // room (the power supply follows from that), or asks it to switch the supply.
-async function tellPresence(action: 'enter' | 'stay' | 'leave' | 'on' | 'off'): Promise<SupplyAnswer> {
+// `instrument` is the script of the instrument selected: the supply is
+// switched on for that one.
+async function tellPresence(action: 'enter' | 'stay' | 'leave' | 'on' | 'off', instrument?: string): Promise<SupplyAnswer> {
   try {
     const res = await fetch('/api/lab/presence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, instrument }),
       keepalive: action === 'leave',
     });
     const data = await res.json().catch(() => null);
@@ -156,11 +159,14 @@ type AccessState =
   | { status: 'loading' }
   | { status: 'denied'; reason: 'auth' }
   | { status: 'denied'; reason: 'no_booking'; next: { start_time: string; experiment_name: string } | null }
-  | { status: 'allowed'; end_time: string; experiment_name: string; disabled: string[] };
+  | { status: 'allowed'; end_time: string; experiment_name: string; disabled: string[]; currents: Currents };
 
 function useAccessGate() {
   const [access, setAccess] = useState<AccessState>({ status: 'loading' });
   const activeBookingId = useRef<string | null>(null);
+  // The round this visit belongs to, kept after the round has been marked
+  // complete: the visit's record is saved under it.
+  const visitBooking = useRef<string | null>(null);
 
   // keepalive: true ทำให้ request ส่งได้แม้ระหว่าง page unload
   function completeBooking(id: string) {
@@ -181,6 +187,7 @@ function useAccessGate() {
         if (d.active) {
           const bookingId: string = d.booking.booking_id;
           activeBookingId.current = bookingId;
+          visitBooking.current = bookingId;
           fetch(`/api/bookings/${bookingId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -189,6 +196,8 @@ function useAccessGate() {
           setAccess({
             status: 'allowed', end_time: d.booking.end_time, experiment_name: d.booking.experiment_name,
             disabled: Array.isArray(d.disabled_instruments) ? d.disabled_instruments : [],
+            // The current each instrument is set to, as the admin has it, for the whole visit.
+            currents: cleanCurrents(d.currents),
           });
         } else {
           setAccess({ status: 'denied', reason: 'no_booking', next: d.next_booking ?? null });
@@ -224,7 +233,7 @@ function useAccessGate() {
     }
   }
 
-  return { access, onComplete };
+  return { access, onComplete, visitBooking };
 }
 
 function formatDateTime(iso: string) {
@@ -469,7 +478,7 @@ function LabIntroScreen({ endTime, onStart }: { endTime: string; onStart: () => 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function RemoteLabPage() {
-  const { access, onComplete } = useAccessGate();
+  const { access, onComplete, visitBooking } = useAccessGate();
   const [labStarted, setLabStarted] = useState(false);
   const [instrument, setInstrument] = useState(0);
   const [z, setZ] = useState(0); // Z position in metres (solenoid only, one of the probe's 21 positions)
@@ -484,9 +493,29 @@ export default function RemoteLabPage() {
   // Everything the student does in this visit (lib/lab-activity.ts): the log
   // tab shows it as it grows, and the summary on leaving is built from it.
   const [events, setEvents] = useState<LabEvent[]>([]);
+  // The same list, readable at once by whatever saves it.
+  const eventsNow = useRef<LabEvent[]>([]);
   const record = useCallback((e: Omit<LabEvent, 'at'>) => {
-    setEvents(prev => [...prev, { ...e, at: Date.now() }]);
+    eventsNow.current = [...eventsNow.current, { ...e, at: Date.now() }];
+    setEvents(eventsNow.current);
   }, []);
+  // The record is kept in the database, so the summary can be opened again
+  // from the dashboard's history.
+  const [save, setSave] = useState<SaveState>('saving');
+  const saveRecord = useCallback(async () => {
+    setSave('saving');
+    try {
+      const res = await fetch('/api/lab/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_id: visitBooking.current, events: eventsNow.current }),
+        keepalive: true,
+      });
+      setSave(res.ok ? 'saved' : 'failed');
+    } catch {
+      setSave('failed');
+    }
+  }, [visitBooking]);
   const [ended, setEnded] = useState(false);
   const ending = useRef(false);
   // The reading last taken for the record. Null when the sensor sent nothing
@@ -569,6 +598,14 @@ export default function RemoteLabPage() {
     if (open >= 0) setInstrument(open);
   }
 
+  // The current each circuit carries: the admin's setting, read when the
+  // visit began. The rig does not measure it.
+  const currents = access.status === 'allowed' ? access.currents : DEFAULT_CURRENTS;
+  const ampsOf = useCallback((inst: Inst) => currents[inst.script] ?? inst.I0, [currents]);
+  // The instrument selected, for what is said to the server outside a render.
+  const selectedScript = useRef(instruments[0].script);
+  useEffect(() => { selectedScript.current = instruments[instrument].script; }, [instrument]);
+
   // Reset Z and measurement data when instrument changes
   const [prevInstrumentForReset, setPrevInstrumentForReset] = useState(instrument);
   if (instrument !== prevInstrumentForReset) {
@@ -603,7 +640,7 @@ export default function RemoteLabPage() {
   // entry and off when the room empties, and an admin's switching off wins.
   const switchSupply = useCallback(async (on: boolean) => {
     setSupplyBusy(true);
-    const { supply, held, error } = await tellPresence(on ? 'on' : 'off');
+    const { supply, held, error } = await tellPresence(on ? 'on' : 'off', selectedScript.current);
     if (supply !== null) setSupplyOn(supply);
     setSupplyHeld(held);
     record({ kind: 'supply', ok: error === null, detail: on ? 'on' : 'off' });
@@ -656,7 +693,7 @@ export default function RemoteLabPage() {
         setBackground(reading);
         record({ kind: 'background', ok: reading !== null, bMeasured: reading });
       }
-      const { supply: on, held } = await tellPresence('enter');
+      const { supply: on, held } = await tellPresence('enter', selectedScript.current);
       if (gone) return;
       setSupplyOn(on);
       setSupplyHeld(held);
@@ -665,10 +702,15 @@ export default function RemoteLabPage() {
       setEntered(true);
     })();
     const beat = setInterval(() => {
-      tellPresence('stay').then(({ supply: on, held }) => { if (!gone && on !== null) { setSupplyOn(on); setSupplyHeld(held); } });
+      tellPresence('stay', selectedScript.current).then(({ supply: on, held }) => { if (!gone && on !== null) { setSupplyOn(on); setSupplyHeld(held); } });
     }, HEARTBEAT_MS);
     // Closing the tab leaves no time for a reply: the goodbye is left with the browser.
-    const bye = () => { navigator.sendBeacon?.('/api/lab/presence', JSON.stringify({ action: 'leave' })); };
+    const bye = () => {
+      navigator.sendBeacon?.('/api/lab/presence', JSON.stringify({ action: 'leave' }));
+      // A visit left without finishing still keeps what it had recorded.
+      if (!ending.current && eventsNow.current.length)
+        navigator.sendBeacon?.('/api/lab/record', JSON.stringify({ booking_id: visitBooking.current, events: eventsNow.current }));
+    };
     window.addEventListener('pagehide', bye);
     return () => {
       gone = true;
@@ -678,7 +720,7 @@ export default function RemoteLabPage() {
       // already said so, and saying it twice does no harm.
       void tellPresence('leave');
     };
-  }, [inRoom, record, freshReading, averager]);
+  }, [inRoom, record, freshReading, averager, visitBooking]);
 
   // Nothing is sent to the rig before the supply has been switched on.
   const rigReady = inRoom && entered;
@@ -689,8 +731,9 @@ export default function RemoteLabPage() {
     if (inst.type !== 'coil') return;
     // Taken while the coil is still on, before anything else is sent to the rig.
     const bMeasured = await freshReading();
-    record({ kind: 'reading', instrument: inst.name, I: inst.I0, bTheory: calcBCoil(inst.turns, inst.I0, inst.R), bMeasured });
-  }, [record, freshReading]);
+    const I = ampsOf(inst);
+    record({ kind: 'reading', instrument: inst.name, I, bTheory: calcBCoil(inst.turns, I, inst.R), bMeasured });
+  }, [record, freshReading, ampsOf]);
 
   useEffect(() => {
     if (!rigReady) return;
@@ -717,16 +760,17 @@ export default function RemoteLabPage() {
         // Switching the solenoid on puts the probe at its middle, which is a
         // measuring position like the others: its reading goes on record too.
         if (inst.type === 'solenoid') {
-          const bTheory = calcBSolenoid(inst.N, inst.I0, inst.L, inst.R, 0);
+          const I = ampsOf(inst);
+          const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
           const reading = await freshReading();
           setMeasData(prev => new Map(prev).set(0, { bMeasured: reading ?? bTheory, bTheory, zero: backgroundNow.current }));
-          record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I: inst.I0, bTheory, bMeasured: reading });
+          record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured: reading });
         }
       } finally {
         setIsRunning(false);
       }
     })();
-  }, [instrument, rigReady, rigAttempt, record, recordReading, freshReading]);
+  }, [instrument, rigReady, rigAttempt, record, recordReading, freshReading, ampsOf]);
 
   // The visit is over, by the finish button or by the clock: cut whatever is
   // live, close the record and show the summary in place of the lab room.
@@ -746,15 +790,16 @@ export default function RemoteLabPage() {
     record({ kind: 'supply', ok: supply === false, detail: 'off' });
     record({ kind: 'end', detail: how });
     setEnded(true);
-  }, [record, recordReading]);
+    void saveRecord();
+  }, [record, recordReading, saveRecord]);
 
   const reportMove = useCallback((text: string | null, zCm: number, bTheory: number) => {
     setRigError(text === null ? null : { text: `เลื่อนหัววัดไม่สำเร็จ ค่าที่ตำแหน่งนี้จึงไม่ถูกบันทึก: ${text}`, canRetry: false });
     const inst = instruments[instrument];
     record(text === null
-      ? { kind: 'move', instrument: inst.name, ok: true, zCm, I: inst.I0, bTheory, bMeasured: sensorNow.current }
+      ? { kind: 'move', instrument: inst.name, ok: true, zCm, I: ampsOf(inst), bTheory, bMeasured: sensorNow.current }
       : { kind: 'move', instrument: inst.name, ok: false, zCm, detail: text });
-  }, [instrument, record]);
+  }, [instrument, record, ampsOf]);
 
   // Read real sensor data via WebSocket
   useEffect(() => {
@@ -806,7 +851,7 @@ export default function RemoteLabPage() {
 
   // Before the access gate: the booking is marked complete as the visit ends,
   // and the gate would otherwise replace the summary with "no booking".
-  if (ended) return <LabSummary events={events} experimentName={labName} onLeave={() => router.push('/dashboard')} />;
+  if (ended) return <LabSummary events={events} experimentName={labName} onLeave={() => router.push('/dashboard')} save={save} onRetrySave={saveRecord} />;
 
   // ── Access gate ───────────────────────────────────────────────────────────
   if (access.status === 'loading') {
@@ -823,7 +868,7 @@ export default function RemoteLabPage() {
 
   const inst = instruments[instrument];
   // The rig does not measure current: I is the value each circuit is set to.
-  const I = inst.I0;
+  const I = ampsOf(inst);
   const bTheory = inst.type === 'coil'
     ? calcBCoil(inst.turns, I, inst.R)
     : calcBSolenoid(inst.N, I, inst.L, inst.R, z);
@@ -1561,10 +1606,11 @@ function CamLatency({ pcRef }: { pcRef: React.RefObject<RTCPeerConnection | null
   return (
     <div
       className={chip}
-      aria-label={`ความหน่วงของสตรีม ${Math.round(reading.total)} มิลลิวินาที`}
+      aria-label={`ความหน่วงสตรีม ${Math.round(reading.total)} มิลลิวินาที`}
       title={`ความหน่วงจากเซิร์ฟเวอร์กล้องถึงจอนี้: เครือข่าย ${ms(reading.network)} + บัฟเฟอร์ ${ms(reading.buffer)} + ถอดรหัส ${ms(reading.decode)} ยังไม่รวมความหน่วงของตัวกล้องและช่วงกล้องถึงเซิร์ฟเวอร์ ซึ่งวัดจากเบราว์เซอร์ไม่ได้`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+      <span className="text-gray-300">ความหน่วงสตรีม</span>
       <span className={`font-mono font-semibold tabular-nums ${tone.text}`}>{Math.round(reading.total)}</span>
       <span className="text-gray-500">ms</span>
     </div>

@@ -24,6 +24,7 @@ type HistoryItem = {
   status: string;
   duration_seconds: number | null;
   session_id: string | null;
+  has_record?: boolean;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -376,7 +377,7 @@ export default function DashboardPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
-                      {['ห้องทดลอง', 'วันที่', 'เวลา', 'เวลาที่ใช้จริง', 'สถานะ'].map(h => (
+                      {['ห้องทดลอง', 'วันที่', 'เวลา', 'เวลาที่ใช้จริง', 'สถานะ', 'สรุปการทดลอง'].map(h => (
                         <th key={h} className="px-5 py-3 text-left text-xs font-medium text-gray-500">{h}</th>
                       ))}
                     </tr>
@@ -399,6 +400,18 @@ export default function DashboardPage() {
                             <span className={`inline-block rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${STATUS_STYLES[status] ?? STATUS_STYLES.completed}`}>
                               {STATUS_LABELS[status] ?? status}
                             </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-xs">
+                            {h.has_record ? (
+                              <Link
+                                href={`/dashboard/record/${h.booking_id}`}
+                                className="rounded font-medium text-cyan-400 underline-offset-4 transition-colors hover:text-cyan-300 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                              >
+                                ดูสรุป
+                              </Link>
+                            ) : (
+                              <span className="text-gray-600" title="รอบนี้ไม่มีบันทึกการทดลอง">—</span>
+                            )}
                           </td>
                         </tr>
                       );

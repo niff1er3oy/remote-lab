@@ -1,4 +1,4 @@
-import { describeEvent, difference, differencePercent, readingsOf, summarise, toCsv, type LabEvent } from '@/lib/lab-activity';
+import { describeEvent, difference, differencePercent, EVENT_KINDS, readingsCsv, readingsOf, summarise, toCsv, visitCsv, type LabEvent } from '@/lib/lab-activity';
 
 // 10:00:00 local time, so the clock column reads the same in any time zone.
 const T0 = new Date(2026, 9, 8, 10, 0, 0).getTime();
@@ -265,5 +265,34 @@ describe('Set 0 in the record', () => {
     const [, first, second] = toCsv([again, failed]).trimEnd().split('\r\n');
     expect(first).toBe('2026-10-08,10:01:10,ตั้งศูนย์ (Set 0),,,,,0.0481,,,สำเร็จ,ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว');
     expect(second).toBe('2026-10-08,10:01:20,ตั้งศูนย์ (Set 0),,,,,,,,ไม่สำเร็จ,เซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่');
+  });
+});
+
+describe('readingsCsv and visitCsv — the table of recorded values in the download', () => {
+  it('writes one row per reading, as the summary\'s table shows them', () => {
+    expect(readingsCsv(VISIT).trimEnd().split('\r\n')).toEqual([
+      'อุปกรณ์,Z (cm),I (A),B ทฤษฎี (mT),B วัดจริง (mT),ΔB (mT),ΔB (%)',
+      'ขดลวดเดี่ยว 1 รอบ,,5.00,0.2417,0.2300,-0.0117,-4.84',
+      'โซลีนอยด์ 75 รอบ,4,1.00,0.5729,0.5500,-0.0229,-4.00',
+      'โซลีนอยด์ 75 รอบ,-8,1.00,0.2936,,,',
+    ]);
+  });
+
+  it('keeps only the latest value of a position measured twice', () => {
+    const again: LabEvent = { at: at(250), kind: 'move', instrument: 'โซลีนอยด์ 75 รอบ', ok: true, zCm: 4, I: 1, bTheory: 0.5729, bMeasured: 0.57 };
+    const rows = readingsCsv([...VISIT, again]).trimEnd().split('\r\n');
+    expect(rows.filter(r => r.startsWith('โซลีนอยด์ 75 รอบ,4,'))).toEqual(['โซลีนอยด์ 75 รอบ,4,1.00,0.5729,0.5700,-0.0029,-0.51']);
+  });
+
+  it('is only the header when nothing was recorded', () => {
+    expect(readingsCsv([{ at: at(0), kind: 'start' }])).toBe('อุปกรณ์,Z (cm),I (A),B ทฤษฎี (mT),B วัดจริง (mT),ΔB (mT),ΔB (%)\r\n');
+  });
+
+  it('puts the readings first and the timeline after, each under its heading', () => {
+    expect(visitCsv(VISIT)).toBe(`ค่าที่บันทึก\r\n${readingsCsv(VISIT)}\r\nลำดับเหตุการณ์\r\n${toCsv(VISIT)}`);
+  });
+
+  it('knows every kind of event', () => {
+    expect([...EVENT_KINDS].sort()).toEqual(['background', 'end', 'move', 'power-off', 'power-on', 'question', 'reading', 'start', 'supply', 'zero']);
   });
 });

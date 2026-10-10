@@ -88,5 +88,20 @@ export function useNotifications() {
     setToasts(prev => prev.filter(t => t.notification_id !== id));
   }
 
-  return { loggedIn, notifications, unread, toasts, markAllRead, dismissToast };
+  // Closing a toast by hand is reading it. One that only timed out was not
+  // necessarily seen, and stays unread (dismissToast).
+  async function readToast(id: string) {
+    dismissToast(id);
+    const res = await fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => null);
+    // Refused or unreachable: nothing was saved, so it stays unread in the panel.
+    if (!res?.ok) return;
+    setNotifications(prev => prev.map(n => (n.notification_id === id && !n.is_read ? { ...n, is_read: 1 } : n)));
+    setUnread(prev => Math.max(0, prev - 1));
+  }
+
+  return { loggedIn, notifications, unread, toasts, markAllRead, dismissToast, readToast };
 }

@@ -1,8 +1,9 @@
-import { rigState, runRigScript, SUPPLY_OFF, SUPPLY_ON } from '@/lib/rig';
+import { feed, RELAY_ALL, rigState, runRigScript, SUPPLY_OFF } from '@/lib/rig';
+import { relayOf } from '@/lib/instruments';
 
 // Who is in the lab room, and the power supply that follows from it. The
-// supply comes on when a student enters the room and goes off when the room is
-// empty. In between, a student in the room can switch it, and an admin can
+// supply comes on when a student enters the room, for the instrument they have
+// selected, and every relay goes off when the room is empty. In between, a student in the room can switch it, and an admin can
 // switch it either way from the admin page; a supply an admin switched off is
 // not a student's to switch back on.
 //
@@ -47,10 +48,15 @@ function watch(p: Presence) {
   p.timer.unref?.();
 }
 
-async function switchOn(): Promise<boolean> {
-  if (rigState().supply === true) return true;
+// The relay to switch on for the instrument a page has selected. A page that
+// did not say gets the relay of the circuit that is on, and failing that all
+// of them.
+export const relayFor = (instrument?: unknown): string =>
+  relayOf(instrument) ?? relayOf(rigState().circuit) ?? RELAY_ALL;
+
+async function switchOn(name: string): Promise<boolean> {
   try {
-    await runRigScript([SUPPLY_ON]);
+    await feed(name);
     return true;
   } catch (err) {
     console.error('[lab-presence] could not switch the supply on', err);
@@ -73,7 +79,7 @@ async function switchOff(): Promise<boolean> {
   }
   if (supply !== false) {
     try {
-      await runRigScript([SUPPLY_OFF]);
+      await runRigScript(SUPPLY_OFF);
     } catch (err) {
       console.error('[lab-presence] could not switch the supply off', err);
       ok = false;
@@ -89,19 +95,22 @@ async function offIfEmpty(p: Presence): Promise<void> {
 }
 
 /**
- * A student walked into the room: the supply comes on. `fresh` is false for a
+ * A student walked into the room: the supply comes on, for the instrument
+ * their page has selected. `fresh` is false for a
  * page that was already open and is only being heard from again (after a
  * restart, or a long silence); that does not undo an admin's switching off.
  * Resolves to whether the supply is on.
  */
-export async function enterRoom(uid: string, fresh = true): Promise<boolean> {
+export async function enterRoom(uid: string, fresh = true, instrument?: unknown): Promise<boolean> {
   const p = presence();
   p.seen.set(uid, Date.now());
   p.offDue = 0;
   watch(p);
   if (fresh) p.held = false;
   if (p.held) return rigState().supply === true;
-  return switchOn();
+  // A page only being heard from again leaves a supply that is on as it is.
+  if (!fresh && rigState().supply === true) return true;
+  return switchOn(relayFor(instrument));
 }
 
 /** The page is still open. */
@@ -134,14 +143,15 @@ export const isHeld = () => presence().held;
  * it off and it is not the student's to switch on; 'failed' when the relay did
  * not answer.
  */
-export async function studentSwitch(uid: string, on: boolean): Promise<'done' | 'held' | 'failed'> {
+export async function studentSwitch(uid: string, on: boolean, instrument?: unknown): Promise<'done' | 'held' | 'failed'> {
   const p = presence();
   p.seen.set(uid, Date.now());
   p.offDue = 0;
   watch(p);
   if (on && p.held) return 'held';
   try {
-    await runRigScript([on ? SUPPLY_ON : SUPPLY_OFF]);
+    if (on) await feed(relayFor(instrument));
+    else await runRigScript(SUPPLY_OFF);
     return 'done';
   } catch (err) {
     console.error(`[lab-presence] could not switch the supply ${on ? 'on' : 'off'}`, err);

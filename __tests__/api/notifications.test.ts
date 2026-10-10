@@ -144,3 +144,45 @@ describe('PATCH /api/notifications', () => {
     expect((await PATCH()).status).toBe(200);
   });
 });
+
+describe('PATCH /api/notifications with an id — one notification', () => {
+  const readOne = (id: unknown) => PATCH(new Request('http://localhost/api/notifications', { method: 'PATCH', body: JSON.stringify({ id }) }));
+
+  it('marks only that notification as read', async () => {
+    notification('a', 1);
+    notification('b', 2);
+    expect((await readOne('a')).status).toBe(200);
+    expect(read('notifications', 'a')?.is_read).toBe(true);
+    expect(read('notifications', 'b')?.is_read).toBe(false);
+  });
+
+  it('answers another user\'s notification as if it did not exist, and leaves it unread', async () => {
+    notification('theirs', 1, { user_id: 'student-2' });
+    expect((await readOne('theirs')).status).toBe(404);
+    expect(read('notifications', 'theirs')?.is_read).toBe(false);
+  });
+
+  it('answers 404 for a notification that does not exist', async () => {
+    expect((await readOne('nope')).status).toBe(404);
+  });
+
+  it.each([[5], [''], ['../x'], [null]])('answers 400 for the id %p and marks nothing', async (id) => {
+    notification('a', 1);
+    expect((await readOne(id)).status).toBe(400);
+    expect(read('notifications', 'a')?.is_read).toBe(false);
+  });
+
+  it('refuses a caller who is not signed in', async () => {
+    signOut();
+    notification('a', 1);
+    expect((await readOne('a')).status).toBe(401);
+    expect(read('notifications', 'a')?.is_read).toBe(false);
+  });
+
+  it('still marks everything when the request names no notification', async () => {
+    notification('a', 1);
+    notification('b', 2);
+    await PATCH(new Request('http://localhost/api/notifications', { method: 'PATCH', body: '{}' }));
+    expect([read('notifications', 'a')?.is_read, read('notifications', 'b')?.is_read]).toEqual([true, true]);
+  });
+});

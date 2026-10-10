@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 9 ตุลาคม 2569 เวลา 18:25
+- รันเมื่อ: 10 ตุลาคม 2569 เวลา 07:33
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1401 ข้อ ใน 46 ไฟล์ (ผ่าน 1401 ไม่ผ่าน 0)
-- เวลาที่ใช้: 10.4 วินาที
+- จำนวนเทสต์: 1639 ข้อ ใน 52 ไฟล์ (ผ่าน 1639 ไม่ผ่าน 0)
+- เวลาที่ใช้: 9.8 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -13,15 +13,16 @@
 
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
-| API ฝั่งเซิร์ฟเวอร์ | 17 | 548 | 548 | 0 |
-| หน้าเว็บและคอมโพเนนต์ | 12 | 444 | 444 | 0 |
-| ไลบรารีและตรรกะกลาง | 17 | 409 | 409 | 0 |
+| API ฝั่งเซิร์ฟเวอร์ | 19 | 669 | 669 | 0 |
+| หน้าเว็บและคอมโพเนนต์ | 15 | 514 | 514 | 0 |
+| ไลบรารีและตรรกะกลาง | 18 | 456 | 456 | 0 |
 
 ## สรุปตามไฟล์
 
 | ไฟล์ทดสอบ | ตรวจอะไร | เทสต์ | ผล |
 |---|---|---|---|
 | `api/active-session.test.ts` | การตรวจว่าผู้ใช้มีรอบกำลังดำเนินอยู่หรือรอบถัดไป | 19 | ผ่าน |
+| `api/admin-tests.test.ts` | API ที่ส่งผลการทดสอบให้หน้า admin: เฉพาะ admin เท่านั้น | 4 | ผ่าน |
 | `api/admin.test.ts` | API ของ admin: สิทธิ์ ภาพรวมการจอง การยกเลิกและสิ้นสุดรอบ การปิดช่วงเวลา การเปิดปิดแลป และแหล่งจ่ายไฟ | 80 | ผ่าน |
 | `api/auth.test.ts` | การสร้าง session จากการล็อกอิน Google การอ่านผู้ใช้ปัจจุบัน และการออกจากระบบ | 22 | ผ่าน |
 | `api/availability.test.ts` | ตารางช่องเวลาว่าง 7 วัน | 21 | ผ่าน |
@@ -29,40 +30,45 @@
 | `api/bookings.test.ts` | การจองรอบ: การตรวจข้อมูล การกันจองซ้อน และสิ่งที่ถูกบันทึก | 36 | ผ่าน |
 | `api/cam.test.ts` | พร็อกซีกล้อง: การส่งต่อไปยังกล้องที่ถูกต้อง และการกัน path ที่พยายามออกนอกที่อยู่ของกล้อง | 33 | ผ่าน |
 | `api/chat.test.ts` | API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ | 81 | ผ่าน |
-| `api/dashboard-history.test.ts` | ประวัติการใช้งาน: รายการที่นับเป็นประวัติ เวลาที่ใช้ และการแบ่งหน้า | 23 | ผ่าน |
+| `api/dashboard-history.test.ts` | ประวัติการใช้งาน: รายการที่นับเป็นประวัติ เวลาที่ใช้ และการแบ่งหน้า | 24 | ผ่าน |
 | `api/dashboard-stats.test.ts` | ตัวเลขสรุปและรอบที่จองไว้บน dashboard | 10 | ผ่าน |
 | `api/db-test.test.ts` | การตรวจการเชื่อมต่อฐานข้อมูล | 4 | ผ่าน |
 | `api/gaps.test.ts` | กรณีที่เหลือของ API ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม เช่น ฐานข้อมูลล้มเหลว | 24 | ผ่าน |
-| `api/hardware.test.ts` | API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว | 66 | ผ่าน |
-| `api/instruments.test.ts` | การเปิดปิดอุปกรณ์การทดลองโดย admin และผลต่อ API อุปกรณ์กับหน้าห้องแลป | 29 | ผ่าน |
-| `api/lab-presence.test.ts` |  | 29 | ผ่าน |
-| `api/notifications.test.ts` | รายการแจ้งเตือนและการทำเครื่องหมายว่าอ่านแล้ว | 15 | ผ่าน |
+| `api/hardware.test.ts` | API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว | 74 | ผ่าน |
+| `api/instruments.test.ts` | การเปิดปิดอุปกรณ์การทดลองโดย admin และผลต่อ API อุปกรณ์กับหน้าห้องแลป | 79 | ผ่าน |
+| `api/lab-presence.test.ts` |  | 38 | ผ่าน |
+| `api/lab-record.test.ts` | การเก็บบันทึกการทดลองลงฐานข้อมูลและเปิดดูย้อนหลัง: การตรวจข้อมูลทีละเหตุการณ์ สิทธิ์ของเจ้าของรอบและ admin ช่วงเวลาที่บันทึกได้ และการไม่ให้บันทึกที่สั้นกว่าทับของเดิม | 40 | ผ่าน |
+| `api/notifications.test.ts` | รายการแจ้งเตือนและการทำเครื่องหมายว่าอ่านแล้ว | 24 | ผ่าน |
 | `api/notify-upcoming.test.ts` | การแจ้งเตือนเมื่อถึงเวลาเข้าห้องแลปและก่อนเริ่ม 5 นาที โดยไม่ส่งซ้ำ | 23 | ผ่าน |
 | `auth-client.test.ts` | การล็อกอินด้วย Google ฝั่งเบราว์เซอร์ และข้อความ error ที่แสดงผู้ใช้ | 14 | ผ่าน |
 | `components/AdminPage.test.tsx` | หน้า admin: การกันสิทธิ์ ห้องแลปตอนนี้ ปุ่มอุปกรณ์ การเปิดปิดแลปและอุปกรณ์ การปิดช่วงเวลา และตารางการจอง | 117 | ผ่าน |
+| `components/AdminTestsPage.test.tsx` | หน้าผลการทดสอบของ admin: การกันสิทธิ์ ตัวเลขรวม หมวดหมู่ การค้นหา และการกรองรายการที่ไม่ผ่าน | 21 | ผ่าน |
 | `components/BookingCalendar.test.tsx` | ตารางจอง: สถานะช่องเวลา การจองและยกเลิก และข้อความผลลัพธ์ | 53 | ผ่าน |
+| `components/CurrentSettings.test.tsx` | ช่องตั้งค่ากระแสของแต่ละอุปกรณ์ในหน้า admin: การตรวจค่า การบันทึก และข้อความผลลัพธ์ | 15 | ผ่าน |
 | `components/DashboardNav.test.tsx` | แถบเมนูผู้ใช้: เมนู ลิงก์ผู้ดูแลระบบ และการออกจากระบบ | 21 | ผ่าน |
-| `components/EquipmentStatus.test.tsx` | ส่วนสถานะอุปกรณ์ในหน้า admin: ชุดทดลอง แหล่งจ่ายไฟ กล้อง และเซนเซอร์ | 53 | ผ่าน |
+| `components/EquipmentStatus.test.tsx` | ส่วนสถานะอุปกรณ์ในหน้า admin: ชุดทดลอง แหล่งจ่ายไฟ กล้อง และเซนเซอร์ | 62 | ผ่าน |
 | `components/FieldDiagram.test.tsx` | ภาพเส้นสนามในหน้าแรก | 31 | ผ่าน |
 | `components/FieldViz.test.tsx` | แบบจำลองสนามแม่เหล็กในห้องแลป: ภาพตัด 2D หัววัดกับลูกศรทฤษฎีและค่าวัด การสลับ 2D/3D และกรณีเครื่องไม่มี WebGL | 35 | ผ่าน |
-| `components/GlobalNotifications.test.tsx` | กระดิ่ง แผงแจ้งเตือน และ toast: การแสดง การปิด การหายเอง และ reduced motion | 41 | ผ่าน |
-| `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 50 | ผ่าน |
+| `components/GlobalNotifications.test.tsx` | กระดิ่ง แผงแจ้งเตือน และ toast: การแสดง การปิด การหายเอง และ reduced motion | 47 | ผ่าน |
+| `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 54 | ผ่าน |
 | `components/LoginPage.test.tsx` | หน้าเข้าสู่ระบบ | 10 | ผ่าน |
 | `components/PortraitGuard.test.tsx` | ข้อความให้หมุนจอเมื่อถือแนวตั้ง | 3 | ผ่าน |
+| `components/ReadinessCheck.test.tsx` | ปุ่มตรวจความพร้อมของเครื่องแลปในหน้า admin และรายการผลที่แสดง | 12 | ผ่าน |
 | `components/SlideIn.test.tsx` | แผงที่เลื่อนเข้าเมื่อปรากฏ | 5 | ผ่าน |
-| `components/useNotifications.test.tsx` | ตัวดึงการแจ้งเตือน: รอบการดึงทุก 30 วินาที การทำเครื่องหมายอ่าน และเมื่อคำขอล้มเหลว | 25 | ผ่าน |
+| `components/useNotifications.test.tsx` | ตัวดึงการแจ้งเตือน: รอบการดึงทุก 30 วินาที การทำเครื่องหมายอ่าน และเมื่อคำขอล้มเหลว | 28 | ผ่าน |
 | `field-geometry.test.ts` | การอ่านแบบจำลองสนามไปวาด: เส้นของแต่ละอุปกรณ์ ความสว่างตามขนาดสนาม หัวลูกศร จำนวนเส้นในมุมมอง 3D และกรอบภาพ | 91 | ผ่าน |
 | `field-lines.test.ts` | ข้อมูลเส้นสนามที่ใช้วาดภาพในหน้าแรก: สมมาตร ไม่ตัดกัน และได้สัดส่วนจริงของอุปกรณ์ | 36 | ผ่าน |
 | `field-model.test.ts` | ข้อมูลเส้นสนามของแบบจำลองในห้องแลป: ตรวจทิศและขนาดสนามกับกฎบีโอต์-ซาวาร์โดยตรง ความสมมาตร ระยะห่างของเส้นตามความเข้มสนาม และจำนวนเส้นตามจำนวนรอบ | 39 | ผ่าน |
-| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 43 | ผ่าน |
-| `lab-presence.test.ts` |  | 18 | ผ่าน |
+| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 48 | ผ่าน |
+| `lab-presence.test.ts` |  | 28 | ผ่าน |
+| `lab-readiness.test.ts` | การตรวจความพร้อมของเครื่องแลปจริง: ไฟล์สคริปต์ Python ไลบรารี ค่าจากเซนเซอร์ กล้อง ฐานข้อมูล และการไม่สั่งอุปกรณ์ทำงานระหว่างตรวจ | 22 | ผ่าน |
 | `lab-status.test.ts` | การตรวจว่ากล้องและเซนเซอร์ตอบสนองหรือไม่ และ API สถานะอุปกรณ์ของ admin | 12 | ผ่าน |
 | `lib-gaps.test.ts` | กรณีที่เหลือของโมดูลใน lib ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม | 16 | ผ่าน |
 | `math.test.tsx` | การแสดงสูตรคณิตศาสตร์ด้วย KaTeX ในแชตผู้ช่วย AI | 5 | ผ่าน |
 | `motion.test.ts` | ตัวช่วยแอนิเมชัน: ไม่ซ่อนเนื้อหาเมื่อผู้ใช้ตั้ง reduced motion หรือเนื้อหาอยู่บนจอแล้ว | 14 | ผ่าน |
 | `physics.test.ts` | สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 21 จุด | 20 | ผ่าน |
 | `rig-access.test.ts` | กติกาว่าใครสั่งอุปกรณ์ได้: รอบที่กำลังดำเนินอยู่ รอบที่เพิ่งจบ และกรณีที่ไม่มีสิทธิ์ | 27 | ผ่าน |
-| `rig.test.ts` | ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์ | 21 | ผ่าน |
+| `rig.test.ts` | ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์ | 31 | ผ่าน |
 | `safety.test.ts` | ตัวกันของชุดทดสอบเอง: เทสต์ต้องไม่ใช้ credential จริง และแตะ Firebase หรือเครือข่ายไม่ได้ถ้าไม่ได้จำลองไว้ | 3 | ผ่าน |
 | `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง | 30 | ผ่าน |
 | `session.test.ts` | การออกและตรวจ session cookie | 12 | ผ่าน |
@@ -103,6 +109,19 @@
 **GET /api/bookings/active-session — when Firestore fails**
 
 - ผ่าน — answers 500
+
+#### `api/admin-tests.test.ts`
+
+API ที่ส่งผลการทดสอบให้หน้า admin: เฉพาะ admin เท่านั้น
+
+ผล: ผ่านทั้ง 4 ข้อ
+
+**GET /api/admin/tests — the unit tests, for admins**
+
+- ผ่าน — answers 403 to someone who is not signed in, with nothing about the tests
+- ผ่าน — answers 403 to a student, with nothing about the tests
+- ผ่าน — gives an admin the last recorded run: its totals and every test by category
+- ผ่าน — files each test under what it is about
 
 #### `api/admin.test.ts`
 
@@ -197,8 +216,8 @@ API ของ admin: สิทธิ์ ภาพรวมการจอง ก
 - ผ่าน — answers 404 for a lab that does not exist, without creating it
 **POST /api/admin/rig/power**
 
-- ผ่าน — with on: true runs relay_on.py, whether or not anyone has a round
-- ผ่าน — with on: false runs relay_off.py, whether or not anyone has a round
+- ผ่าน — with on: true switches every relay on, whether or not anyone has a round
+- ผ่าน — with on: false switches every relay off, whether or not anyone has a round
 - ผ่าน — answers 400 for the body {"on":"true"} and runs nothing
 - ผ่าน — answers 400 for the body {"on":1} and runs nothing
 - ผ่าน — answers 400 for the body {} and runs nothing
@@ -525,13 +544,14 @@ API ผู้ช่วย AI: สิทธิ์ การกรองข้อ�
 
 ประวัติการใช้งาน: รายการที่นับเป็นประวัติ เวลาที่ใช้ และการแบ่งหน้า
 
-ผล: ผ่านทั้ง 23 ข้อ
+ผล: ผ่านทั้ง 24 ข้อ
 
 **GET /api/dashboard/history — what counts as history**
 
 - ผ่าน — refuses a caller who is not signed in
 - ผ่าน — returns an empty first page for a user without bookings
 - ผ่าน — describes a past round
+- ผ่าน — says which rounds have a record kept, so their summary can be opened
 - ผ่าน — lists completed and cancelled rounds, and any round whose slot is over
 - ผ่าน — leaves out a confirmed round that is running or still to come
 - ผ่าน — leaves out a pending round that is running or still to come
@@ -638,7 +658,7 @@ API ผู้ช่วย AI: สิทธิ์ การกรองข้อ�
 
 API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว
 
-ผล: ผ่านทั้ง 66 ข้อ
+ผล: ผ่านทั้ง 74 ข้อ
 
 **POST /api/hardware — who may command the rig**
 
@@ -662,11 +682,23 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 **POST /api/hardware — the accepted commands**
 
 - ผ่าน — reports whether the power supply was last switched on or off
+**POST /api/hardware — the accepted commands › the relay follows the instrument being started**
+
+- ผ่าน — moves a supply that is on to the instrument, before starting it
+- ผ่าน — leaves the relay alone when it already feeds that instrument
+- ผ่าน — leaves the relays alone when all of them are on
+- ผ่าน — does not switch on a supply that is false
+- ผ่าน — does not switch on a supply that is null
+- ผ่าน — does not touch the relay for a break script
+- ผ่าน — answers 500 and does not start the instrument when the relay cannot be moved
+**POST /api/hardware — the accepted commands**
+
+- ผ่าน — refuses relay.py: students do not switch the power supply
 - ผ่าน — refuses relay_on.py: students do not switch the power supply
 - ผ่าน — refuses relay_off.py: students do not switch the power supply
 - ผ่าน — refuses psu_on.py: a script is named, never given by path
-- ผ่าน — refuses /home/admin/Documents/relay_on.py: a script is named, never given by path
-- ผ่าน — refuses ../relay_on.py: a script is named, never given by path
+- ผ่าน — refuses /home/admin/Documents/relay.py: a script is named, never given by path
+- ผ่าน — refuses ../relay.py: a script is named, never given by path
 - ผ่าน — runs coil_1.py with the rig's Python, the script name as the only argument, in the script folder
 - ผ่าน — runs coil_2.py with the rig's Python, the script name as the only argument, in the script folder
 - ผ่าน — runs coil_3.py with the rig's Python, the script name as the only argument, in the script folder
@@ -719,7 +751,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 การเปิดปิดอุปกรณ์การทดลองโดย admin และผลต่อ API อุปกรณ์กับหน้าห้องแลป
 
-ผล: ผ่านทั้ง 29 ข้อ
+ผล: ผ่านทั้ง 79 ข้อ
 
 **cleanDisabled**
 
@@ -736,7 +768,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — refuses to close every instrument
 - ผ่าน — answers 400 for "coil_1.py" and changes nothing
 - ผ่าน — answers 400 for ["coil_1.py","coil_b.py"] and changes nothing
-- ผ่าน — answers 400 for ["relay_on.py"] and changes nothing
+- ผ่าน — answers 400 for ["relay.py"] and changes nothing
 - ผ่าน — answers 400 for [1] and changes nothing
 - ผ่าน — answers 400 for null and changes nothing
 - ผ่าน — answers 400 for undefined and changes nothing
@@ -756,16 +788,74 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — the lab room is told which instruments not to offer
 - ผ่าน — the admin page is told too
 - ผ่าน — the rig answers 500, and starts nothing, when Firestore cannot be read
+**the relay of each instrument**
+
+- ผ่าน — is the name relay.py knows its supply by
+- ผ่าน — is nothing for "coil_b.py"
+- ผ่าน — is nothing for "sole_b.py"
+- ผ่าน — is nothing for "relay.py"
+- ผ่าน — is nothing for "all"
+- ผ่าน — is nothing for null
+- ผ่าน — is nothing for undefined
+- ผ่าน — is nothing for 3
+**the current of each instrument**
+
+- ผ่าน — is 5 A for each single coil and 0.3 A for the solenoid until an admin sets another
+- ผ่าน — accepts 0.001 A
+- ผ่าน — accepts 0.3 A
+- ผ่าน — accepts 0.25 A
+- ผ่าน — accepts 4.999 A
+- ผ่าน — accepts 10 A
+- ผ่าน — refuses 0 as a current
+- ผ่าน — refuses -0.3 as a current
+- ผ่าน — refuses 10.001 as a current
+- ผ่าน — refuses 0.0005 as a current
+- ผ่าน — refuses 0.3001 as a current
+- ผ่าน — refuses NaN as a current
+- ผ่าน — refuses Infinity as a current
+- ผ่าน — refuses "0.3" as a current
+- ผ่าน — refuses null as a current
+- ผ่าน — refuses undefined as a current
+- ผ่าน — keeps usable values for known instruments and falls back to the default for the rest
+- ผ่าน — reads undefined as every default
+- ผ่าน — reads null as every default
+- ผ่าน — reads "sole.py" as every default
+- ผ่าน — reads [0.3] as every default
+- ผ่าน — reads 7 as every default
+**the current of each instrument › PATCH /api/admin/rig/currents**
+
+- ผ่าน — sets the current of the instruments named and leaves the others as they were
+- ผ่าน — records who changed it and when
+- ผ่าน — keeps the instruments an admin has closed, and closing keeps the currents
+- ผ่าน — answers 400 for the value in {"sole.py":0} and changes nothing
+- ผ่าน — answers 400 for the value in {"sole.py":-0.3} and changes nothing
+- ผ่าน — answers 400 for the value in {"sole.py":10.5} and changes nothing
+- ผ่าน — answers 400 for the value in {"sole.py":"0.3"} and changes nothing
+- ผ่าน — answers 400 for the value in {"sole.py":0.3001} and changes nothing
+- ผ่าน — answers 400 for the value in {"sole.py":null} and changes nothing
+- ผ่าน — answers 400 for the value in {"coil_1.py":5,"sole.py":0} and changes nothing
+- ผ่าน — answers 400 for {"coil_b.py":1}: only instruments have a current
+- ผ่าน — answers 400 for {"relay.py":1}: only instruments have a current
+- ผ่าน — answers 400 for {}: only instruments have a current
+- ผ่าน — answers 400 for [0.3]: only instruments have a current
+- ผ่าน — answers 400 for "sole.py": only instruments have a current
+- ผ่าน — answers 400 for null: only instruments have a current
+- ผ่าน — answers 400 for undefined: only instruments have a current
+- ผ่าน — is for admins only
+- ผ่าน — answers 500 without details when the database fails
+**the current of each instrument**
+
+- ผ่าน — reaches the lab room with the running round, and the admin page
 
 #### `api/lab-presence.test.ts`
 
-ผล: ผ่านทั้ง 29 ข้อ
+ผล: ผ่านทั้ง 38 ข้อ
 
 **POST /api/lab/presence**
 
 - ผ่าน — answers 401 to someone who is not signed in
 - ผ่าน — answers 400 for the action "toggle"
-- ผ่าน — answers 400 for the action "relay_on.py"
+- ผ่าน — answers 400 for the action "relay.py --status on --name all"
 - ผ่าน — answers 400 for the action ""
 - ผ่าน — answers 400 for the action null
 - ผ่าน — answers 400 for the action 1
@@ -781,6 +871,17 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — a page heard from for the first time by "stay" is let in and the supply comes on
 - ผ่าน — after an admin switches off, staying reports the supply off and does not switch it back on
 - ผ่าน — after an admin switches off, walking in anew switches the supply on again
+**POST /api/lab/presence — the instrument selected on the page**
+
+- ผ่าน — entering switches on the relay of that instrument
+- ผ่าน — the student's switch switches on the relay of the instrument now selected
+- ผ่าน — takes the instrument "coil_b.py" as not said: nothing from the request reaches the command
+- ผ่าน — takes the instrument "relay.py" as not said: nothing from the request reaches the command
+- ผ่าน — takes the instrument "../sole.py" as not said: nothing from the request reaches the command
+- ผ่าน — takes the instrument "all" as not said: nothing from the request reaches the command
+- ผ่าน — takes the instrument 7 as not said: nothing from the request reaches the command
+- ผ่าน — takes the instrument {"script":"sole.py"} as not said: nothing from the request reaches the command
+- ผ่าน — an admin switching on feeds the instrument whose circuit is on
 **POST /api/lab/presence — the student's own switch**
 
 - ผ่าน — switches the supply off and on again during the round
@@ -795,11 +896,64 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — answers 500 without the script's output when the relay does not answer
 - ผ่าน — the supply a student switched on still goes off when they leave
 
+#### `api/lab-record.test.ts`
+
+การเก็บบันทึกการทดลองลงฐานข้อมูลและเปิดดูย้อนหลัง: การตรวจข้อมูลทีละเหตุการณ์ สิทธิ์ของเจ้าของรอบและ admin ช่วงเวลาที่บันทึกได้ และการไม่ให้บันทึกที่สั้นกว่าทับของเดิม
+
+ผล: ผ่านทั้ง 40 ข้อ
+
+**cleanEvents — a record fit to store**
+
+- ผ่าน — keeps a visit's events as they are
+- ผ่าน — drops anything an event does not have
+- ผ่าน — cuts an over-long name or detail
+- ผ่าน — refuses not a list
+- ผ่าน — refuses an empty list
+- ผ่าน — refuses an event of no known kind
+- ผ่าน — refuses an event with no time
+- ผ่าน — refuses a time that is not a number
+- ผ่าน — refuses a field of the wrong type
+- ผ่าน — refuses a measurement that is not a number
+- ผ่าน — refuses a result that is not yes or no
+- ผ่าน — refuses one bad event among good ones
+- ผ่าน — refuses more events than any visit makes
+**POST /api/lab/record — keeping a visit**
+
+- ผ่าน — answers 401 to someone who is not signed in
+- ผ่าน — keeps the record under the booking, and marks the booking as having one
+- ผ่าน — stores only what an event has, whatever else was sent with it
+- ผ่าน — answers 400 for no booking named
+- ผ่าน — answers 400 for a booking named by a path
+- ผ่าน — answers 400 for no events
+- ผ่าน — answers 400 for events that are not events
+- ผ่าน — answers 400 for nothing at all
+- ผ่าน — answers 404 for a booking that does not exist
+- ผ่าน — does not let one student write the record of another's round
+- ผ่าน — refuses a round that has not started
+- ผ่าน — refuses a round that ended more than an hour ago
+- ผ่าน — refuses a cancelled round
+- ผ่าน — still keeps the record of a round that was marked complete a moment ago
+- ผ่าน — still keeps it shortly after the round's time ran out
+- ผ่าน — replaces an earlier save with a later, longer one
+- ผ่าน — does not let a shorter save, arriving late, replace a fuller one
+- ผ่าน — answers 500 without the database's own words when it cannot be reached
+**GET /api/lab/record — opening a visit again**
+
+- ผ่าน — gives the owner the events and the name of the experiment
+- ผ่าน — answers 401 to someone who is not signed in
+- ผ่าน — answers another student as if there were no record
+- ผ่าน — lets an admin open any student's record
+- ผ่าน — answers 404 for a round with no record
+- ผ่าน — answers 400 when the booking is given as null
+- ผ่าน — answers 400 when the booking is given as "../x"
+- ผ่าน — answers 400 when the booking is given as ""
+- ผ่าน — answers 500 without the database's own words when it cannot be reached
+
 #### `api/notifications.test.ts`
 
 รายการแจ้งเตือนและการทำเครื่องหมายว่าอ่านแล้ว
 
-ผล: ผ่านทั้ง 15 ข้อ
+ผล: ผ่านทั้ง 24 ข้อ
 
 **GET /api/notifications**
 
@@ -820,6 +974,17 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — leaves other users' notifications unread
 - ผ่าน — changes nothing but the read flag
 - ผ่าน — succeeds when there is nothing to mark
+**PATCH /api/notifications with an id — one notification**
+
+- ผ่าน — marks only that notification as read
+- ผ่าน — answers another user's notification as if it did not exist, and leaves it unread
+- ผ่าน — answers 404 for a notification that does not exist
+- ผ่าน — answers 400 for the id 5 and marks nothing
+- ผ่าน — answers 400 for the id "" and marks nothing
+- ผ่าน — answers 400 for the id "../x" and marks nothing
+- ผ่าน — answers 400 for the id null and marks nothing
+- ผ่าน — refuses a caller who is not signed in
+- ผ่าน — still marks everything when the request names no notification
 
 #### `api/notify-upcoming.test.ts`
 
@@ -1007,6 +1172,46 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — animates nothing when the admin asked for reduced motion
 - ผ่าน — leaves the heading readable and the panels visible without the animation
 
+#### `components/AdminTestsPage.test.tsx`
+
+หน้าผลการทดสอบของ admin: การกันสิทธิ์ ตัวเลขรวม หมวดหมู่ การค้นหา และการกรองรายการที่ไม่ผ่าน
+
+ผล: ผ่านทั้ง 21 ข้อ
+
+**AdminTestsPage — who may see it**
+
+- ผ่าน — sends someone who is not signed in to the login page, and asks for no tests
+- ผ่าน — tells a student the page is for admins, and asks for no tests
+- ผ่าน — says so when the tests cannot be loaded, with a way back
+**AdminTestsPage — the run**
+
+- ผ่าน — shows the totals, when the tests were run and that some did not pass
+- ผ่าน — says every test passed when none failed
+- ผ่าน — says the page shows a recorded run and runs nothing itself
+**AdminTestsPage — by category**
+
+- ผ่าน — summarises each category: its tests, its files, and how many failed
+- ผ่าน — lists every file under its category, with what it checks, its layer, count and time
+- ผ่าน — opens a file with a failure in it from the start, and leaves the others closed
+- ผ่าน — shows a failed test with why it failed
+- ผ่าน — shows a group twice when the file comes back to it, without mixing the two up
+- ผ่าน — opens a file to its tests, grouped as the file groups them, and closes it again
+**AdminTestsPage — finding a test**
+
+- ผ่าน — keeps only the tests that match what is typed, laid open, and says how many
+- ผ่าน — matches a file's name and what it checks as well as a test's own words
+- ผ่าน — says nothing was found for words no test has
+- ผ่าน — shows only the tests that failed when asked to
+- ผ่าน — says there are none when asked for failures and every test passed
+**AdminTestsPage — a file that could not be run**
+
+- ผ่าน — counts as a failure, starts open and shows what stopped it
+- ผ่าน — stays in the list when only failures are shown
+**AdminTestsPage — motion**
+
+- ผ่าน — brings the page in, counts the totals up and fills the bars
+- ผ่าน — keeps everything still for someone who asked for reduced motion
+
 #### `components/BookingCalendar.test.tsx`
 
 ตารางจอง: สถานะช่องเวลา การจองและยกเลิก และข้อความผลลัพธ์
@@ -1085,6 +1290,30 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — skips the ripple when motion is reduced
 - ผ่าน — starts no scroll animation when the page turns it off
 
+#### `components/CurrentSettings.test.tsx`
+
+ช่องตั้งค่ากระแสของแต่ละอุปกรณ์ในหน้า admin: การตรวจค่า การบันทึก และข้อความผลลัพธ์
+
+ผล: ผ่านทั้ง 15 ข้อ
+
+**CurrentSettings**
+
+- ผ่าน — shows the current of every instrument, in amperes
+- ผ่าน — says that the supply itself is set by hand
+- ผ่าน — has nothing to save until a value is changed
+- ผ่าน — sends only the values that were changed
+- ผ่าน — sends several changed values together
+- ผ่าน — shows what is stored again once it has been saved
+- ผ่าน — does not save "0", and says what a current may be
+- ผ่าน — does not save "-1", and says what a current may be
+- ผ่าน — does not save "10.5", and says what a current may be
+- ผ่าน — does not save "0.3001", and says what a current may be
+- ผ่าน — does not save "", and says what a current may be
+- ผ่าน — keeps what was typed and gives the server's reason when saving is refused
+- ผ่าน — says so when the server cannot be reached
+- ผ่าน — settles the saved fields into place, and only those
+- ผ่าน — keeps everything still for someone who asked for reduced motion
+
 #### `components/DashboardNav.test.tsx`
 
 แถบเมนูผู้ใช้: เมนู ลิงก์ผู้ดูแลระบบ และการออกจากระบบ
@@ -1123,7 +1352,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 ส่วนสถานะอุปกรณ์ในหน้า admin: ชุดทดลอง แหล่งจ่ายไฟ กล้อง และเซนเซอร์
 
-ผล: ผ่านทั้ง 53 ข้อ
+ผล: ผ่านทั้ง 62 ข้อ
 
 **EquipmentStatus › before the first answer**
 
@@ -1151,6 +1380,13 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — says whether the supply is on: true
 - ผ่าน — says whether the supply is on: false
 - ผ่าน — says whether the supply is on: null
+- ผ่าน — says which relay is on: solenoid
+- ผ่าน — says which relay is on: coil1
+- ผ่าน — says which relay is on: coil2
+- ผ่าน — says which relay is on: coil3
+- ผ่าน — says which relay is on: all
+- ผ่าน — says which relay is on: psu9
+- ผ่าน — names no relay once the supply is off
 - ผ่าน — makes the supply being on look different from it being off
 - ผ่าน — names the last command, says it succeeded and when, in Bangkok time
 - ผ่าน — says so when the last command failed, and makes it look different from a success
@@ -1192,6 +1428,10 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — runs current round the circuit that is on, and round nothing when none is
 - ผ่าน — glides the probe marker 4 px along its track for every cm
 - ผ่าน — animates nothing when the visitor asked for reduced motion, and puts the probe marker straight in place
+**EquipmentStatus — asked to read again**
+
+- ผ่าน — reads the status again at once when the page says a command was sent, without waiting for the next round
+- ผ่าน — keeps reading every ten seconds after that, one round at a time
 
 #### `components/FieldDiagram.test.tsx`
 
@@ -1295,7 +1535,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 กระดิ่ง แผงแจ้งเตือน และ toast: การแสดง การปิด การหายเอง และ reduced motion
 
-ผล: ผ่านทั้ง 41 ข้อ
+ผล: ผ่านทั้ง 47 ข้อ
 
 **GlobalNotifications › where it appears**
 
@@ -1314,7 +1554,9 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — closes when the bell is clicked again
 - ผ่าน — closes when the page behind it is clicked
 - ผ่าน — lists every notification in the order the server sent them
-- ผ่าน — marks everything as read on the server and clears the count
+- ผ่าน — marks everything as read on the server and clears the count, just by being opened
+- ผ่าน — keeps what was unread picked out while the panel stays open, and shows it as read the next time
+- ผ่าน — asks the server for nothing when it is opened with nothing unread
 **GlobalNotifications › the panel, continued**
 
 - ผ่าน — closes on Escape
@@ -1326,6 +1568,8 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — shows one at a time, newest first, and says how many are waiting
 - ผ่าน — says nothing about waiting ones when it is the only one
 - ผ่าน — links to the lab when the notification carries a link, and has no link otherwise
+- ผ่าน — marks that one notification as read when its close button is clicked, and leaves the others unread
+- ผ่าน — does not mark a toast as read when it only goes away by itself
 - ผ่าน — gives way to the next one when its close button is clicked
 - ผ่าน — goes away by itself after 20 seconds: a plain one
 - ผ่าน — goes away by itself after 20 seconds: one with a link to the lab
@@ -1351,7 +1595,9 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — shows each notification's title, message and age
 - ผ่าน — makes unread notifications look different from read ones
 - ผ่าน — links to the lab only from notifications that carry a link
-- ผ่าน — shows the unread count and a mark-all-read button that calls back
+- ผ่าน — calls back to mark everything read as soon as it is shown with something unread
+- ผ่าน — does not call back when nothing is unread
+- ผ่าน — shows the unread count and a mark-all-read button, for when marking them read did not go through
 - ผ่าน — caps the unread count at 9+
 - ผ่าน — offers no mark-all-read button and no count when nothing is unread
 - ผ่าน — still shows a notification whose type it does not know
@@ -1361,7 +1607,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV
 
-ผล: ผ่านทั้ง 50 ข้อ
+ผล: ผ่านทั้ง 54 ข้อ
 
 **LabSummary › the heading**
 
@@ -1402,17 +1648,21 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 - ผ่าน — hands the browser nothing until the button is clicked
 - ผ่าน — starts with a byte-order mark so a spreadsheet reads the Thai text as UTF-8
-- ผ่าน — holds a header and one row for every event of the visit
+- ผ่าน — opens with the table of recorded values, one row per reading
+- ผ่าน — then holds a header and one row for every event of the visit
 - ผ่าน — names the file after the date and time the visit started
 - ผ่าน — pads single-digit months, days, hours and minutes in the file name
 - ผ่าน — points the download at the file it made and releases it afterwards
 - ผ่าน — makes a fresh file each time the button is clicked
-- ผ่าน — gives a visit with no events a header-only file named after the present moment
+- ผ่าน — gives a visit with no events a file of headings only, named after the present moment
 - ผ่าน — does not leave the page
 **LabSummary › the leave button**
 
 - ผ่าน — calls back once when clicked
-- ผ่าน — comes with a warning that the record is not kept
+- ผ่าน — says the record is kept and can be opened again, for a summary opened from history
+- ผ่าน — says the record is being kept while it is
+- ผ่าน — says so once it has been kept
+- ผ่าน — warns when it could not be kept, and offers to try again
 **LabSummary › motion**
 
 - ผ่าน — brings the sections and the rows in when the summary appears
@@ -1463,6 +1713,27 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — draws one device outline and keeps the shape it turns into out of sight
 - ผ่าน — turns the visible outline into the hidden one and back, over and over
 
+#### `components/ReadinessCheck.test.tsx`
+
+ปุ่มตรวจความพร้อมของเครื่องแลปในหน้า admin และรายการผลที่แสดง
+
+ผล: ผ่านทั้ง 12 ข้อ
+
+**ReadinessCheck**
+
+- ผ่าน — checks nothing until the button is pressed
+- ผ่าน — asks the server to check when the button is pressed
+- ผ่าน — says the machine is ready and when that was checked
+- ผ่าน — lists each thing checked under its group, with what was found
+- ผ่าน — marks what could not be checked as not checked, neither ready nor not
+- ผ่าน — says how many things need fixing, and which, when the machine is not ready
+- ผ่าน — cannot be pressed again while a check is running
+- ผ่าน — replaces the last result with the new one when checked again
+- ผ่าน — says so when the check itself fails, with the server's reason
+- ผ่าน — says so when the server cannot be reached
+- ผ่าน — brings the lines of a result in one after another
+- ผ่าน — keeps everything still for someone who asked for reduced motion
+
 #### `components/SlideIn.test.tsx`
 
 แผงที่เลื่อนเข้าเมื่อปรากฏ
@@ -1481,7 +1752,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 ตัวดึงการแจ้งเตือน: รอบการดึงทุก 30 วินาที การทำเครื่องหมายอ่าน และเมื่อคำขอล้มเหลว
 
-ผล: ผ่านทั้ง 25 ข้อ
+ผล: ผ่านทั้ง 28 ข้อ
 
 **formatRelative**
 
@@ -1507,6 +1778,9 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — never stacks more than five toasts
 - ผ่าน — refreshes at once when a booking is made, without waiting for the next poll
 - ผ่าน — stops polling and listening once unmounted
+- ผ่าน — marks one notification as read when its toast is closed by hand
+- ผ่าน — takes the toast away but leaves the notification unread when the server refuses
+- ผ่าน — leaves a toast that is only dismissed unread
 - ผ่าน — marks everything as read on the server and on screen
 - ผ่าน — leaves the notifications unread when marking as read cannot reach the server
 - ผ่าน — leaves the notifications unread when the server refuses to mark them as read
@@ -1783,7 +2057,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV
 
-ผล: ผ่านทั้ง 43 ข้อ
+ผล: ผ่านทั้ง 48 ข้อ
 
 **summarise — the figures at the top of the summary**
 
@@ -1844,16 +2118,35 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — does not count a Set 0 that failed, and keeps the zero that was in force
 - ผ่าน — is not one of the readings, and not a rig command
 - ผ่าน — is written to the CSV with the new zero, or as not set
+**readingsCsv and visitCsv — the table of recorded values in the download**
+
+- ผ่าน — writes one row per reading, as the summary's table shows them
+- ผ่าน — keeps only the latest value of a position measured twice
+- ผ่าน — is only the header when nothing was recorded
+- ผ่าน — puts the readings first and the timeline after, each under its heading
+- ผ่าน — knows every kind of event
 
 #### `lab-presence.test.ts`
 
-ผล: ผ่านทั้ง 18 ข้อ
+ผล: ผ่านทั้ง 28 ข้อ
 
 **entering the lab room**
 
 - ผ่าน — switches the power supply on
 - ผ่าน — does not run the script again when the supply is already on
 - ผ่าน — says the supply is not on when the relay does not answer, and still counts the student as in
+**the relay of the instrument in use**
+
+- ผ่าน — entering with coil_1.py selected switches on the relay coil1, after switching every relay off
+- ผ่าน — entering with coil_2.py selected switches on the relay coil2, after switching every relay off
+- ผ่าน — entering with coil_3.py selected switches on the relay coil3, after switching every relay off
+- ผ่าน — entering with sole.py selected switches on the relay solenoid, after switching every relay off
+- ผ่าน — does not switch everything off first when the supply is known to be off
+- ผ่าน — switches every relay on for a page that names no instrument, or one that is not an instrument
+- ผ่าน — takes the relay of the circuit that is on when the page names none
+- ผ่าน — the student's own switch feeds the instrument selected, and switches every relay off
+- ผ่าน — a page only heard from again leaves the relay that is on as it is
+- ผ่าน — says the supply is not on when the relay answers for off but not for on
 **leaving the lab room**
 
 - ผ่าน — switches the supply off when that leaves the room empty
@@ -1875,6 +2168,47 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — off: the next student to walk in switches it on again
 - ผ่าน — on, with nobody in the room: it is left on
 - ผ่าน — on: a page heard from again is no longer held off
+
+#### `lab-readiness.test.ts`
+
+การตรวจความพร้อมของเครื่องแลปจริง: ไฟล์สคริปต์ Python ไลบรารี ค่าจากเซนเซอร์ กล้อง ฐานข้อมูล และการไม่สั่งอุปกรณ์ทำงานระหว่างตรวจ
+
+ผล: ผ่านทั้ง 22 ข้อ
+
+**checkReadiness — a lab machine with everything in place**
+
+- ผ่าน — is ready, with every check passed
+- ผ่าน — checks the folder, Python, every script the web app can run, the sensor, three cameras and the database
+- ผ่าน — says which Python it found and what the sensor read
+**checkReadiness — it never runs the rig**
+
+- ผ่าน — starts Python only to ask its version and to read the scripts, never to run one
+**checkReadiness — what can be wrong with the rig**
+
+- ผ่าน — names a script that is missing, and is not ready
+- ผ่าน — names every missing script when several are
+- ผ่าน — says which library a script needs that the venv does not have
+- ผ่าน — says so when Python cannot read a script
+- ผ่าน — says where it looked when the scripts folder is not there
+- ผ่าน — says where it looked for Python when it is not there, and leaves the scripts it has as not fully checked
+- ผ่าน — says so when Python is there but will not start
+- ผ่าน — leaves the scripts as not checked, not as failed, when reading them could not be done
+**checkReadiness — the sensor**
+
+- ผ่าน — asks the sensor service at its own address
+- ผ่าน — is not ready when the service cannot be reached
+- ผ่าน — is not ready when the service answers but sends no reading: an open port is not a working sensor
+- ผ่าน — says it could not check, rather than guess, on a Node without WebSocket
+**checkReadiness — cameras and the database**
+
+- ผ่าน — is not ready when a camera does not answer, and names it
+- ผ่าน — is not ready when the database cannot be read, without the database's own words
+- ผ่าน — is not ready when the database answers but holds no lab
+**POST /api/admin/readiness**
+
+- ผ่าน — answers 403 to a student and checks nothing
+- ผ่าน — answers 403 to someone who is not signed in
+- ผ่าน — gives an admin the result
 
 #### `lab-status.test.ts`
 
@@ -1999,7 +2333,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — approaches the long-solenoid value μ₀(N/L)I when the solenoid is long
 **the solenoid on the rig and its probe positions**
 
-- ผ่าน — is 8 cm long with 100 turns, 42 mm across, at 0.5 A
+- ผ่าน — is 8 cm long with 100 turns, 42 mm across, at 0.3 A
 - ผ่าน — has 21 positions, from -10 to 10
 - ผ่าน — steps 1 cm at a time from the middle of the solenoid, so the ends are at 10 cm
 - ผ่าน — gives the field worked by hand at the centre and at the last position
@@ -2064,7 +2398,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์
 
-ผล: ผ่านทั้ง 21 ข้อ
+ผล: ผ่านทั้ง 31 ข้อ
 
 **runRigScript**
 
@@ -2074,7 +2408,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — uses the lab machine's own layout when nothing is set
 - ผ่าน — takes the folder from RIG_SCRIPT_DIR, and the Python from the venv inside it
 - ผ่าน — takes the Python from RIG_PYTHON when that is set
-- ผ่าน — runs the relay scripts from that same folder
+- ผ่าน — runs the relay script from that same folder
 - ผ่าน — runs the scripts from the folder and with the Python that were set
 **cutAllCircuits**
 
@@ -2089,12 +2423,24 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — clears a circuit when its own break script runs, not the other one's
 - ผ่าน — is cleared by cutting both circuits
 - ผ่าน — records the power supply being switched on and off, leaving the circuit as it was
+- ผ่าน — builds the relay command as relay.py --status on|off --name <relay>
+- ผ่าน — records which relay is on
+- ผ่าน — counts every instrument as fed while all the relays are on
+- ผ่าน — keeps the supply on when a relay other than the one that is on is switched off
 - ผ่าน — does not count the supply as switched when the script fails
 - ผ่าน — keeps what was on when a command fails, and records the failure
 - ผ่าน — keeps why a command failed: the end of the script's output, with its exit code
 - ผ่าน — keeps why a command could not be started at all
 - ผ่าน — keeps no reason after a command that worked
 - ผ่าน — is busy while a script is running
+**feed — the supply moved to one instrument**
+
+- ผ่าน — switches every relay off first when it is not known what is on
+- ผ่าน — moves from one instrument to another by switching everything off in between
+- ผ่าน — runs nothing when that relay is already on
+- ผ่าน — switches on only, when the supply is known to be off
+- ผ่าน — switches every relay on in one command
+- ผ่าน — does not switch on when switching off failed
 
 #### `safety.test.ts`
 
