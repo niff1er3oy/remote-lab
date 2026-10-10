@@ -11,7 +11,7 @@ import { cleanCurrents, DEFAULT_CURRENTS, type Currents } from '@/lib/instrument
 import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
 import { prefersReducedMotion, press } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
-import { clockTime, describeEvent, positionsOf, type EndReason, type LabEvent } from '@/lib/lab-activity';
+import { clockTime, describeEvent, positionsOf, readingsOf, type EndReason, type LabEvent, type LabReading } from '@/lib/lab-activity';
 import { createSaveQueue, fitToSave, MAX_EVENTS } from '@/lib/lab-record';
 import { aboveBackground, createAverager, fieldFromSensor } from '@/lib/sensor';
 import { FieldViz } from './FieldViz';
@@ -1037,6 +1037,18 @@ export default function RemoteLabPage() {
   // No value from the sensor is shown as 0, never as the theory value: the two
   // would then agree exactly when nothing was measured at all.
   const bMeasured = realSensorValue ?? 0;
+  // What the assistant is told with each question: the readings on screen and
+  // the state of the room, so that it can say why a value is what it is.
+  const chatReadings: ChatReadings = {
+    inst, I, bTheory, bMeasured, z, background,
+    supply: supplyHeld ? 'held' : supplyOn === true ? 'on' : supplyOn === false ? 'off' : undefined,
+    busy: isRunning,
+    sensor: realSensorValue !== null,
+    rezeroed: events.filter(e => e.kind === 'zero' && e.ok).length,
+    error: rigError?.text,
+    endTime: access.end_time,
+    recorded: readingsOf(events),
+  };
   // The theory field at the middle of the winding: the field model draws the
   // probe's two arrows against it.
   const bPeak = inst.type === 'coil' ? bTheory : calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
@@ -1144,7 +1156,7 @@ export default function RemoteLabPage() {
         >
           <RightTabs
             chat={chat}
-            readings={{ inst, I, bTheory, bMeasured, z, background }}
+            readings={chatReadings}
             events={events}
           />
         </div>
@@ -1224,7 +1236,7 @@ export default function RemoteLabPage() {
             <div className="h-full flex flex-col">
               <RightTabs
                 chat={chat}
-            readings={{ inst, I, bTheory, bMeasured, z, background }}
+            readings={chatReadings}
                 events={events}
               />
             </div>
@@ -2333,6 +2345,15 @@ type ChatReadings = {
   z: number;
   /** The background taken off bMeasured; null when it could not be read, undefined before it was tried. */
   background: number | null | undefined;
+  /** The state of the room, for the assistant to answer from. */
+  supply: 'on' | 'off' | 'held' | undefined;
+  busy: boolean;
+  sensor: boolean;
+  rezeroed: number;
+  error: string | undefined;
+  /** When the round ends, ISO; the minutes left are worked out when a question is sent. */
+  endTime: string;
+  recorded: LabReading[];
 };
 
 // The conversation with the AI assistant. It lives in the page, above the two
@@ -2342,7 +2363,7 @@ function useChat(onAsk: (question: string) => void) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [streaming, setStreaming] = useState(false);
 
-  async function send(text: string, { inst, I, bTheory, bMeasured, z, background }: ChatReadings) {
+  async function send(text: string, { inst, I, bTheory, bMeasured, z, background, supply, busy, sensor, rezeroed, error, endTime, recorded }: ChatReadings) {
     if (!text.trim() || streaming) return;
     onAsk(text.trim());
     const userMsg: ChatMsg = { id: ++_cid, role: 'user', content: text.trim() };
@@ -2367,6 +2388,9 @@ function useChat(onAsk: (question: string) => void) {
             I, bTheory, bMeasured,
             z: inst.type === 'solenoid' ? z : undefined,
             background,
+            supply, busy, sensor, rezeroed, error,
+            minutesLeft: Math.max(0, Math.round((Date.parse(endTime) - Date.now()) / 60_000)),
+            recorded,
           },
         }),
       });

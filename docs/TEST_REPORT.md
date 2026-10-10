@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 10 ตุลาคม 2569 เวลา 14:10
+- รันเมื่อ: 10 ตุลาคม 2569 เวลา 14:27
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1701 ข้อ ใน 52 ไฟล์ (ผ่าน 1701 ไม่ผ่าน 0)
-- เวลาที่ใช้: 17.5 วินาที
+- จำนวนเทสต์: 1721 ข้อ ใน 52 ไฟล์ (ผ่าน 1721 ไม่ผ่าน 0)
+- เวลาที่ใช้: 16.3 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -13,7 +13,7 @@
 
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
-| API ฝั่งเซิร์ฟเวอร์ | 19 | 709 | 709 | 0 |
+| API ฝั่งเซิร์ฟเวอร์ | 19 | 729 | 729 | 0 |
 | หน้าเว็บและคอมโพเนนต์ | 15 | 520 | 520 | 0 |
 | ไลบรารีและตรรกะกลาง | 18 | 472 | 472 | 0 |
 
@@ -29,7 +29,7 @@
 | `api/bookings-id.test.ts` | การเริ่ม จบ และยกเลิกการจองของตัวเอง | 33 | ผ่าน |
 | `api/bookings.test.ts` | การจองรอบ: การตรวจข้อมูล การกันจองซ้อน และสิ่งที่ถูกบันทึก | 54 | ผ่าน |
 | `api/cam.test.ts` | พร็อกซีกล้อง: การส่งต่อไปยังกล้องที่ถูกต้อง และการกัน path ที่พยายามออกนอกที่อยู่ของกล้อง | 33 | ผ่าน |
-| `api/chat.test.ts` | API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ | 81 | ผ่าน |
+| `api/chat.test.ts` | API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ | 101 | ผ่าน |
 | `api/dashboard-history.test.ts` | ประวัติการใช้งาน: รายการที่นับเป็นประวัติ เวลาที่ใช้ และการแบ่งหน้า | 24 | ผ่าน |
 | `api/dashboard-stats.test.ts` | ตัวเลขสรุปและรอบที่จองไว้บน dashboard | 10 | ผ่าน |
 | `api/db-test.test.ts` | การตรวจการเชื่อมต่อฐานข้อมูล | 4 | ผ่าน |
@@ -472,7 +472,7 @@ API ของ admin: สิทธิ์ ภาพรวมการจอง ก
 
 API ผู้ช่วย AI: สิทธิ์ การกรองข้อความ ข้อมูลที่ส่งให้โมเดล และการจัดการ error จากผู้ให้บริการ
 
-ผล: ผ่านทั้ง 81 ข้อ
+ผล: ผ่านทั้ง 101 ข้อ
 
 **POST /api/chat — who may use the assistant**
 
@@ -565,6 +565,28 @@ API ผู้ช่วย AI: สิทธิ์ การกรองข้อ�
 - ผ่าน — answers 502 with its own message when Typhoon rejects the request
 - ผ่าน — answers 429 with its own message when Typhoon is rate limiting
 - ผ่าน — answers 502 with its own message when Typhoon cannot be reached
+**POST /api/chat — the state of the lab room**
+
+- ผ่าน — tells the tutor to answer in at most 100 words, and to use the state of the room
+- ผ่าน — gives the single coils' radius and says how the measured value is obtained
+- ผ่าน — passes the supply, the sensor, Set 0, the failed command and the time left on
+- ผ่าน — says the supply is off
+- ผ่าน — says the supply is held
+- ผ่าน — says the measured 0 is no measurement when the sensor is silent
+- ผ่าน — says the rig is busy while a command runs
+- ผ่าน — lists the values recorded so far, a reading without a signal as such
+- ผ่าน — says nothing has been recorded yet when that is so
+- ผ่าน — gives the current to the milliampere, without trailing zeros
+- ผ่าน — leaves out the whole state block when the page sends none of it
+- ผ่าน — ignores a supply that is not one of the three
+- ผ่าน — ignores a flag that is not a boolean
+- ผ่าน — ignores a count that is not a whole number in range
+- ผ่าน — ignores a count beyond the limit
+- ผ่าน — ignores an error that is not text
+- ผ่าน — puts an error on one line and cuts it short
+- ผ่าน — keeps at most the last 30 recorded values
+- ผ่าน — drops recorded rows that are not readings, and cuts a long instrument name to one short line
+- ผ่าน — takes recorded values that are not a list as none
 
 #### `api/dashboard-history.test.ts`
 

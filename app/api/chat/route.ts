@@ -8,9 +8,15 @@ const TYPHOON_API = 'https://api.opentyphoon.ai/v1/chat/completions';
 // size of a request must not be up to the caller.
 const MAX_TURNS = 20;
 const MAX_TURN_CHARS = 4000;
-// Long enough for a worked calculation in Thai. The page tells the student
+// The tutor is told to answer in at most 100 words; this is the backstop, with
+// room for the formulas, which take many tokens. The page tells the student
 // when an answer still runs into this limit.
-const MAX_ANSWER_TOKENS = 1536;
+const MAX_ANSWER_TOKENS = 600;
+// The state of the lab room that comes with a question is bounded like the
+// conversation is: so many recorded values, an error line so long.
+const MAX_RECORDED = 30;
+const MAX_ERROR_CHARS = 160;
+const MAX_MINUTES_LEFT = 600;
 const UPSTREAM_TIMEOUT_MS = 60_000;
 
 interface ChatContext {
@@ -23,7 +29,23 @@ interface ChatContext {
   bTheory: number;
   bMeasured: number;
   z?: number;
+  /** The power supply: on, off, or held off by an admin. */
+  supply?: 'on' | 'off' | 'held';
+  /** The rig is carrying out a command right now. */
+  busy?: boolean;
+  /** Whether the sensor is sending values. When it is not, bMeasured is 0 for want of one. */
+  sensor?: boolean;
+  /** How many times the student set the zero again with Set 0. */
+  rezeroed?: number;
+  /** The last command the rig did not carry out, as the student sees it. */
+  error?: string;
+  /** Minutes until the round ends. */
+  minutesLeft?: number;
+  /** The values recorded so far in this visit. */
+  recorded?: Recorded[];
 }
+
+type Recorded = { instrument: string; zCm: number | null; I: number; bTheory: number; bMeasured: number | null };
 
 type Turn = { role: 'user' | 'assistant'; content: string };
 
@@ -37,19 +59,20 @@ const SYSTEM_PROMPT = `คุณคือ "ครูฟิสิกส์ Typhoo
    - ใช้ Markdown ในการจัดหัวข้อให้ชัดเจน
    - ใช้ LaTeX สำหรับสูตรทางฟิสิกส์เสมอ เช่น $F = ma$ หรือ $$E = mc^2$$
    - หากต้องมีการคำนวณ ให้แสดงวิธีทำเป็นลำดับขั้นตอน (Step-by-step)
-   - ตอบให้กระชับ ยาวไม่เกินประมาณ 200 คำต่อครั้ง ถ้าเนื้อหายาวหรือต้องคำนวณหลายขั้น ให้ทำทีละช่วงแล้วถามนักเรียนก่อนไปขั้นต่อไป
+   - ตอบสั้นและตรงประเด็น ยาวไม่เกิน 100 คำต่อครั้งเสมอ ไม่ต้องทักทายและไม่ต้องทวนคำถาม ถ้าต้องคำนวณหลายขั้น ให้ทำครั้งละหนึ่งขั้นแล้วถามนักเรียนก่อนไปขั้นต่อไป
 4. ข้อจำกัด: หากนักเรียนถามเรื่องที่ไม่เกี่ยวข้องกับฟิสิกส์ ให้ตอบอย่างสุภาพว่า "ครูเชี่ยวชาญด้านฟิสิกส์ ลองกลับมาคุยเรื่องแรง พลังงาน หรือคลื่นกันดีกว่านะครับ"
 
 **โครงสร้างการตอบ:**
-- (ทักทายและทวนคำถาม)
-- (อธิบายคอนเซปต์สั้นๆ ที่เกี่ยวข้อง)
-- (แสดงวิธีคิดหรือคำนวณ)
-- (ทิ้งท้ายด้วยคำถามเพื่อเช็คความเข้าใจของนักเรียน)
+- (ตอบประเด็นที่ถาม พร้อมหลักการหรือขั้นคำนวณที่เกี่ยวข้องเพียงขั้นเดียว)
+- (ปิดด้วยคำถามสั้นๆ หนึ่งข้อเพื่อเช็คความเข้าใจ)
+
+**การใช้สถานะห้องแลป:** ทุกคำถามมีสถานะปัจจุบันของห้องแลปแนบมา ให้ใช้ประกอบการตอบเสมอ ถ้าสถานะบอกว่าแหล่งจ่ายไฟปิดหรือถูกล็อก เซนเซอร์ไม่ส่งค่า อุปกรณ์กำลังทำงาน หรือมีคำสั่งที่ไม่สำเร็จ และสิ่งนั้นอธิบายค่าที่นักเรียนเห็นได้ ให้บอกสาเหตุนั้นก่อนอธิบายฟิสิกส์ ถ้ามีค่าที่บันทึกแล้ว ให้อ้างตัวเลขจากค่าเหล่านั้นเมื่อพูดถึงแนวโน้ม ห้ามแต่งค่าที่ไม่มีในข้อมูล
 
 การทดลองที่ 8 "สนามแม่เหล็กในขดลวดเดี่ยวและกฎของไบโอต-ซาวัต" รายวิชา 04203102:
-- ตอนที่ 1 ขดลวดเดี่ยว: วัด B ที่จุดกึ่งกลาง สำหรับ n = 1, 2, 3 รอบ ที่ I = 5 A (ค่าปกติ)  สูตร $B_0 = \\mu_0 n I / (2R)$
+- ตอนที่ 1 ขดลวดเดี่ยว: วัด B ที่จุดกึ่งกลาง สำหรับ n = 1, 2, 3 รอบ รัศมี R = 13 mm ที่ I = 5 A (ค่าปกติ)  สูตร $B_0 = \\mu_0 n I / (2R)$
 - ตอนที่ 2 โซลีนอยด์ (ชุดทดลองมีขดเดียว n = 100 รอบ): วัด B ตามแนวแกน Z 21 ตำแหน่ง ห่างกัน 1 cm (Z = −10 ถึง +10 cm) ที่ I = 0.3 A (ค่าปกติ)  L = 80 mm, R = 21 mm (เส้นผ่านศูนย์กลาง 42 mm)  สูตรตามใบแลป $B_Z = \\frac{\\mu_0 n I}{2L}\\left[\\frac{a}{\\sqrt{R^2+a^2}} - \\frac{b}{\\sqrt{R^2+b^2}}\\right]$ โดย $a = Z + \\frac{L}{2}$ และ $b = Z - \\frac{L}{2}$ (ใช้สัญลักษณ์และรูปสมการนี้เสมอเมื่ออธิบาย) ค่าคงที่ $\\mu_0 = 1.2566 \\times 10^{-6}$ H/m
-- ค่ากระแสของแต่ละอุปกรณ์ผู้ดูแลระบบปรับได้ ถ้าข้อมูลการทดลองที่แนบมากับคำถามบอกค่ากระแส ให้ใช้ค่านั้นแทนค่าปกติเสมอ`;
+- ค่ากระแสของแต่ละอุปกรณ์ผู้ดูแลระบบปรับได้ ถ้าข้อมูลการทดลองที่แนบมากับคำถามบอกค่ากระแส ให้ใช้ค่านั้นแทนค่าปกติเสมอ
+- ค่าวัดจริงคือขนาดของสนามที่เซนเซอร์อ่านได้ ลบด้วยขนาดของสนามพื้นหลัง (สนามโลกและสิ่งรอบชุดทดลอง) ที่อ่านไว้ขณะแหล่งจ่ายไฟปิด จึงคลาดเคลื่อนได้เมื่อสนามพื้นหลังไม่ขนานกับแกนขดลวด และเซนเซอร์อ่านได้สูงสุดราว 1.09 mT`;
 
 function reply(error: string, status: number) {
   return new Response(JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json' } });
@@ -84,6 +107,19 @@ function readContext(raw: unknown): ChatContext | null {
   if (I === null || bTheory === null || bMeasured === null) return null;
   if (c.instType !== 'coil' && c.instType !== 'solenoid') return null;
 
+  // The state of the room is optional, piece by piece: what is missing or
+  // not of the right kind is left out, never guessed.
+  const flag = (v: unknown) => (typeof v === 'boolean' ? v : undefined);
+  const count = (v: unknown, max: number) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max ? v : undefined);
+  const recorded: Recorded[] = [];
+  for (const row of Array.isArray(c.recorded) ? c.recorded.slice(-MAX_RECORDED) : []) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as Record<string, unknown>;
+    const rowI = num(r.I), rowTheory = num(r.bTheory), instrument = label(r.instrument);
+    if (rowI === null || rowTheory === null || !instrument) continue;
+    recorded.push({ instrument, zCm: num(r.zCm), I: rowI, bTheory: rowTheory, bMeasured: num(r.bMeasured) });
+  }
+
   return {
     instrumentName: label(c.instrumentName),
     instSub: label(c.instSub),
@@ -91,6 +127,13 @@ function readContext(raw: unknown): ChatContext | null {
     I, bTheory, bMeasured,
     z: num(c.z) ?? undefined,
     background: c.background === null ? null : num(c.background) ?? undefined,
+    supply: c.supply === 'on' || c.supply === 'off' || c.supply === 'held' ? c.supply : undefined,
+    busy: flag(c.busy),
+    sensor: flag(c.sensor),
+    rezeroed: count(c.rezeroed, 999),
+    error: typeof c.error === 'string' ? c.error.replace(/\s+/g, ' ').trim().slice(0, MAX_ERROR_CHARS) || undefined : undefined,
+    minutesLeft: count(c.minutesLeft, MAX_MINUTES_LEFT),
+    recorded: recorded.length ? recorded : undefined,
   };
 }
 
@@ -126,12 +169,32 @@ export async function POST(req: NextRequest) {
       ? '\n- ค่าวัดจริงยังรวมสนามพื้นหลัง (สนามโลกและสิ่งรอบชุดทดลอง) เพราะยังอ่านค่าพื้นหลังไม่ได้'
       : `\n- ค่าวัดจริงหักสนามพื้นหลัง ${fixed(context.background, 3)} mT ออกแล้ว (อ่านด้วยเซนเซอร์ขณะแหล่งจ่ายไฟปิด)`;
 
+  // The current to the milliampere an admin can set it to, without trailing zeros.
+  const amps = (I: number) => String(+I.toFixed(3));
+
+  const SUPPLY = { on: 'เปิดอยู่', off: 'ปิดอยู่ จึงไม่มีกระแสในขดลวด', held: 'ผู้ดูแลระบบปิดและล็อกไว้ นักเรียนเปิดเองไม่ได้' };
+  const state = [
+    context.supply && `- แหล่งจ่ายไฟ: ${SUPPLY[context.supply]}`,
+    context.busy && '- ชุดทดลองกำลังทำตามคำสั่งอยู่ (กำลังสลับอุปกรณ์หรือเลื่อนหัววัด) ค่าที่เห็นอาจยังไม่นิ่ง',
+    context.sensor === false && '- เซนเซอร์ไม่ส่งค่าในขณะนี้ ค่า B_measured = 0 ข้างบนจึงไม่ใช่ค่าที่วัดได้',
+    context.sensor === true && '- เซนเซอร์ส่งค่าตามปกติ',
+    context.rezeroed ? `- นักเรียนกด Set 0 ตั้งค่าศูนย์ใหม่แล้ว ${context.rezeroed} ครั้ง` : '',
+    context.error && `- คำสั่งล่าสุดที่ไม่สำเร็จ: ${context.error}`,
+    context.minutesLeft !== undefined && `- เวลาที่เหลือของรอบทดลอง: ${context.minutesLeft} นาที`,
+  ].filter(Boolean).join('\n');
+
+  const rows = (context.recorded ?? []).map(r =>
+    `- ${r.instrument}${r.zCm === null ? '' : ` Z = ${+r.zCm.toFixed(2)} cm`}: I = ${amps(r.I)} A, ทฤษฎี ${r.bTheory.toFixed(3)} mT, วัดได้ ${r.bMeasured === null ? 'ไม่มีสัญญาณเซนเซอร์' : `${fixed(r.bMeasured, 3)} mT`}`);
+  const recordedBlock = rows.length
+    ? `\n\n**ค่าที่บันทึกแล้วในการทดลองครั้งนี้ (${rows.length} ค่า):**\n${rows.join('\n')}`
+    : '\n\n**ค่าที่บันทึกแล้วในการทดลองครั้งนี้:** ยังไม่มี';
+
   const contextBlock = `\n\n**บริบทการทดลองปัจจุบัน:**
 - อุปกรณ์: ${context.instrumentName} (${context.instSub})
-- กระแสที่จ่าย I = ${context.I.toFixed(2)} A (ค่าที่ตั้งไว้ ชุดทดลองไม่ได้วัดกระแส)${zLine}
+- กระแสที่จ่าย I = ${amps(context.I)} A (ค่าที่ตั้งไว้ ชุดทดลองไม่ได้วัดกระแส)${zLine}
 - สนามแม่เหล็กทฤษฎี B_theory = ${context.bTheory.toFixed(3)} mT
 - สนามแม่เหล็กวัดจริง B_measured = ${fixed(context.bMeasured, 3)} mT${backgroundLine}
-- ΔB = ${signedFixed(delta, 3)} mT${percent}`;
+- ΔB = ${signedFixed(delta, 3)} mT${percent}${state ? `\n\n**สถานะห้องแลปตอนนี้:**\n${state}` : ''}${recordedBlock}`;
 
   let upstream: Response;
   try {
