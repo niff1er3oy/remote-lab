@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
 import { rigAccess } from '@/lib/rig-access';
-import { PROBE_MAX, PROBE_MIN, PROBE_SET0 } from '@/lib/physics';
+import { PROBE_MAX, PROBE_MIN } from '@/lib/physics';
 import { INSTRUMENT_SCRIPTS, relayOf } from '@/lib/instruments';
 import { disabledInstruments } from '@/lib/rig-settings';
 import { BREAK_SCRIPTS, feed, rigState, runRigScript } from '@/lib/rig';
@@ -13,8 +13,6 @@ import { BREAK_SCRIPTS, feed, rigState, runRigScript } from '@/lib/rig';
 // while it is on, its relay follows the instrument being started.
 const COIL_SCRIPTS = ['coil_1.py', 'coil_2.py', 'coil_3.py']; // switch a single coil on
 const SOLENOID_SCRIPT = 'sole.py';                            // solenoid on, probe to --position
-// sole.py --position set0: the probe out of the solenoid and the solenoid off,
-// for reading the sensor's zero.
 // The probe's measuring positions, as sole.py takes them.
 const POSITION_MIN = PROBE_MIN;
 const POSITION_MAX = PROBE_MAX;
@@ -25,7 +23,7 @@ const BREAK_GRACE_MS = 10 * 60 * 1000;
 
 let armBusy = false;
 
-type Command = { argv: string[]; isBreak: boolean; isZero?: boolean };
+type Command = { argv: string[]; isBreak: boolean };
 
 function readCommand(body: unknown): Command | null {
   if (!body || typeof body !== 'object') return null;
@@ -35,7 +33,6 @@ function readCommand(body: unknown): Command | null {
   if (COIL_SCRIPTS.includes(script)) return { argv: [script], isBreak: false };
   if (BREAK_SCRIPTS.includes(script)) return { argv: [script], isBreak: true };
   if (script === SOLENOID_SCRIPT) {
-    if (position === PROBE_SET0) return { argv: [script, '--position', PROBE_SET0], isBreak: false, isZero: true };
     if (typeof position !== 'number' || !Number.isInteger(position)) return null;
     if (position < POSITION_MIN || position > POSITION_MAX) return null;
     return { argv: [script, '--position', String(position)], isBreak: false };
@@ -90,9 +87,8 @@ export async function POST(request: Request) {
   armBusy = true;
   try {
     // A supply that is on is moved to the instrument being started. One that
-    // is off stays off: switching it on is not this route's to do. Taking the
-    // probe out for a zero starts nothing.
-    const relay = command.isZero ? undefined : relayOf(script);
+    // is off stays off: switching it on is not this route's to do.
+    const relay = relayOf(script);
     if (relay && rigState().supply === true) {
       try {
         await feed(relay);

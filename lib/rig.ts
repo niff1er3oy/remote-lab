@@ -80,8 +80,7 @@ function note(argv: string[], ok: boolean, err?: unknown) {
     }
   } else if (script === 'sole.py') {
     state.circuit = script;
-    // `--position set0` takes the probe out of the solenoid: no measuring position.
-    state.position = Number.isInteger(Number(argv[2])) ? Number(argv[2]) : null;
+    state.position = Number(argv[2]);
   } else if (script === 'coil_b.py') {
     if (state.circuit !== 'sole.py') state.circuit = null;
   } else if (script === 'sole_b.py') {
