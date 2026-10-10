@@ -119,7 +119,7 @@ server.js                           — custom server: loads env and boots Next.
 
 ## Data model (Firestore)
 
-There is no fixed schema file — Firestore is schemaless — but the app expects these collections:
+There is no fixed schema file — Firestore is schemaless — but the app expects these collections. `npm run db:setup` (`scripts/setup-firestore.mjs`) shows what a new or emptied database lacks, and with `-- --apply` writes it: the `labs/LAB8` document and the `settings/rig` defaults, never replacing a value already stored; the other collections are created by the app as it is used, and the script prints their shape. The composite indexes the queries need are in `firestore.indexes.json` and the rules (closed to everything but the Admin SDK, since the browser never touches Firestore) in `firestore.rules`; `npx firebase-tools deploy --only firestore` puts both in place.
 
 - **`labs/{labId}`** — the experiment catalog (currently one seeded document, `LAB8`). Fields: `code`, `name_th`, `name_en`, `description_th`, `duration_minutes`, `is_active`. `labId` doubles as the human-readable code (e.g. `"LAB8"`) — no separate UUID.
 - **`bookings/{bookingId}`** (auto-ID) — `user_id`, `lab_id`, `start_time`/`end_time` (Timestamps), `status` (`pending`/`confirmed`/`in_progress`/`completed`/`cancelled`), plus `notified_can_enter_at`/`notified_starting_soon_at` (reminder de-dup flags).
