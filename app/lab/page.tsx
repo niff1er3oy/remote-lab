@@ -800,11 +800,19 @@ export default function RemoteLabPage() {
   const [pointAdjust, setPointAdjust] = useState(0);
   const supplyOnNow = useRef<boolean | null>(null);
   useEffect(() => { supplyOnNow.current = supplyOn; }, [supplyOn]);
+  // The supply going off ends the point's calibration: the solenoid is then
+  // read as a coil is, and when the supply comes back the value is shown as
+  // read until the point is chosen again.
+  const [supplyWas, setSupplyWas] = useState(supplyOn);
+  if (supplyWas !== supplyOn) {
+    setSupplyWas(supplyOn);
+    if (supplyOn === false) setPointAdjust(0);
+  }
   const adjustAt = useCallback((reading: number | null, bTheory: number) => {
-    // No value from the sensor is no measurement, and with the supply off
-    // there is no field of the instrument's: in neither case is there anything
-    // to calibrate against theory.
-    const adjust = reading === null || supplyOnNow.current === false ? 0 : pointAdjustment(reading, bTheory);
+    // No value from the sensor is no measurement, and unless the supply is
+    // known to be on there is no field of the instrument's to speak of: in
+    // neither case is there anything to calibrate against theory.
+    const adjust = reading === null || supplyOnNow.current !== true ? 0 : pointAdjustment(reading, bTheory);
     setPointAdjust(adjust);
     return { value: reading === null ? null : reading + adjust };
   }, []);
@@ -1138,9 +1146,9 @@ export default function RemoteLabPage() {
     : calcBSolenoid(inst.N, I, inst.L, inst.R, z);
   // No value from the sensor is shown as 0, never as the theory value: the two
   // would then agree exactly when nothing was measured at all.
-  // With the calibration of the point the probe is at, while the supply is on
-  // (with it off there is no field of the instrument's to calibrate).
-  const bMeasured = realSensorValue === null ? 0 : realSensorValue + (supplyOn === false ? 0 : pointAdjust);
+  // With the calibration of the point the probe is at, while the supply is
+  // known to be on (otherwise there is no field of the instrument's to calibrate).
+  const bMeasured = realSensorValue === null ? 0 : realSensorValue + (supplyOn === true ? pointAdjust : 0);
   // What the assistant is told with each question: the readings on screen and
   // the state of the room, so that it can say why a value is what it is.
   const chatReadings: ChatReadings = {

@@ -267,8 +267,9 @@ describe('fieldAbove — the background taken off size from size, then calibrate
     expect((sizeFromSize - 0.0384) / 0.0384).toBeLessThan(-0.5);
   });
 
-  it('gives the background the raw size the sensor read', () => {
-    expect(backgroundSize({ x: 0.03, y: 0.04, z: 0 })).toBeCloseTo(0.05, 12);
+  it('shows the background as its raw size with the calibration on it', () => {
+    // 1.1076 x 0.05 + 0.0692
+    expect(backgroundSize({ x: 0.03, y: 0.04, z: 0 })).toBeCloseTo(0.12458, 12);
   });
 });
 

@@ -78,6 +78,10 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
   const [dates, setDates] = useState<string[]>(getBookingDates());
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
+  // Why there is no table to book from, when there is none: the server could
+  // not be asked ('failed'), or it has no lab open to booking ('closed'). The
+  // grid drawn then is only a placeholder, and must not pass for a free week.
+  const [trouble, setTrouble] = useState<'failed' | 'closed' | null>(null);
 
   const [held,         setHeld]         = useState<{ ti: number; di: number } | null>(null);
   const [cancelTarget, setCancelTarget] = useState<{ ti: number; di: number; booking_id: string } | null>(null);
@@ -106,18 +110,27 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
   useEffect(() => () => { if (msgTimer.current) clearTimeout(msgTimer.current); }, []);
 
   const loadAvailability = useCallback(async () => {
+    // Stays true for a reply that is an error, is not JSON, or never came.
+    let failed = true;
     try {
-      const r = await fetch('/api/bookings/availability');
-      const data = await r.json();
-      if (data.ok && data.rooms?.length > 0) {
-        setRooms(data.rooms);
-        setSlotsByRoom(data.slots_by_room);
-        setMineBookingIds(data.mine_booking_ids ?? {});
-        setDates(data.dates);
-        setSelectedId(prev => prev || data.rooms[0].room_id);
+      const r = await fetch('/api/bookings/availability').catch(() => null);
+      const data = r ? await r.json().catch(() => null) : null;
+      if (r?.ok && data?.ok) {
+        failed = false;
         setLoggedIn(!!data.logged_in);
+        if (data.rooms?.length > 0) {
+          setRooms(data.rooms);
+          setSlotsByRoom(data.slots_by_room);
+          setMineBookingIds(data.mine_booking_ids ?? {});
+          setDates(data.dates);
+          setSelectedId(prev => prev || data.rooms[0].room_id);
+          setTrouble(null);
+        } else {
+          setTrouble('closed');
+        }
       }
     } finally {
+      if (failed) setTrouble('failed');
       setLoading(false);
     }
   }, []);
@@ -246,6 +259,24 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
 
   const panel = (
     <>
+      {trouble && !loading && (
+        <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3">
+          <p className="text-sm text-red-200">
+            {trouble === 'failed'
+              ? 'โหลดตารางจองไม่สำเร็จ จึงยังเลือกเวลาไม่ได้ ลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งผู้ดูแลระบบ'
+              : 'ขณะนี้ปิดรับจอง ยังเลือกเวลาไม่ได้'}
+          </p>
+          {trouble === 'failed' && (
+            <button
+              type="button"
+              onClick={() => { setLoading(true); void loadAvailability(); }}
+              className="rounded-full border border-white/10 px-4 py-1.5 text-xs font-semibold text-gray-100 transition-colors hover:border-cyan-500/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+            >
+              ลองใหม่
+            </button>
+          )}
+        </div>
+      )}
       {/* Room selector */}
       {rooms.length > 0 && (
         <div className="mb-6 flex flex-wrap gap-2">
@@ -336,7 +367,7 @@ export default function BookingCalendar({ scrollAnimate = true, embedded = false
                 <span className="inline-block h-3 w-4 rounded-sm bg-[#c8ff00]" /> กำลังเลือก
               </span>
             </div>
-            {!loggedIn && (
+            {!loggedIn && trouble !== 'failed' && (
               <Link href="/login"
                 className="rounded-full bg-[#c8ff00] px-5 py-2 text-xs font-semibold text-gray-950 hover:bg-white transition-colors">
                 เข้าสู่ระบบเพื่อจอง →

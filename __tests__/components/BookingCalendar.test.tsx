@@ -702,6 +702,44 @@ describe('BookingCalendar', () => {
       expect(screen.getByText('10/3/26')).toBeInTheDocument();
       expect(queryButton(/LAB8/)).not.toBeInTheDocument();
     });
+
+    it('says the table could not be loaded, and does not send a signed-in user to sign in', async () => {
+      await show(world({ availability: () => ({ status: 500, body: { ok: false, error: '8 RESOURCE_EXHAUSTED: Quota exceeded.' } }) }));
+
+      expect(screen.getByRole('alert')).toHaveTextContent('โหลดตารางจองไม่สำเร็จ จึงยังเลือกเวลาไม่ได้');
+      expect(screen.getByRole('alert')).not.toHaveTextContent(/RESOURCE_EXHAUSTED|Quota/);
+      expect(screen.queryByRole('link', { name: /เข้าสู่ระบบเพื่อจอง/ })).not.toBeInTheDocument();
+    });
+
+    it('says so when the server cannot be reached at all', async () => {
+      globalThis.fetch = jest.fn(async () => { throw new Error('offline'); }) as unknown as typeof fetch;
+      render(<BookingCalendar scrollAnimate={false} />);
+      await advance();
+
+      expect(screen.getByRole('alert')).toHaveTextContent('โหลดตารางจองไม่สำเร็จ');
+    });
+
+    it('loads the table when "ลองใหม่" is pressed after a failure', async () => {
+      let fail = true;
+      const base = world();
+      const { net } = await show(world({ availability: () => (fail ? { status: 500, body: { ok: false } } : base.availability ? base.availability() : { body: {} }) }));
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+
+      fail = false;
+      net.clear();
+      fireEvent.click(screen.getByRole('button', { name: 'ลองใหม่' }));
+      await advance();
+
+      expect(net.requests()).toEqual(['GET /api/bookings/availability']);
+    });
+
+    it('says booking is closed when no lab is open to it, keeping the sign-in link only for a visitor', async () => {
+      await show(world({ availability: () => ({ body: { ok: true, rooms: [], slots_by_room: {}, mine_booking_ids: {}, dates: [], logged_in: true } }) }));
+
+      expect(screen.getByRole('alert')).toHaveTextContent('ขณะนี้ปิดรับจอง ยังเลือกเวลาไม่ได้');
+      expect(screen.queryByRole('button', { name: 'ลองใหม่' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /เข้าสู่ระบบเพื่อจอง/ })).not.toBeInTheDocument();
+    });
   });
 
   describe('motion', () => {

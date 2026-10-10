@@ -84,8 +84,12 @@ export function fieldAbove(reading: FieldVector, background: FieldVector | null,
   return calibration.gain * above + calibration.offset;
 }
 
-/** The size in mT of the background as it is taken off: the raw size the sensor read. */
-export const backgroundSize = (background: FieldVector) => fieldSize(background);
+/**
+ * The size in mT of the background as it is shown and recorded: the raw size
+ * the sensor read with the calibration on it. What `fieldAbove` takes off a
+ * reading is the raw size, not this.
+ */
+export const backgroundSize = (background: FieldVector) => calibrated(fieldSize(background));
 
 /**
  * A reading with a background taken off it, size from size, both calibrated

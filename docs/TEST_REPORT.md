@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 11 ตุลาคม 2569 เวลา 00:17
+- รันเมื่อ: 11 ตุลาคม 2569 เวลา 02:43
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1770 ข้อ ใน 52 ไฟล์ (ผ่าน 1770 ไม่ผ่าน 0)
-- เวลาที่ใช้: 18.0 วินาที
+- จำนวนเทสต์: 1774 ข้อ ใน 52 ไฟล์ (ผ่าน 1774 ไม่ผ่าน 0)
+- เวลาที่ใช้: 17.2 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -14,7 +14,7 @@
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
 | API ฝั่งเซิร์ฟเวอร์ | 19 | 738 | 738 | 0 |
-| หน้าเว็บและคอมโพเนนต์ | 15 | 520 | 520 | 0 |
+| หน้าเว็บและคอมโพเนนต์ | 15 | 524 | 524 | 0 |
 | ไลบรารีและตรรกะกลาง | 18 | 512 | 512 | 0 |
 
 ## สรุปตามไฟล์
@@ -43,7 +43,7 @@
 | `auth-client.test.ts` | การล็อกอินด้วย Google ฝั่งเบราว์เซอร์ และข้อความ error ที่แสดงผู้ใช้ | 14 | ผ่าน |
 | `components/AdminPage.test.tsx` | หน้า admin: การกันสิทธิ์ ห้องแลปตอนนี้ ปุ่มอุปกรณ์ การเปิดปิดแลปและอุปกรณ์ การปิดช่วงเวลา และตารางการจอง | 117 | ผ่าน |
 | `components/AdminTestsPage.test.tsx` | หน้าผลการทดสอบของ admin: การกันสิทธิ์ ตัวเลขรวม หมวดหมู่ การค้นหา และการกรองรายการที่ไม่ผ่าน | 21 | ผ่าน |
-| `components/BookingCalendar.test.tsx` | ตารางจอง: สถานะช่องเวลา การจองและยกเลิก และข้อความผลลัพธ์ | 53 | ผ่าน |
+| `components/BookingCalendar.test.tsx` | ตารางจอง: สถานะช่องเวลา การจองและยกเลิก และข้อความผลลัพธ์ | 57 | ผ่าน |
 | `components/CurrentSettings.test.tsx` | ช่องตั้งค่ากระแสของแต่ละอุปกรณ์ในหน้า admin: การตรวจค่า การบันทึก และข้อความผลลัพธ์ | 15 | ผ่าน |
 | `components/DashboardNav.test.tsx` | แถบเมนูผู้ใช้: เมนู ลิงก์ผู้ดูแลระบบ และการออกจากระบบ | 21 | ผ่าน |
 | `components/EquipmentStatus.test.tsx` | ส่วนสถานะอุปกรณ์ในหน้า admin: ชุดทดลอง แหล่งจ่ายไฟ กล้อง และเซนเซอร์ | 62 | ผ่าน |
@@ -1297,7 +1297,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 ตารางจอง: สถานะช่องเวลา การจองและยกเลิก และข้อความผลลัพธ์
 
-ผล: ผ่านทั้ง 53 ข้อ
+ผล: ผ่านทั้ง 57 ข้อ
 
 **BookingCalendar › what the week looks like**
 
@@ -1365,6 +1365,10 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — asks the server for availability once when it appears
 - ผ่าน — reloads when the page changes its refresh key, staying on the chosen room
 - ผ่าน — still shows a week, with no rooms to choose, when the server reports a failure
+- ผ่าน — says the table could not be loaded, and does not send a signed-in user to sign in
+- ผ่าน — says so when the server cannot be reached at all
+- ผ่าน — loads the table when "ลองใหม่" is pressed after a failure
+- ผ่าน — says booking is closed when no lab is open to it, keeping the sign-in link only for a visitor
 **BookingCalendar › motion**
 
 - ผ่าน — ripples the slots in when embedded in the dashboard
