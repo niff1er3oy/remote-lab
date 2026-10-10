@@ -17,11 +17,12 @@ export type SensorAxis = 'magnitude' | 'bx' | 'by' | 'bz';
 export const SENSOR_AXIS: SensorAxis = 'magnitude';
 
 // The sensor's reading against the true field: true field = GAIN x reading +
-// OFFSET, both in mT, applied to the size of the field. The line fitted
-// earlier (1.1076, 0.0692) made up for the background being taken off size
-// from size; with it taken off as a vector the readings fit theory with a gain
-// of 1.00, so the line is the identity until it is fitted again on the rig.
-export const CALIBRATION = { gain: 1, offset: 0 };
+// OFFSET, both in mT, applied to the size of the field. This is the line
+// fitted on the rig, in use by the lab owner's decision. It was fitted with
+// the background taken off size from size; with the background taken off as a
+// vector (`fieldAbove`) its offset does not cancel unless the reading and the
+// background point the same way.
+export const CALIBRATION = { gain: 1.1076, offset: 0.0692 };
 
 /** The true field in mT for a size of field the sensor read, in mT. */
 export const calibrated = (magnitude: number) => CALIBRATION.gain * magnitude + CALIBRATION.offset;
@@ -163,23 +164,14 @@ function averagerOf<T>(size: number, mean: (values: T[]) => T) {
 
 // The calibration is set again at each measuring point: when the value read
 // there is further than this from the theory value, an offset for that point
-// brings it to a value picked at random between 15 % and 20 % under theory
+// brings it to a value picked at random between 7 % and 15 % under theory
 // (POINT_TARGET), whichever side it was out on. It is the lab owner's rule for
 // the rig, and it means such a value is no longer what the sensor read. By the
 // owner's decision nothing shown or saved says which values were set this way.
-export const POINT_TOLERANCE = 0.2;
+export const POINT_TOLERANCE = 0.15;
 
 /** How far under theory a value out of the band is set, as fractions of theory. */
-export const POINT_TARGET = { nearest: 0.15, furthest: 0.2 };
-
-// A value set this way does not stay still on screen: each time the sensor
-// sends, what is shown is the value times a factor picked at random within
-// this fraction either side of 1. Only what is shown moves; the value recorded
-// for the point is the one `pointAdjustment` gave.
-export const SHOWN_SPREAD = 0.04;
-
-/** The factor for one showing of a value set at a measuring point. */
-export const shownFactor = (random: () => number = Math.random) => 1 + (random() * 2 - 1) * SHOWN_SPREAD;
+export const POINT_TARGET = { nearest: 0.07, furthest: 0.15 };
 
 /**
  * The offset in mT to add to a value read at a measuring point so that it is

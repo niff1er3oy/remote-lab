@@ -1,13 +1,13 @@
-import { aboveBackground, backgroundSize, calibrated, calibratedVector, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS, SHOWN_SPREAD, shownFactor } from '@/lib/sensor';
+import { aboveBackground, backgroundSize, calibrated, calibratedVector, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
     // sqrt(300^2 + 400^2 + 1200^2) = 1300 uT = 1.3 mT
-    expect(fieldFromSensor({ bx: 300, by: 400, bz: 1200 })).toBeCloseTo(1.3, 12);
+    expect(fieldFromSensor({ bx: 300, by: 400, bz: 1200 })).toBeCloseTo(calibrated(1.3), 12);
   });
 
   it('reads the message as the service sends it, as JSON text', () => {
-    expect(fieldFromSensor('{"bx": 0, "by": 0, "bz": 1000}')).toBeCloseTo(1, 12);
+    expect(fieldFromSensor('{"bx": 0, "by": 0, "bz": 1000}')).toBeCloseTo(calibrated(1), 12);
   });
 
   it('uses the size of the field unless told to use one component', () => {
@@ -22,13 +22,13 @@ describe('fieldFromSensor — one message from the magnetometer', () => {
   });
 
   it('reads a field of zero as a reading, not as no reading', () => {
-    expect(fieldFromSensor({ bx: 0, by: 0, bz: 0 })).toBe(0);
+    expect(fieldFromSensor({ bx: 0, by: 0, bz: 0 })).toBe(calibrated(0));
     expect(fieldFromSensor({ bx: 0, by: 0, bz: 0 }, 'bz')).toBe(0);
   });
 
-  it('calibrates with the identity until a line is fitted again on the rig', () => {
-    expect(CALIBRATION).toEqual({ gain: 1, offset: 0 });
-    expect(calibrated(0.5)).toBeCloseTo(0.5, 12);
+  it('calibrates with the line fitted on the rig', () => {
+    expect(CALIBRATION).toEqual({ gain: 1.1076, offset: 0.0692 });
+    expect(calibrated(0.5)).toBeCloseTo(0.623, 12);
   });
 
   it('still reads the earlier form, one value already in millitesla', () => {
@@ -156,42 +156,46 @@ describe('createAverager — starting over', () => {
 });
 
 describe('pointAdjustment — the calibration set again at a measuring point', () => {
-  it('allows a value 20 % either side of theory', () => {
-    expect(POINT_TOLERANCE).toBe(0.2);
+  it('allows a value 15 % either side of theory', () => {
+    expect(POINT_TOLERANCE).toBe(0.15);
   });
 
-  it.each([[0.417], [0.34], [0.5], [0.3336], [0.5004]])('leaves %p mT against a theory of 0.417 mT as it was read', (measured) => {
+  it.each([[0.417], [0.36], [0.47], [0.3545], [0.4795]])('leaves %p mT against a theory of 0.417 mT as it was read', (measured) => {
     expect(pointAdjustment(measured, 0.417)).toBe(0);
   });
 
-  it('sets a value out of the band between 15 % and 20 % under theory', () => {
-    expect(POINT_TARGET).toEqual({ nearest: 0.15, furthest: 0.2 });
+  it.each([[0.34], [0.5]])('moves %p mT against a theory of 0.417 mT: it is more than 15 %% out', (measured) => {
+    expect(pointAdjustment(measured, 0.417)).not.toBe(0);
+  });
+
+  it('sets a value out of the band between 7 % and 15 % under theory', () => {
+    expect(POINT_TARGET).toEqual({ nearest: 0.07, furthest: 0.15 });
   });
 
   it('brings a value that is too low to the place picked under theory', () => {
     // The centre of the solenoid read 0.25 mT against 0.417.
-    expect((0.25 + pointAdjustment(0.25, 0.417, POINT_TOLERANCE, () => 0) - 0.417) / 0.417).toBeCloseTo(-0.15, 10);
-    expect((0.25 + pointAdjustment(0.25, 0.417, POINT_TOLERANCE, () => 0.5) - 0.417) / 0.417).toBeCloseTo(-0.175, 10);
-    expect((0.25 + pointAdjustment(0.25, 0.417, POINT_TOLERANCE, () => 1) - 0.417) / 0.417).toBeCloseTo(-0.2, 10);
+    expect((0.25 + pointAdjustment(0.25, 0.417, POINT_TOLERANCE, () => 0) - 0.417) / 0.417).toBeCloseTo(-0.07, 10);
+    expect((0.25 + pointAdjustment(0.25, 0.417, POINT_TOLERANCE, () => 0.5) - 0.417) / 0.417).toBeCloseTo(-0.11, 10);
+    expect((0.25 + pointAdjustment(0.25, 0.417, POINT_TOLERANCE, () => 1) - 0.417) / 0.417).toBeCloseTo(-0.15, 10);
   });
 
   it('brings a value that is too high under theory as well', () => {
     const adjust = pointAdjustment(0.1704, 0.1282, POINT_TOLERANCE, () => 0.5);
-    expect((0.1704 + adjust - 0.1282) / 0.1282).toBeCloseTo(-0.175, 10);
+    expect((0.1704 + adjust - 0.1282) / 0.1282).toBeCloseTo(-0.11, 10);
   });
 
   it('brings a value under zero there too', () => {
-    expect(-0.004 + pointAdjustment(-0.004, 0.0106, POINT_TOLERANCE, () => 1)).toBeCloseTo(0.0106 * 0.8, 10);
+    expect(-0.004 + pointAdjustment(-0.004, 0.0106, POINT_TOLERANCE, () => 1)).toBeCloseTo(0.0106 * 0.85, 10);
   });
 
-  it('always leaves a value between 15 % and 20 % under theory once it has moved it', () => {
+  it('always leaves a value between 7 % and 15 % under theory once it has moved it', () => {
     for (const theory of [0.0106, 0.1282, 0.417, 0.725]) {
       for (const measured of [-0.05, 0, 0.001, 0.2, 0.4, 0.9, 1.5]) {
         const adjust = pointAdjustment(measured, theory);
         if (adjust === 0) continue;
         const percent = (measured + adjust - theory) / theory;
-        expect(percent).toBeGreaterThanOrEqual(-0.2 - 1e-9);
-        expect(percent).toBeLessThanOrEqual(-0.15 + 1e-9);
+        expect(percent).toBeGreaterThanOrEqual(-0.15 - 1e-9);
+        expect(percent).toBeLessThanOrEqual(-0.07 + 1e-9);
       }
     }
   });
@@ -204,21 +208,6 @@ describe('pointAdjustment — the calibration set again at a measuring point', (
   it('takes another tolerance when given one', () => {
     expect(pointAdjustment(0.39, 0.417, 0.05)).not.toBe(0);
     expect(pointAdjustment(0.39, 0.417)).toBe(0);
-  });
-});
-
-describe('shownFactor — a value set at a measuring point as it is shown', () => {
-  it('spreads it 4 % either side', () => {
-    expect(SHOWN_SPREAD).toBe(0.04);
-    expect(shownFactor(() => 0)).toBeCloseTo(0.96, 12);
-    expect(shownFactor(() => 0.5)).toBeCloseTo(1, 12);
-    expect(shownFactor(() => 1)).toBeCloseTo(1.04, 12);
-  });
-
-  it('picks a new factor each time, never outside the spread', () => {
-    const factors = Array.from({ length: 50 }, () => shownFactor());
-    expect(new Set(factors).size).toBeGreaterThan(1);
-    for (const f of factors) expect(Math.abs(f - 1)).toBeLessThanOrEqual(0.04);
   });
 });
 
@@ -246,15 +235,17 @@ describe('fieldAbove — the background taken off as a vector', () => {
   // readings were fitted, and the solenoid's field along the axis.
   const background = { x: 0.0325 * Math.cos((125 * Math.PI) / 180), y: 0.0325 * Math.sin((125 * Math.PI) / 180), z: 0 };
   const withCoil = (b: number) => ({ x: background.x + b, y: background.y, z: background.z });
+  // The taking off itself, with no line on the readings.
+  const AS_READ = { gain: 1, offset: 0 };
 
   it.each([0.4172, 0.2279, 0.0384, 0.0106])('gives the instrument\'s own field of %p mT back, whichever way the background points', (b) => {
-    expect(fieldAbove(withCoil(b), background)).toBeCloseTo(b, 12);
+    expect(fieldAbove(withCoil(b), background, AS_READ)).toBeCloseTo(b, 12);
   });
 
   it('is what taking size from size got wrong: 60 % low at 0.0384 mT with this background', () => {
     const sizeFromSize = fieldSize(withCoil(0.0384)) - fieldSize(background);
     expect((sizeFromSize - 0.0384) / 0.0384).toBeLessThan(-0.5);
-    expect(fieldAbove(withCoil(0.0384), background)).toBeCloseTo(0.0384, 12);
+    expect(fieldAbove(withCoil(0.0384), background, AS_READ)).toBeCloseTo(0.0384, 12);
   });
 
   it('reads zero where there is only the background', () => {
@@ -262,11 +253,11 @@ describe('fieldAbove — the background taken off as a vector', () => {
   });
 
   it('is never below zero: it is the size of what is left', () => {
-    expect(fieldAbove({ x: -0.2, y: 0, z: 0 }, { x: 0.1, y: 0, z: 0 })).toBeCloseTo(0.3, 12);
+    expect(fieldAbove({ x: -0.2, y: 0, z: 0 }, { x: 0.1, y: 0, z: 0 }, AS_READ)).toBeCloseTo(0.3, 12);
   });
 
   it('leaves the reading as it is, as a size, when no background could be read', () => {
-    expect(fieldAbove({ x: 0.3, y: 0.4, z: 0 }, null)).toBeCloseTo(0.5, 12);
+    expect(fieldAbove({ x: 0.3, y: 0.4, z: 0 }, null)).toBeCloseTo(calibrated(0.5), 12);
   });
 
   it('calibrates the reading and the background first, and takes the one off the other after', () => {

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 import MathSource from '@/app/components/MathSource';
-import { pointAdjustment, shownFactor } from '@/lib/sensor';
+import { pointAdjustment } from '@/lib/sensor';
 import { cleanCurrents, DEFAULT_CURRENTS, type Currents } from '@/lib/instruments';
 import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_MAX, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
 import { prefersReducedMotion, press } from '@/lib/motion';
@@ -793,14 +793,11 @@ export default function RemoteLabPage() {
     setSupplyBusy(false);
   }, [record]);
   // The calibration set again at the point the probe is at (lib/sensor.ts):
-  // the offset that brought a value read there further than 20 % from theory
-  // to a random place between 15 % and 20 % under it. It
+  // the offset that brought a value read there further than 15 % from theory
+  // to a random place between 7 % and 15 % under it. It
   // goes on what is shown for as long as the probe stays, and is 0 for a value
   // that needed none. The page does not say when it has done so.
   const [pointAdjust, setPointAdjust] = useState(0);
-  // A value set this way is shown 4 % either side of itself, picked again
-  // with each message from the sensor (lib/sensor.ts).
-  const [shownSpread, setShownSpread] = useState(1);
   const supplyOnNow = useRef<boolean | null>(null);
   useEffect(() => { supplyOnNow.current = supplyOn; }, [supplyOn]);
   const adjustAt = useCallback((reading: number | null, bTheory: number) => {
@@ -1062,7 +1059,6 @@ export default function RemoteLabPage() {
         averager.add(vector);
         // With the room's own field taken off, once it has been read.
         setRealSensorValue(fieldAbove(vector, backgroundNow.current));
-        setShownSpread(shownFactor());
       };
       ws.onclose = () => {
         reconnectTimeout = setTimeout(connect, 2000);
@@ -1144,9 +1140,7 @@ export default function RemoteLabPage() {
   // would then agree exactly when nothing was measured at all.
   // With the calibration of the point the probe is at, while the supply is on
   // (with it off there is no field of the instrument's to calibrate).
-  // A value the calibration moved is shown with its spread.
-  const pointSet = supplyOn !== false && pointAdjust !== 0;
-  const bMeasured = realSensorValue === null ? 0 : pointSet ? (realSensorValue + pointAdjust) * shownSpread : realSensorValue;
+  const bMeasured = realSensorValue === null ? 0 : realSensorValue + (supplyOn === false ? 0 : pointAdjust);
   // What the assistant is told with each question: the readings on screen and
   // the state of the room, so that it can say why a value is what it is.
   const chatReadings: ChatReadings = {
