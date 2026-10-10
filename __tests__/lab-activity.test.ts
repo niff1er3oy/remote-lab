@@ -434,3 +434,22 @@ describe('a Set 0 that failed for a reason other than the sensor', () => {
     expect(describeEvent({ at: 0, kind: 'zero', ok: false, bMeasured: null })).toBe('ตั้งศูนย์ (Set 0) ไม่สำเร็จ เพราะเซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่');
   });
 });
+
+describe('a value whose calibration was set again at its point', () => {
+  const NOTE = 'ปรับคาลิเบทที่จุดนี้ +0.084 mT ให้ต่างจากทฤษฎีไม่เกิน 20%';
+  const move: LabEvent = { at: 0, kind: 'move', instrument: 'โซลีนอยด์ 100 รอบ', ok: true, zCm: 0, I: 0.3, bTheory: 0.4172, bMeasured: 0.3338, detail: NOTE };
+  const reading: LabEvent = { at: 0, kind: 'reading', instrument: 'ขดลวดเดี่ยว 1 รอบ', I: 5, bTheory: 0.2417, bMeasured: 0.1934, detail: NOTE };
+
+  it('says so beside the value in the timeline, for a probe position and for a coil', () => {
+    expect(describeEvent(move)).toBe(`เลื่อนหัววัดไป Z = 0 cm · B = 0.334 mT (${NOTE})`);
+    expect(describeEvent(reading)).toBe(`ขดลวดเดี่ยว 1 รอบ · B = 0.193 mT (ทฤษฎี 0.242 mT) (${NOTE})`);
+  });
+
+  it('says so in the CSV of the visit', () => {
+    expect(toCsv([move])).toContain(NOTE);
+  });
+
+  it('adds nothing to a value that was kept as read', () => {
+    expect(describeEvent({ ...move, detail: undefined })).toBe('เลื่อนหัววัดไป Z = 0 cm · B = 0.334 mT');
+  });
+});

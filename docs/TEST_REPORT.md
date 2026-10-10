@@ -2,9 +2,9 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 10 ตุลาคม 2569 เวลา 17:16
+- รันเมื่อ: 10 ตุลาคม 2569 เวลา 17:48
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1728 ข้อ ใน 52 ไฟล์ (ผ่าน 1728 ไม่ผ่าน 0)
+- จำนวนเทสต์: 1742 ข้อ ใน 52 ไฟล์ (ผ่าน 1742 ไม่ผ่าน 0)
 - เวลาที่ใช้: 10.6 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
@@ -15,7 +15,7 @@
 |---|---|---|---|---|
 | API ฝั่งเซิร์ฟเวอร์ | 19 | 733 | 733 | 0 |
 | หน้าเว็บและคอมโพเนนต์ | 15 | 520 | 520 | 0 |
-| ไลบรารีและตรรกะกลาง | 18 | 475 | 475 | 0 |
+| ไลบรารีและตรรกะกลาง | 18 | 489 | 489 | 0 |
 
 ## สรุปตามไฟล์
 
@@ -59,7 +59,7 @@
 | `field-geometry.test.ts` | การอ่านแบบจำลองสนามไปวาด: เส้นของแต่ละอุปกรณ์ ความสว่างตามขนาดสนาม หัวลูกศร จำนวนเส้นในมุมมอง 3D และกรอบภาพ | 91 | ผ่าน |
 | `field-lines.test.ts` | ข้อมูลเส้นสนามที่ใช้วาดภาพในหน้าแรก: สมมาตร ไม่ตัดกัน และได้สัดส่วนจริงของอุปกรณ์ | 36 | ผ่าน |
 | `field-model.test.ts` | ข้อมูลเส้นสนามของแบบจำลองในห้องแลป: ตรวจทิศและขนาดสนามกับกฎบีโอต์-ซาวาร์โดยตรง ความสมมาตร ระยะห่างของเส้นตามความเข้มสนาม และจำนวนเส้นตามจำนวนรอบ | 39 | ผ่าน |
-| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 67 | ผ่าน |
+| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 70 | ผ่าน |
 | `lab-presence.test.ts` |  | 28 | ผ่าน |
 | `lab-readiness.test.ts` | การตรวจความพร้อมของเครื่องแลปจริง: ไฟล์สคริปต์ Python ไลบรารี ค่าจากเซนเซอร์ กล้อง ฐานข้อมูล และการไม่สั่งอุปกรณ์ทำงานระหว่างตรวจ | 22 | ผ่าน |
 | `lab-status.test.ts` | การตรวจว่ากล้องและเซนเซอร์ตอบสนองหรือไม่ และ API สถานะอุปกรณ์ของ admin | 12 | ผ่าน |
@@ -70,7 +70,7 @@
 | `rig-access.test.ts` | กติกาว่าใครสั่งอุปกรณ์ได้: รอบที่กำลังดำเนินอยู่ รอบที่เพิ่งจบ และกรณีที่ไม่มีสิทธิ์ | 27 | ผ่าน |
 | `rig.test.ts` | ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์ | 31 | ผ่าน |
 | `safety.test.ts` | ตัวกันของชุดทดสอบเอง: เทสต์ต้องไม่ใช้ credential จริง และแตะ Firebase หรือเครือข่ายไม่ได้ถ้าไม่ได้จำลองไว้ | 3 | ผ่าน |
-| `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง | 30 | ผ่าน |
+| `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง | 41 | ผ่าน |
 | `session.test.ts` | การออกและตรวจ session cookie | 12 | ผ่าน |
 | `webrtc-latency.test.ts` | การคำนวณความหน่วงของวิดีโอจากสถิติ WebRTC (เครือข่าย บัฟเฟอร์ ถอดรหัส) และการตรวจภาพค้าง | 8 | ผ่าน |
 
@@ -2139,7 +2139,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV
 
-ผล: ผ่านทั้ง 67 ข้อ
+ผล: ผ่านทั้ง 70 ข้อ
 
 **summarise — the figures at the top of the summary**
 
@@ -2234,6 +2234,11 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — says why in the timeline
 - ผ่าน — says why in the CSV
 - ผ่าน — still blames the sensor when no reason is given
+**a value whose calibration was set again at its point**
+
+- ผ่าน — says so beside the value in the timeline, for a probe position and for a coil
+- ผ่าน — says so in the CSV of the visit
+- ผ่าน — adds nothing to a value that was kept as read
 
 #### `lab-presence.test.ts`
 
@@ -2567,7 +2572,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง
 
-ผล: ผ่านทั้ง 30 ข้อ
+ผล: ผ่านทั้ง 41 ข้อ
 
 **fieldFromSensor — one message from the magnetometer**
 
@@ -2607,6 +2612,19 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 - ผ่าน — drops what was collected toward the next reading
 - ผ่าน — does not disturb someone waiting for a fresh reading
+**pointAdjustment — the calibration set again at a measuring point**
+
+- ผ่าน — allows a value 20 % either side of theory
+- ผ่าน — leaves 0.417 mT against a theory of 0.417 mT as it was read
+- ผ่าน — leaves 0.34 mT against a theory of 0.417 mT as it was read
+- ผ่าน — leaves 0.5 mT against a theory of 0.417 mT as it was read
+- ผ่าน — leaves 0.3336 mT against a theory of 0.417 mT as it was read
+- ผ่าน — leaves 0.5004 mT against a theory of 0.417 mT as it was read
+- ผ่าน — brings a value that is too low up to 20 % under theory
+- ผ่าน — brings a value that is too high down to 20 % over theory
+- ผ่าน — brings a value under zero up to the lower edge too
+- ผ่าน — never moves a value further than the edge of the band
+- ผ่าน — takes another tolerance when given one
 
 #### `session.test.ts`
 

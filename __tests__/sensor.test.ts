@@ -1,4 +1,4 @@
-import { aboveBackground, calibrated, CALIBRATION, createAverager, fieldFromSensor, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
+import { aboveBackground, calibrated, CALIBRATION, createAverager, fieldFromSensor, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
@@ -152,5 +152,45 @@ describe('createAverager — starting over', () => {
     averager.add(1);
     averager.add(3);
     expect(await reading).toBe(2);
+  });
+});
+
+describe('pointAdjustment — the calibration set again at a measuring point', () => {
+  it('allows a value 20 % either side of theory', () => {
+    expect(POINT_TOLERANCE).toBe(0.2);
+  });
+
+  it.each([[0.417], [0.34], [0.5], [0.3336], [0.5004]])('leaves %p mT against a theory of 0.417 mT as it was read', (measured) => {
+    expect(pointAdjustment(measured, 0.417)).toBe(0);
+  });
+
+  it('brings a value that is too low up to 20 % under theory', () => {
+    // The centre of the solenoid read 0.25 mT against 0.417: the edge is 0.3336.
+    const adjust = pointAdjustment(0.25, 0.417);
+    expect(adjust).toBeCloseTo(0.0836, 10);
+    expect((0.25 + adjust - 0.417) / 0.417).toBeCloseTo(-0.2, 10);
+  });
+
+  it('brings a value that is too high down to 20 % over theory', () => {
+    const adjust = pointAdjustment(0.1704, 0.1282);
+    expect(adjust).toBeCloseTo(0.1282 * 1.2 - 0.1704, 10);
+    expect((0.1704 + adjust - 0.1282) / 0.1282).toBeCloseTo(0.2, 10);
+  });
+
+  it('brings a value under zero up to the lower edge too', () => {
+    expect(-0.004 + pointAdjustment(-0.004, 0.0106)).toBeCloseTo(0.0106 * 0.8, 10);
+  });
+
+  it('never moves a value further than the edge of the band', () => {
+    for (const theory of [0.0106, 0.1282, 0.417, 0.725]) {
+      for (const measured of [-0.05, 0, 0.001, 0.2, 0.4, 0.9, 1.5]) {
+        const percent = (measured + pointAdjustment(measured, theory) - theory) / theory;
+        expect(Math.abs(percent)).toBeLessThanOrEqual(0.2 + 1e-9);
+      }
+    }
+  });
+
+  it('takes another tolerance when given one', () => {
+    expect(0.25 + pointAdjustment(0.25, 0.417, 0.05)).toBeCloseTo(0.417 * 0.95, 10);
   });
 });

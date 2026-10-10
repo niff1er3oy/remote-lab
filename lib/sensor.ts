@@ -91,3 +91,20 @@ export function createAverager(size = SAMPLES_PER_READING) {
     },
   };
 }
+
+// The calibration is set again at each measuring point: when the value read
+// there is further than this from the theory value, an offset for that point
+// brings it to the edge of the band. It is the lab owner's rule for the rig,
+// and it means such a value is no longer what the sensor read: the offset is
+// kept with the value, in the table, its CSV and the visit's record.
+export const POINT_TOLERANCE = 0.2;
+
+/**
+ * The offset in mT to add to a value read at a measuring point so that it is
+ * within POINT_TOLERANCE of the theory value: 0 when it already is.
+ */
+export function pointAdjustment(measured: number, theory: number, tolerance = POINT_TOLERANCE): number {
+  const low = Math.min(theory * (1 - tolerance), theory * (1 + tolerance));
+  const high = Math.max(theory * (1 - tolerance), theory * (1 + tolerance));
+  return measured < low ? low - measured : measured > high ? high - measured : 0;
+}

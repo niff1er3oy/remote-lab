@@ -31,7 +31,11 @@ export type LabEvent = {
    * 'background' or 'zero' event before it that worked.
    */
   bMeasured?: number | null;
-  /** The rig's error, the question asked, or how the visit ended (an EndReason). */
+  /**
+   * The rig's error, the question asked, how the visit ended (an EndReason),
+   * or for a value that was read, the note that the calibration was set again
+   * at that point and by how much.
+   */
   detail?: string;
 };
 
@@ -106,10 +110,10 @@ export function describeEvent(e: LabEvent): string {
     }
     case 'move':
       return e.ok
-        ? `เลื่อนหัววัดไป Z = ${signed(e.zCm ?? 0)} cm · B = ${fieldText(e.bMeasured)}`
+        ? `เลื่อนหัววัดไป Z = ${signed(e.zCm ?? 0)} cm · B = ${fieldText(e.bMeasured)}${e.detail ? ` (${e.detail})` : ''}`
         : `เลื่อนหัววัดไป Z = ${signed(e.zCm ?? 0)} cm ไม่สำเร็จ: ${e.detail}`;
     case 'reading':
-      return `${e.instrument} · B = ${fieldText(e.bMeasured)} (ทฤษฎี ${e.bTheory?.toFixed(3)} mT)`;
+      return `${e.instrument} · B = ${fieldText(e.bMeasured)} (ทฤษฎี ${e.bTheory?.toFixed(3)} mT)${e.detail ? ` (${e.detail})` : ''}`;
     case 'question':
       return `ถามผู้ช่วย: ${e.detail}`;
     case 'end':
