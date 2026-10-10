@@ -957,11 +957,10 @@ export default function RemoteLabPage() {
     // Taken while the coil is still on, before anything else is sent to the rig.
     const I = ampsOf(inst);
     const bTheory = calcBCoil(inst.turns, I, inst.R);
-    // The calibration is set on this reading itself, not carried over from
-    // the one taken when the coil came on.
-    const at = adjustAt(await freshReading(), bTheory);
-    record({ kind: 'reading', instrument: inst.name, I, bTheory, bMeasured: at.value });
-  }, [record, freshReading, ampsOf, adjustAt]);
+    // A coil's value is recorded as it was read: the calibration of a
+    // measuring point (lib/sensor.ts) is the solenoid's alone.
+    record({ kind: 'reading', instrument: inst.name, I, bTheory, bMeasured: await freshReading() });
+  }, [record, freshReading, ampsOf]);
 
   useEffect(() => {
     if (!rigReady) return;
@@ -997,9 +996,9 @@ export default function RemoteLabPage() {
           setMeasData(prev => new Map(prev).set(0, { bMeasured: at.value ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
           record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured: at.value });
         } else {
-          // A coil has one measuring point, the one its probe is at: the
-          // calibration is set there as soon as the coil is on.
-          adjustAt(await freshReading(), calcBCoil(inst.turns, ampsOf(inst), inst.R));
+          // A coil is shown as it is read, whatever its distance from
+          // theory: no calibration is set at its one measuring point.
+          await freshReading();
         }
       } finally {
         setIsRunning(false);
