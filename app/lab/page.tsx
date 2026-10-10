@@ -797,9 +797,13 @@ export default function RemoteLabPage() {
   // goes on what is shown for as long as the probe stays, and is 0 for a value
   // that needed none. The page does not say when it has done so.
   const [pointAdjust, setPointAdjust] = useState(0);
+  const supplyOnNow = useRef<boolean | null>(null);
+  useEffect(() => { supplyOnNow.current = supplyOn; }, [supplyOn]);
   const adjustAt = useCallback((reading: number | null, bTheory: number) => {
-    // No value from the sensor is no measurement: there is nothing to calibrate.
-    const adjust = reading === null ? 0 : pointAdjustment(reading, bTheory);
+    // No value from the sensor is no measurement, and with the supply off
+    // there is no field of the instrument's: in neither case is there anything
+    // to calibrate against theory.
+    const adjust = reading === null || supplyOnNow.current === false ? 0 : pointAdjustment(reading, bTheory);
     setPointAdjust(adjust);
     return { value: reading === null ? null : reading + adjust };
   }, []);
@@ -808,10 +812,10 @@ export default function RemoteLabPage() {
   // winding (the sensor would otherwise read the very field being measured,
   // and that would be taken off from then on). With a coil the student
   // switches the supply off first and it is read where the probe is. With the
-  // solenoid the page does it all: the arm takes the probe to the far end of
-  // its row (position PROBE_MAX), where little of the solenoid's field is left
-  // in any case, the supply goes off for the reading and back on after it, and
-  // that position is then measured like any other.
+  // solenoid the page does it all: the supply goes off, the arm goes home
+  // (sole_b.py), clear of the solenoid, the background is read there, and
+  // then the supply goes back on and the probe back to the middle of the
+  // solenoid, which is measured as it is when the solenoid is first switched on.
   const [zeroing, setZeroing] = useState(false);
   const setZero = useCallback(async (): Promise<boolean> => {
     const inst = instruments[instrument];
@@ -828,12 +832,14 @@ export default function RemoteLabPage() {
       setIsRunning(true);
       try {
         adjustAt(null, 0); // the point the probe was at is being left
-        let failed = await sendToRig({ script: inst.script, position: PROBE_MAX });
-        if (failed) failed = `เลื่อนหัววัดไปตำแหน่ง +${PROBE_MAX} ไม่สำเร็จ: ${failed}`;
-        else setZ(probeZ(PROBE_MAX));
-        if (!failed && wasOn) {
-          failed = await supplyTo(false);
-          if (failed) failed = `ปิดแหล่งจ่ายไฟไม่สำเร็จ: ${failed}`;
+        let failed = wasOn ? await supplyTo(false) : null;
+        if (failed) failed = `ปิดแหล่งจ่ายไฟไม่สำเร็จ: ${failed}`;
+        let home = false;
+        if (!failed) {
+          failed = await sendToRig(breakCommand(inst.type));
+          record({ kind: 'power-off', instrument: inst.name, ok: !failed, detail: failed ?? undefined });
+          if (failed) failed = `พาแขนกลกลับ home ไม่สำเร็จ: ${failed}`;
+          else { home = true; powered.current = null; }
         }
         if (!failed) await armSettled();
         const vector = failed ? null : await freshVector();
@@ -842,18 +848,30 @@ export default function RemoteLabPage() {
         else record({ kind: 'zero', ok: false, bMeasured: null, detail: failed ?? undefined });
         // The supply the page switched off goes back on, whatever became of the zero.
         const back = wasOn ? await supplyTo(true) : null;
-        // With the supply on again the far end is a measuring position like the others.
-        if (vector !== null && wasOn && !back) {
-          const I = ampsOf(inst);
-          const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, probeZ(PROBE_MAX));
-          await armSettled();
-          const at = adjustAt(await freshReading(), bTheory);
-          setMeasData(prev => new Map(prev).set(PROBE_MAX, { bMeasured: at.value ?? 0, bTheory, zero: fieldSize(vector) }));
-          record({ kind: 'move', instrument: inst.name, ok: true, zCm: PROBE_MAX, I, bTheory, bMeasured: at.value });
+        // The arm is home with the solenoid cut: the probe goes back to the
+        // middle, as it does when the solenoid is switched on.
+        let restart: string | null = null;
+        if (home) {
+          restart = await sendToRig(startCommand(inst));
+          record({ kind: 'power-on', instrument: inst.name, ok: !restart, detail: restart ?? undefined });
+          if (!restart) {
+            powered.current = inst;
+            setZ(0);
+            // Measured only with current in the winding.
+            if (wasOn && !back) {
+              const I = ampsOf(inst);
+              const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
+              await armSettled();
+              const at = adjustAt(await freshReading(), bTheory);
+              setMeasData(prev => new Map(prev).set(0, { bMeasured: at.value ?? 0, bTheory, zero: backgroundNow.current && fieldSize(backgroundNow.current) }));
+              record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured: at.value });
+            }
+          }
         }
         setRigError(failed
           ? { text: `ตั้งศูนย์ไม่สำเร็จ: ${failed} ค่าศูนย์เดิมยังใช้อยู่`, canRetry: false }
-          : back ? { text: `ตั้งศูนย์แล้ว แต่เปิดแหล่งจ่ายไฟคืนไม่สำเร็จ: ${back}`, canRetry: false } : null);
+          : back ? { text: `ตั้งศูนย์แล้ว แต่เปิดแหล่งจ่ายไฟคืนไม่สำเร็จ: ${back}`, canRetry: false }
+            : restart ? { text: `ตั้งศูนย์แล้ว แต่เปิดใช้อุปกรณ์อีกครั้งไม่สำเร็จ: ${restart}`, canRetry: true } : null);
         return !failed;
       } finally {
         setZeroing(false);
@@ -2121,7 +2139,7 @@ function SensorPanel({ inst, I, bTheory, bMeasured, background, z, zero, waiting
    * while it is being read or the rig is at work; `blocked` while the supply
    * is on, when pressing it only says to switch the supply off first.
    */
-  /** `arm`: with the solenoid, the arm takes the probe to the far end, where the background is read again. */
+  /** `arm`: with the solenoid, the arm goes home for the background to be read again. */
   zero: { set: () => Promise<boolean>; busy: boolean; blocked: boolean; arm: boolean };
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -2186,7 +2204,7 @@ function SensorPanel({ inst, I, bTheory, bMeasured, background, z, zero, waiting
         <button
           ref={zeroRef} type="button" onClick={pressZero} disabled={zero.busy} aria-disabled={zero.blocked || undefined}
           aria-label="Set 0 ตั้งค่าที่เซนเซอร์อ่านได้ตอนนี้เป็นศูนย์"
-          title={zero.blocked ? 'ปิดแหล่งจ่ายไฟก่อน จึงจะตั้งศูนย์ได้' : zero.arm ? 'เลื่อนหัววัดไปตำแหน่ง +10 ปิดแหล่งจ่ายไฟชั่วคราว แล้วอ่านสนามพื้นหลังใหม่ตรงนั้น' : 'ตั้งค่าที่เซนเซอร์อ่านได้ตอนนี้เป็นศูนย์ (สนามพื้นหลัง ณ ตำแหน่งนี้)'}
+          title={zero.blocked ? 'ปิดแหล่งจ่ายไฟก่อน จึงจะตั้งศูนย์ได้' : zero.arm ? 'ปิดแหล่งจ่ายไฟชั่วคราว พาแขนกลกลับ home อ่านสนามพื้นหลังใหม่ แล้วพาหัววัดกลับมาที่กึ่งกลางโซลีนอยด์' : 'ตั้งค่าที่เซนเซอร์อ่านได้ตอนนี้เป็นศูนย์ (สนามพื้นหลัง ณ ตำแหน่งนี้)'}
           className={`-my-1 h-6 shrink-0 rounded-md border px-2 text-xs font-semibold normal-case tracking-normal transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${zero.blocked ? 'border-white/5 text-gray-500' : 'border-white/10 text-gray-200 hover:border-cyan-500/30 hover:text-white'}`}
         >
           Set 0
