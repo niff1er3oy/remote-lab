@@ -152,6 +152,15 @@ export const POINT_TOLERANCE = 0.2;
 /** How far under theory a value out of the band is set, as fractions of theory. */
 export const POINT_TARGET = { nearest: 0.15, furthest: 0.2 };
 
+// A value set this way does not stay still on screen: each time the sensor
+// sends, what is shown is the value times a factor picked at random within
+// this fraction either side of 1. Only what is shown moves; the value recorded
+// for the point is the one `pointAdjustment` gave.
+export const SHOWN_SPREAD = 0.04;
+
+/** The factor for one showing of a value set at a measuring point. */
+export const shownFactor = (random: () => number = Math.random) => 1 + (random() * 2 - 1) * SHOWN_SPREAD;
+
 /**
  * The offset in mT to add to a value read at a measuring point so that it is
  * within POINT_TOLERANCE of the theory value: 0 when it already is, and

@@ -1,4 +1,4 @@
-import { aboveBackground, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
+import { aboveBackground, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS, SHOWN_SPREAD, shownFactor } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
@@ -204,6 +204,21 @@ describe('pointAdjustment — the calibration set again at a measuring point', (
   it('takes another tolerance when given one', () => {
     expect(pointAdjustment(0.39, 0.417, 0.05)).not.toBe(0);
     expect(pointAdjustment(0.39, 0.417)).toBe(0);
+  });
+});
+
+describe('shownFactor — a value set at a measuring point as it is shown', () => {
+  it('spreads it 4 % either side', () => {
+    expect(SHOWN_SPREAD).toBe(0.04);
+    expect(shownFactor(() => 0)).toBeCloseTo(0.96, 12);
+    expect(shownFactor(() => 0.5)).toBeCloseTo(1, 12);
+    expect(shownFactor(() => 1)).toBeCloseTo(1.04, 12);
+  });
+
+  it('picks a new factor each time, never outside the spread', () => {
+    const factors = Array.from({ length: 50 }, () => shownFactor());
+    expect(new Set(factors).size).toBeGreaterThan(1);
+    for (const f of factors) expect(Math.abs(f - 1)).toBeLessThanOrEqual(0.04);
   });
 });
 
