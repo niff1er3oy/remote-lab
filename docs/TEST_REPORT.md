@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 10 ตุลาคม 2569 เวลา 14:27
+- รันเมื่อ: 10 ตุลาคม 2569 เวลา 14:40
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1721 ข้อ ใน 52 ไฟล์ (ผ่าน 1721 ไม่ผ่าน 0)
-- เวลาที่ใช้: 16.3 วินาที
+- จำนวนเทสต์: 1736 ข้อ ใน 52 ไฟล์ (ผ่าน 1736 ไม่ผ่าน 0)
+- เวลาที่ใช้: 10.6 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -13,9 +13,9 @@
 
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
-| API ฝั่งเซิร์ฟเวอร์ | 19 | 729 | 729 | 0 |
+| API ฝั่งเซิร์ฟเวอร์ | 19 | 739 | 739 | 0 |
 | หน้าเว็บและคอมโพเนนต์ | 15 | 520 | 520 | 0 |
-| ไลบรารีและตรรกะกลาง | 18 | 472 | 472 | 0 |
+| ไลบรารีและตรรกะกลาง | 18 | 477 | 477 | 0 |
 
 ## สรุปตามไฟล์
 
@@ -34,7 +34,7 @@
 | `api/dashboard-stats.test.ts` | ตัวเลขสรุปและรอบที่จองไว้บน dashboard | 10 | ผ่าน |
 | `api/db-test.test.ts` | การตรวจการเชื่อมต่อฐานข้อมูล | 4 | ผ่าน |
 | `api/gaps.test.ts` | กรณีที่เหลือของ API ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม เช่น ฐานข้อมูลล้มเหลว | 24 | ผ่าน |
-| `api/hardware.test.ts` | API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว | 74 | ผ่าน |
+| `api/hardware.test.ts` | API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว | 84 | ผ่าน |
 | `api/instruments.test.ts` | การเปิดปิดอุปกรณ์การทดลองโดย admin และผลต่อ API อุปกรณ์กับหน้าห้องแลป | 79 | ผ่าน |
 | `api/lab-presence.test.ts` |  | 43 | ผ่าน |
 | `api/lab-record.test.ts` | การเก็บบันทึกการทดลองลงฐานข้อมูลและเปิดดูย้อนหลัง: การตรวจข้อมูลทีละเหตุการณ์ สิทธิ์ของเจ้าของรอบและ admin ช่วงเวลาที่บันทึกได้ และการไม่ให้บันทึกที่สั้นกว่าทับของเดิม | 51 | ผ่าน |
@@ -59,14 +59,14 @@
 | `field-geometry.test.ts` | การอ่านแบบจำลองสนามไปวาด: เส้นของแต่ละอุปกรณ์ ความสว่างตามขนาดสนาม หัวลูกศร จำนวนเส้นในมุมมอง 3D และกรอบภาพ | 91 | ผ่าน |
 | `field-lines.test.ts` | ข้อมูลเส้นสนามที่ใช้วาดภาพในหน้าแรก: สมมาตร ไม่ตัดกัน และได้สัดส่วนจริงของอุปกรณ์ | 36 | ผ่าน |
 | `field-model.test.ts` | ข้อมูลเส้นสนามของแบบจำลองในห้องแลป: ตรวจทิศและขนาดสนามกับกฎบีโอต์-ซาวาร์โดยตรง ความสมมาตร ระยะห่างของเส้นตามความเข้มสนาม และจำนวนเส้นตามจำนวนรอบ | 39 | ผ่าน |
-| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 64 | ผ่าน |
+| `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 67 | ผ่าน |
 | `lab-presence.test.ts` |  | 28 | ผ่าน |
 | `lab-readiness.test.ts` | การตรวจความพร้อมของเครื่องแลปจริง: ไฟล์สคริปต์ Python ไลบรารี ค่าจากเซนเซอร์ กล้อง ฐานข้อมูล และการไม่สั่งอุปกรณ์ทำงานระหว่างตรวจ | 22 | ผ่าน |
 | `lab-status.test.ts` | การตรวจว่ากล้องและเซนเซอร์ตอบสนองหรือไม่ และ API สถานะอุปกรณ์ของ admin | 12 | ผ่าน |
 | `lib-gaps.test.ts` | กรณีที่เหลือของโมดูลใน lib ที่เทสต์ไฟล์อื่นยังไม่ครอบคลุม | 16 | ผ่าน |
 | `math.test.tsx` | การแสดงสูตรคณิตศาสตร์ด้วย KaTeX ในแชตผู้ช่วย AI | 5 | ผ่าน |
 | `motion.test.ts` | ตัวช่วยแอนิเมชัน: ไม่ซ่อนเนื้อหาเมื่อผู้ใช้ตั้ง reduced motion หรือเนื้อหาอยู่บนจอแล้ว | 14 | ผ่าน |
-| `physics.test.ts` | สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 21 จุด | 20 | ผ่าน |
+| `physics.test.ts` | สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 21 จุด | 22 | ผ่าน |
 | `rig-access.test.ts` | กติกาว่าใครสั่งอุปกรณ์ได้: รอบที่กำลังดำเนินอยู่ รอบที่เพิ่งจบ และกรณีที่ไม่มีสิทธิ์ | 27 | ผ่าน |
 | `rig.test.ts` | ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์ | 31 | ผ่าน |
 | `safety.test.ts` | ตัวกันของชุดทดสอบเอง: เทสต์ต้องไม่ใช้ credential จริง และแตะ Firebase หรือเครือข่ายไม่ได้ถ้าไม่ได้จำลองไว้ | 3 | ผ่าน |
@@ -706,7 +706,7 @@ API ผู้ช่วย AI: สิทธิ์ การกรองข้อ�
 
 API สั่งอุปกรณ์: สิทธิ์ คำสั่งที่รับ ช่วงตำแหน่งหัววัด การกันคำสั่งซ้อน และการไม่เปิดเผยรายละเอียดเมื่อสคริปต์ล้มเหลว
 
-ผล: ผ่านทั้ง 74 ข้อ
+ผล: ผ่านทั้ง 84 ข้อ
 
 **POST /api/hardware — who may command the rig**
 
@@ -753,6 +753,20 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — runs coil_b.py with the rig's Python, the script name as the only argument, in the script folder
 - ผ่าน — runs sole_b.py with the rig's Python, the script name as the only argument, in the script folder
 - ผ่าน — runs sole.py --position <n> for every whole number from -6 to 6
+**POST /api/hardware — the accepted commands › sole.py --position set0, the probe taken out for a zero**
+
+- ผ่าน — runs sole.py --position set0
+- ผ่าน — does not move the supply to the solenoid for it, even when another relay is on
+- ผ่าน — leaves the solenoid on record with no measuring position, so that leaving still returns the arm
+- ผ่าน — refuses the position "SET0"
+- ผ่าน — refuses the position "set0 "
+- ผ่าน — refuses the position "set1"
+- ผ่าน — refuses the position "zero"
+- ผ่าน — refuses the position "set0; rm -rf /"
+- ผ่าน — refuses the position "--position"
+- ผ่าน — is not a break command: it is refused once the round has ended
+**POST /api/hardware — the accepted commands**
+
 - ผ่าน — ignores a position sent along with coil_1.py
 - ผ่าน — ignores a position sent along with coil_b.py
 - ผ่าน — refuses sole.py when the position is one below the range
@@ -2135,7 +2149,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV
 
-ผล: ผ่านทั้ง 64 ข้อ
+ผล: ผ่านทั้ง 67 ข้อ
 
 **summarise — the figures at the top of the summary**
 
@@ -2225,6 +2239,11 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — gives no zero for a position read when the background could not be
 - ผ่าน — keeps a position with no sensor value as no measurement
 - ผ่าน — leaves out a position the probe never reached, a coil's reading and another instrument
+**a Set 0 that failed for a reason other than the sensor**
+
+- ผ่าน — says why in the timeline
+- ผ่าน — says why in the CSV
+- ผ่าน — still blames the sensor when no reason is given
 
 #### `lab-presence.test.ts`
 
@@ -2417,7 +2436,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 สูตรสนามแม่เหล็กของขดลวดเดี่ยวและโซลีนอยด์ ค่าคงที่ของโซลีนอยด์ 8 cm และตำแหน่งหัววัด 21 จุด
 
-ผล: ผ่านทั้ง 20 ข้อ
+ผล: ผ่านทั้ง 22 ข้อ
 
 **calcBCoil — field at the centre of a single coil**
 
@@ -2447,6 +2466,10 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — writes -0, a hair under zero, as zero and not as a negative zero
 - ผ่าน — keeps the sign of a value that does not round away
 - ผ่าน — shows the sign of a difference either way, and a plus for none
+**where Set 0 leaves the solenoid's probe**
+
+- ผ่าน — is the start of the row: 317.0 mm against the middle at 437.9 mm, outside every measuring position
+- ผ่าน — is where the solenoid's own field is a small part of the field at its middle
 
 #### `rig-access.test.ts`
 

@@ -418,3 +418,19 @@ describe('a visit left and continued in the same round', () => {
     });
   });
 });
+
+describe('a Set 0 that failed for a reason other than the sensor', () => {
+  const failed: LabEvent = { at: 0, kind: 'zero', ok: false, bMeasured: null, detail: 'เลื่อนหัววัดออกจากโซลีนอยด์ไม่สำเร็จ: อุปกรณ์กำลังทำงานอยู่' };
+
+  it('says why in the timeline', () => {
+    expect(describeEvent(failed)).toBe('ตั้งศูนย์ (Set 0) ไม่สำเร็จ: เลื่อนหัววัดออกจากโซลีนอยด์ไม่สำเร็จ: อุปกรณ์กำลังทำงานอยู่ ค่าศูนย์เดิมยังใช้อยู่');
+  });
+
+  it('says why in the CSV', () => {
+    expect(toCsv([failed])).toContain('เลื่อนหัววัดออกจากโซลีนอยด์ไม่สำเร็จ: อุปกรณ์กำลังทำงานอยู่ ค่าศูนย์เดิมยังใช้อยู่');
+  });
+
+  it('still blames the sensor when no reason is given', () => {
+    expect(describeEvent({ at: 0, kind: 'zero', ok: false, bMeasured: null })).toBe('ตั้งศูนย์ (Set 0) ไม่สำเร็จ เพราะเซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่');
+  });
+});

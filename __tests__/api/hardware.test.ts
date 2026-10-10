@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { GET, POST } from '@/app/api/hardware/route';
-import { resetRigState, runRigScript } from '@/lib/rig';
+import { resetRigState, rigState, runRigScript } from '@/lib/rig';
 import { breakDb, resetDb, seedBooking } from '../helpers/server/firestore';
 import { signInAs, signOut } from '../helpers/server/session';
 import { freezeTime, restoreTime, HOUR, MINUTE } from '../helpers/server/time';
@@ -259,6 +259,44 @@ describe('POST /api/hardware — the accepted commands', () => {
       expect(res.status).toBe(200);
       expect(runScript.mock.calls).toEqual([[PYTHON, ['sole.py', '--position', String(n)], { cwd: '/home/admin/Documents' }]]);
     }
+  });
+
+  describe('sole.py --position set0, the probe taken out for a zero', () => {
+    const ran = () => runScript.mock.calls.map(([, args]) => (args as string[]).join(' '));
+    afterEach(() => resetRigState());
+
+    it('runs sole.py --position set0', async () => {
+      const res = await send({ script: 'sole.py', position: 'set0' });
+      expect(res.status).toBe(200);
+      expect(runScript.mock.calls).toEqual([[PYTHON, ['sole.py', '--position', 'set0'], { cwd: '/home/admin/Documents' }]]);
+    });
+
+    it('does not move the supply to the solenoid for it, even when another relay is on', async () => {
+      await runRigScript(['relay.py', '--status', 'on', '--name', 'coil1']);
+      runScript.mockClear();
+      await send({ script: 'sole.py', position: 'set0' });
+      expect(ran()).toEqual(['sole.py --position set0']);
+    });
+
+    it('leaves the solenoid on record with no measuring position, so that leaving still returns the arm', async () => {
+      await send({ script: 'sole.py', position: 3 });
+      await send({ script: 'sole.py', position: 'set0' });
+      expect(rigState()).toMatchObject({ circuit: 'sole.py', position: null });
+    });
+
+    it.each(['SET0', 'set0 ', 'set1', 'zero', 'set0; rm -rf /', '--position'])('refuses the position %j', async (position) => {
+      runScript.mockClear();
+      expect((await send({ script: 'sole.py', position })).status).toBe(400);
+      expect(runScript).not.toHaveBeenCalled();
+    });
+
+    it('is not a break command: it is refused once the round has ended', async () => {
+      resetDb();
+      seedBooking('round', { status: 'completed', start: NOW - 3 * 60 * MINUTE, end: NOW - 5 * MINUTE });
+      runScript.mockClear();
+      expect((await send({ script: 'sole.py', position: 'set0' })).status).toBe(403);
+      expect(runScript).not.toHaveBeenCalled();
+    });
   });
 
   it.each(['coil_1.py', 'coil_b.py'])('ignores a position sent along with %s', async (script) => {

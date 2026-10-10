@@ -1,4 +1,4 @@
-import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_MAX, PROBE_MIN, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID as RIG_SOLENOID } from '@/lib/physics';
+import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_MAX, PROBE_MIN, PROBE_POSITIONS, PROBE_SET0, PROBE_SET0_Z, PROBE_STEP_M, probeZ, signedFixed, SOLENOID as RIG_SOLENOID } from '@/lib/physics';
 
 // A 16 cm solenoid with the rig's winding and current, worked by hand below.
 // (The rig's own solenoid is 8 cm long; it has its own tests further down.)
@@ -124,5 +124,19 @@ describe('fixed and signedFixed — a field as text', () => {
     expect(signedFixed(-0.3, 3)).toBe('-0.300');
     expect(signedFixed(0, 3)).toBe('+0.000');
     expect(signedFixed(-0.0002, 3)).toBe('+0.000');
+  });
+});
+
+describe('where Set 0 leaves the solenoid\'s probe', () => {
+  it('is the start of the row: 317.0 mm against the middle at 437.9 mm, outside every measuring position', () => {
+    expect(PROBE_SET0).toBe('set0');
+    expect(PROBE_SET0_Z).toBeCloseTo((317.0 - 437.9) / 1000, 12);
+    expect(PROBE_SET0_Z).toBeLessThan(probeZ(PROBE_MIN));
+    expect(cmText(PROBE_SET0_Z)).toBe('-12.09');
+  });
+
+  it('is where the solenoid\'s own field is a small part of the field at its middle', () => {
+    const at = (z: number) => calcBSolenoid(RIG_SOLENOID.N, RIG_SOLENOID.I, RIG_SOLENOID.L, RIG_SOLENOID.R, z);
+    expect(at(PROBE_SET0_Z) / at(0)).toBeLessThan(0.02);
   });
 });

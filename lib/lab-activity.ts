@@ -10,7 +10,7 @@ export type LabEvent = {
   kind:
     | 'start'      // the student pressed start
     | 'background' // the room's own field was read, before anything was switched on (bMeasured)
-    | 'zero'       // the student set the zero again with Set 0, the supply being off (bMeasured: the new zero)
+    | 'zero'       // the student set the zero again with Set 0, the supply being off (bMeasured: the new zero; detail: why it failed)
     | 'power-on'   // an instrument's circuit was switched on
     | 'power-off'  // a circuit was cut
     | 'supply'     // the power supply was switched on or off (detail: 'on' | 'off')
@@ -93,7 +93,9 @@ export function describeEvent(e: LabEvent): string {
     case 'zero':
       return e.ok && typeof e.bMeasured === 'number'
         ? `ตั้งศูนย์ใหม่ (Set 0) ที่ ${fixed(e.bMeasured, 3)} mT ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว`
-        : 'ตั้งศูนย์ (Set 0) ไม่สำเร็จ เพราะเซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่';
+        : e.detail
+          ? `ตั้งศูนย์ (Set 0) ไม่สำเร็จ: ${e.detail} ค่าศูนย์เดิมยังใช้อยู่`
+          : 'ตั้งศูนย์ (Set 0) ไม่สำเร็จ เพราะเซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่';
     case 'power-on':
       return e.ok ? `เปิดใช้ ${e.instrument}` : `เปิดใช้ ${e.instrument} ไม่สำเร็จ: ${e.detail}`;
     case 'power-off':
@@ -281,7 +283,7 @@ export function toCsv(events: LabEvent[]): string {
         e.kind === 'end' ? (e.detail === 'time-up' ? 'หมดเวลา' : e.detail === 'round-closed' ? ROUND_CLOSED_TEXT : 'กดเสร็จสิ้น')
           : e.kind === 'supply' ? (e.detail === 'on' ? 'เปิด' : 'ปิด')
             : e.kind === 'background' ? (e.ok ? 'ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว' : 'เซนเซอร์ไม่ส่งค่า ค่าที่วัดได้ยังรวมสนามพื้นหลัง')
-              : e.kind === 'zero' ? (e.ok ? 'ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว' : 'เซนเซอร์ไม่ส่งค่า ค่าศูนย์เดิมยังใช้อยู่')
+              : e.kind === 'zero' ? (e.ok ? 'ค่าที่วัดได้หลังจากนี้หักค่านี้ออกแล้ว' : `${e.detail ?? 'เซนเซอร์ไม่ส่งค่า'} ค่าศูนย์เดิมยังใช้อยู่`)
                 : e.detail ?? '',
       ),
     ].join(',');

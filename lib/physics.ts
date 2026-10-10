@@ -17,6 +17,11 @@ export const PROBE_MIN = -10;
 export const PROBE_MAX = 10;
 export const PROBE_STEP_M = 0.01;
 export const PROBE_POSITIONS = Array.from({ length: PROBE_MAX - PROBE_MIN + 1 }, (_, i) => PROBE_MIN + i);
+// Set 0 with the solenoid: `sole.py --position set0` takes the probe out of
+// the solenoid, to the start point of its row (START_X = 317.0 mm in sole.py,
+// against the middle at 437.9 mm), where the zero is read.
+export const PROBE_SET0 = 'set0';
+export const PROBE_SET0_Z = -0.1209;
 /** Where the probe is at position `n`, in metres from the middle of the solenoid. */
 export const probeZ = (position: number) => position * PROBE_STEP_M;
 /** A length in metres as centimetres, to at most two decimals: "2.5", "0", "-10". */
