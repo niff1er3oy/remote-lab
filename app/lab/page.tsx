@@ -119,6 +119,11 @@ async function sendToRig(command: RigCommand): Promise<string | null> {
 // How long a fresh reading is waited for after the probe arrives. Twenty
 // values take about a second; longer than this and the sensor is not sending.
 const FRESH_READING_MS = 4000;
+// How long the probe is left to come to rest once the arm has stopped, before
+// a reading is taken there. Until the reading is in, the page shows the
+// measured value as waiting rather than whatever the sensor sees on the way.
+const ARM_SETTLE_MS = 3000;
+const armSettled = () => new Promise<void>(resolve => setTimeout(resolve, ARM_SETTLE_MS));
 // A sensor that has sent nothing for this long is not waited for at all.
 const SENSOR_SILENT_MS = 1000;
 
@@ -802,6 +807,7 @@ export default function RemoteLabPage() {
           else setZ(probeZ(PROBE_MAX));
         }
         const inForce = backgroundNow.current ?? 0;
+        if (!failed) await armSettled();
         const reading = failed ? null : await freshReading();
         if (!failed && reading === null) failed = 'เซนเซอร์ไม่ส่งค่า';
         if (reading !== null) {
@@ -943,6 +949,7 @@ export default function RemoteLabPage() {
         if (inst.type === 'solenoid') {
           const I = ampsOf(inst);
           const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
+          await armSettled();
           const reading = await freshReading();
           // No value from the sensor is 0 on screen, never the theory value.
           setMeasData(prev => new Map(prev).set(0, { bMeasured: reading ?? 0, bTheory, zero: backgroundNow.current }));
@@ -1170,7 +1177,7 @@ export default function RemoteLabPage() {
               <SensorPanel
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured} background={background}
-                z={z}
+                z={z} waiting={isBusy}
                 zero={{ set: setZero, busy: zeroing || isBusy || !rigReady, blocked: supplyOn === true && inst.type === 'coil', arm: inst.type === 'solenoid' }}
               />
             </div>
@@ -1180,7 +1187,7 @@ export default function RemoteLabPage() {
                 <SplitFieldPanel
                   instType={inst.type} turns={inst.type === 'coil' ? inst.turns : 0}
                   bTheory={bTheory} bMeasured={bMeasured} bPeak={bPeak}
-                  I={I} z={z}
+                  I={I} z={z} waiting={isBusy}
                 />
               </div>
               {inst.type === 'solenoid' && (
@@ -1252,7 +1259,7 @@ export default function RemoteLabPage() {
               <SensorPanel
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured} background={background}
-                z={z}
+                z={z} waiting={isBusy}
                 zero={{ set: setZero, busy: zeroing || isBusy || !rigReady, blocked: supplyOn === true && inst.type === 'coil', arm: inst.type === 'solenoid' }}
               />
               <FormulaPanel inst={inst} I={I} z={z} widthClassName="w-full" />
@@ -1265,7 +1272,7 @@ export default function RemoteLabPage() {
                 <SplitFieldPanel
                   instType={inst.type} turns={inst.type === 'coil' ? inst.turns : 0}
                   bTheory={bTheory} bMeasured={bMeasured} bPeak={bPeak}
-                  I={I} z={z}
+                  I={I} z={z} waiting={isBusy}
                 />
               </div>
               {inst.type === 'solenoid' && (
@@ -2029,7 +2036,9 @@ function InstrumentSelector({ active, onSelect, disabled, closed = NO_INSTRUMENT
 
 // ── Split Field Panel ─────────────────────────────────────────────────────────
 
-function SplitFieldPanel({ instType, turns, bTheory, bMeasured, bPeak, I, z }: {
+function SplitFieldPanel({ instType, turns, bTheory, bMeasured, bPeak, I, z, waiting }: {
+  /** The rig is still carrying out a command: there is no measured value to show yet. */
+  waiting: boolean;
   instType: 'solenoid' | 'coil';
   /** Turns of the single coil; not used for the solenoid. */
   turns: number;
@@ -2052,7 +2061,7 @@ function SplitFieldPanel({ instType, turns, bTheory, bMeasured, bPeak, I, z }: {
           <span className="text-gray-600 font-normal">VS</span>
           <span className="flex items-center gap-1.5" style={{ color: '#22d3ee' }}>
             <span className="h-2 w-2 shrink-0 rounded-full inline-block" style={{ backgroundColor: '#22d3ee' }} />
-            วัดจริง · {fixed(bMeasured, 3)} mT
+            วัดจริง · {waiting ? 'รอค่า' : `${fixed(bMeasured, 3)} mT`}
           </span>
         </div>
         {/* I is already in the readings panel; it only joins this bar when it is wide. */}
@@ -2065,7 +2074,7 @@ function SplitFieldPanel({ instType, turns, bTheory, bMeasured, bPeak, I, z }: {
       </div>
 
       <div className="flex-1 min-h-0">
-        <FieldViz kind={instType} turns={turns} zCm={Number(cmText(z))} bTheory={bTheory} bMeasured={bMeasured} bPeak={bPeak} />
+        <FieldViz kind={instType} turns={turns} zCm={Number(cmText(z))} bTheory={bTheory} bMeasured={waiting ? 0 : bMeasured} bPeak={bPeak} />
       </div>
     </div>
   );
@@ -2073,7 +2082,9 @@ function SplitFieldPanel({ instType, turns, bTheory, bMeasured, bPeak, I, z }: {
 
 // ── Sensor Panel ──────────────────────────────────────────────────────────────
 
-function SensorPanel({ inst, I, bTheory, bMeasured, background, z, zero }: {
+function SensorPanel({ inst, I, bTheory, bMeasured, background, z, zero, waiting }: {
+  /** The rig is still carrying out a command (the arm moving, the probe settling, a reading being averaged): the measured value is not shown until it is done. */
+  waiting: boolean;
   inst: Inst;
   I: number;
   bTheory: number; bMeasured: number;
@@ -2160,7 +2171,7 @@ function SensorPanel({ inst, I, bTheory, bMeasured, background, z, zero }: {
           all six readings stay on screen; the scrollbar is only a fallback. */}
       <div className="flex-1 min-h-0 flex flex-col gap-1.5 short:gap-1 overflow-y-auto">
         {rows.map(r => (
-          <SensorRow key={r.label} {...r} />
+          <SensorRow key={r.label} {...(waiting && (r.label === 'B วัดจริง' || r.label === 'ΔB') ? { ...r, value: 'รอค่า', unit: '', color: '#6b7280' } : r)} />
         ))}
       </div>
     </div>
@@ -2837,7 +2848,9 @@ function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMovin
       // back to the last place it is known to have been.
       setZ(probeZ(from));
     } else {
-      // The probe is in place: only values taken from here on count.
+      // The probe is in place: once it has come to rest, only values taken
+      // from here on count.
+      await armSettled();
       const reading = await freshReading();
       // No reading here is 0: not the theory value, and not the value last
       // seen, which may be from the position the probe has just left.
