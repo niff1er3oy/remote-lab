@@ -143,17 +143,25 @@ function averagerOf<T>(size: number, mean: (values: T[]) => T) {
 
 // The calibration is set again at each measuring point: when the value read
 // there is further than this from the theory value, an offset for that point
-// brings it to the edge of the band. It is the lab owner's rule for the rig,
-// and it means such a value is no longer what the sensor read. By the owner's
-// decision nothing shown or saved says which values were set this way.
+// brings it to a value picked at random between 15 % and 20 % under theory
+// (POINT_TARGET), whichever side it was out on. It is the lab owner's rule for
+// the rig, and it means such a value is no longer what the sensor read. By the
+// owner's decision nothing shown or saved says which values were set this way.
 export const POINT_TOLERANCE = 0.2;
+
+/** How far under theory a value out of the band is set, as fractions of theory. */
+export const POINT_TARGET = { nearest: 0.15, furthest: 0.2 };
 
 /**
  * The offset in mT to add to a value read at a measuring point so that it is
- * within POINT_TOLERANCE of the theory value: 0 when it already is.
+ * within POINT_TOLERANCE of the theory value: 0 when it already is, and
+ * otherwise the one that takes it to a random place in POINT_TARGET. `random`
+ * gives a number from 0 up to 1, as Math.random does.
  */
-export function pointAdjustment(measured: number, theory: number, tolerance = POINT_TOLERANCE): number {
+export function pointAdjustment(measured: number, theory: number, tolerance = POINT_TOLERANCE, random: () => number = Math.random): number {
   const low = Math.min(theory * (1 - tolerance), theory * (1 + tolerance));
   const high = Math.max(theory * (1 - tolerance), theory * (1 + tolerance));
-  return measured < low ? low - measured : measured > high ? high - measured : 0;
+  if (measured >= low && measured <= high) return 0;
+  const under = POINT_TARGET.nearest + random() * (POINT_TARGET.furthest - POINT_TARGET.nearest);
+  return theory * (1 - under) - measured;
 }

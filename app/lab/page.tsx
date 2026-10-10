@@ -793,7 +793,8 @@ export default function RemoteLabPage() {
     setSupplyBusy(false);
   }, [record]);
   // The calibration set again at the point the probe is at (lib/sensor.ts):
-  // the offset that brought the value read there to within 20 % of theory. It
+  // the offset that brought a value read there further than 20 % from theory
+  // to a random place between 15 % and 20 % under it. It
   // goes on what is shown for as long as the probe stays, and is 0 for a value
   // that needed none. The page does not say when it has done so.
   const [pointAdjust, setPointAdjust] = useState(0);
