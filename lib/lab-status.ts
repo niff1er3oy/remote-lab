@@ -27,7 +27,7 @@ export async function checkCameras(): Promise<Array<{ key: string; state: Reach 
 // The sensor service that /ws/sensor is rewritten to (next.config.ts), from the
 // same SENSOR_URL setting.
 function sensorAddress(): { host: string; port: number } {
-  const url = new URL((process.env.SENSOR_URL?.trim() || 'http://127.0.0.1:8888').replace(/^ws/, 'http'));
+  const url = new URL((process.env.SENSOR_URL?.trim() || 'http://127.0.0.1:8788').replace(/^ws/, 'http'));
   return { host: url.hostname, port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80) };
 }
 

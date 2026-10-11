@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 11 ตุลาคม 2569 เวลา 02:43
+- รันเมื่อ: 11 ตุลาคม 2569 เวลา 20:56
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1774 ข้อ ใน 52 ไฟล์ (ผ่าน 1774 ไม่ผ่าน 0)
-- เวลาที่ใช้: 17.2 วินาที
+- จำนวนเทสต์: 1776 ข้อ ใน 52 ไฟล์ (ผ่าน 1776 ไม่ผ่าน 0)
+- เวลาที่ใช้: 10.8 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -15,7 +15,7 @@
 |---|---|---|---|---|
 | API ฝั่งเซิร์ฟเวอร์ | 19 | 738 | 738 | 0 |
 | หน้าเว็บและคอมโพเนนต์ | 15 | 524 | 524 | 0 |
-| ไลบรารีและตรรกะกลาง | 18 | 512 | 512 | 0 |
+| ไลบรารีและตรรกะกลาง | 18 | 514 | 514 | 0 |
 
 ## สรุปตามไฟล์
 
@@ -70,7 +70,7 @@
 | `rig-access.test.ts` | กติกาว่าใครสั่งอุปกรณ์ได้: รอบที่กำลังดำเนินอยู่ รอบที่เพิ่งจบ และกรณีที่ไม่มีสิทธิ์ | 27 | ผ่าน |
 | `rig.test.ts` | ตัวรันสคริปต์อุปกรณ์: ตำแหน่งสคริปต์และ Python จาก env การตัดวงจรทั้งหมด และการจำสถานะอุปกรณ์ | 31 | ผ่าน |
 | `safety.test.ts` | ตัวกันของชุดทดสอบเอง: เทสต์ต้องไม่ใช้ credential จริง และแตะ Firebase หรือเครือข่ายไม่ได้ถ้าไม่ได้จำลองไว้ | 3 | ผ่าน |
-| `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง | 67 | ผ่าน |
+| `sensor.test.ts` | การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง | 69 | ผ่าน |
 | `session.test.ts` | การออกและตรวจ session cookie | 12 | ผ่าน |
 | `webrtc-latency.test.ts` | การคำนวณความหน่วงของวิดีโอจากสถิติ WebRTC (เครือข่าย บัฟเฟอร์ ถอดรหัส) และการตรวจภาพค้าง | 8 | ผ่าน |
 
@@ -2578,7 +2578,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 
 การอ่านค่าจากเซนเซอร์สนามแม่เหล็ก: แปลง bx, by, bz หน่วยไมโครเทสลาเป็นขนาดสนามหน่วย mT คาลิเบต เฉลี่ย 20 ค่า และหักสนามพื้นหลัง
 
-ผล: ผ่านทั้ง 67 ข้อ
+ผล: ผ่านทั้ง 69 ข้อ
 
 **fieldFromSensor — one message from the magnetometer**
 
@@ -2635,6 +2635,10 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — always leaves a value between 7 % and 15 % under theory once it has moved it
 - ผ่าน — picks a new place each time
 - ผ่าน — takes another tolerance when given one
+**supplyOffValue — the solenoid with its supply off**
+
+- ผ่าน — is between 0.003 and 0.009 mT
+- ผ่าน — is picked again each time, never outside the range
 **vectorFromSensor — the three components of one message**
 
 - ผ่าน — gives them in millitesla
@@ -2657,7 +2661,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — only calibrates the reading when no background could be read
 - ผ่าน — takes another line when given one
 - ผ่าน — is low along the tails of the solenoid when the background is not along the axis
-- ผ่าน — gives the background the raw size the sensor read
+- ผ่าน — shows the background as its raw size with the calibration on it
 **createVectorAverager — a reading of the three components**
 
 - ผ่าน — is the mean of each component over the block

@@ -65,7 +65,7 @@ describe('checkSensor', () => {
   it('is online when the sensor service accepts a connection', async () => {
     const socket = socketThat('connect');
     expect(await checkSensor()).toBe('online');
-    expect(net.connect).toHaveBeenCalledWith({ host: '127.0.0.1', port: 8888 });
+    expect(net.connect).toHaveBeenCalledWith({ host: '127.0.0.1', port: 8788 });
     expect(socket.destroy).toHaveBeenCalled();
   });
 

@@ -815,14 +815,15 @@ export default function RemoteLabPage() {
   // A position of the solenoid is measured with the supply on: when it is off
   // as the probe gets there, the page switches it on first, and leaves it on.
   // False when it could not be switched on: nothing is measured there then.
-  const supplyForMeasuring = useCallback(async (): Promise<boolean> => {
+  // Choosing another instrument does the same, for a coil as for the solenoid.
+  const supplyForMeasuring = useCallback(async (lost = 'ค่าที่ตำแหน่งนี้จึงไม่ถูกบันทึก'): Promise<boolean> => {
     if (supplyOnNow.current !== false) return true;
     const { supply, held, error } = await tellPresence('on', selectedScript.current);
     if (supply !== null) { setSupplyOn(supply); supplyOnNow.current = supply; }
     setSupplyHeld(held);
     const ok = error === null && supply === true;
     record({ kind: 'supply', ok, detail: 'on' });
-    if (!ok) setRigError({ text: `เปิดแหล่งจ่ายไฟไม่สำเร็จ ค่าที่ตำแหน่งนี้จึงไม่ถูกบันทึก: ${error ?? 'แหล่งจ่ายไฟยังปิดอยู่'}`, canRetry: false });
+    if (!ok) setRigError({ text: `เปิดแหล่งจ่ายไฟไม่สำเร็จ ${lost}: ${error ?? 'แหล่งจ่ายไฟยังปิดอยู่'}`, canRetry: false });
     return ok;
   }, [record]);
   // A position's calibration is set only by a reading taken there with the
@@ -1026,6 +1027,10 @@ export default function RemoteLabPage() {
         if (failed) { setRigError({ text: `เปิดใช้อุปกรณ์ไม่สำเร็จ: ${failed}`, canRetry: true }); return; }
         powered.current = inst;
         setRigError(null);
+        // An instrument is always chosen with the supply on: one that was off
+        // is switched on here, and stays on. When it cannot be, the page says
+        // so and nothing is measured.
+        if (!await supplyForMeasuring('อุปกรณ์นี้จึงยังไม่มีกระแส')) return;
         // Switching the solenoid on puts the probe at its middle, which is a
         // measuring position like the others: its reading goes on record too.
         if (inst.type === 'solenoid') {
@@ -1045,7 +1050,7 @@ export default function RemoteLabPage() {
         setIsRunning(false);
       }
     })();
-  }, [instrument, rigReady, rigAttempt, record, recordReading, freshReading, ampsOf, adjustAt, forgetPoints]);
+  }, [instrument, rigReady, rigAttempt, record, recordReading, freshReading, ampsOf, adjustAt, forgetPoints, supplyForMeasuring]);
 
   // The supply coming on with the probe at a position never measured with it
   // on (one where the page could not switch it on for the measuring): the
@@ -2923,7 +2928,7 @@ function keptTable(events: LabEvent[], inst: Inst): Map<number, MeasRecord> {
 
 function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, adjustAt, forgetPoints, supplyForMeasuring, supplyOff, freshReading, background, disabled }: {
   /** Switches the supply on if it is off; false when it could not be, and has said so. */
-  supplyForMeasuring: () => Promise<boolean>;
+  supplyForMeasuring: (lost?: string) => Promise<boolean>;
   /** The supply is off: choosing a position will switch it on. */
   supplyOff: boolean;
   /** Sets the calibration at the position just reached; gives the value to show and record. */

@@ -124,7 +124,7 @@ async function checkRig(): Promise<ReadyCheck[]> {
 // Not only that the sensor service's port is open: that a reading arrives.
 function checkSensorData(): Promise<ReadyCheck> {
   const base = { id: 'sensor-data', group: SENSOR, label: 'ค่าจากเซนเซอร์' };
-  const url = (process.env.SENSOR_URL?.trim() || 'ws://127.0.0.1:8888').replace(/^http/, 'ws');
+  const url = (process.env.SENSOR_URL?.trim() || 'ws://127.0.0.1:8788').replace(/^http/, 'ws');
   if (typeof WebSocket === 'undefined')
     return Promise.resolve({ ...base, ok: null, detail: 'Node รุ่นนี้ตรวจไม่ได้ ดูสถานะการเชื่อมต่อในส่วนสถานะอุปกรณ์แทน' });
 

@@ -200,7 +200,7 @@ describe('checkReadiness — what can be wrong with the rig', () => {
 describe('checkReadiness — the sensor', () => {
   it('asks the sensor service at its own address', async () => {
     await checkReadiness();
-    expect(sensorUrls).toEqual(['ws://127.0.0.1:8888']);
+    expect(sensorUrls).toEqual(['ws://127.0.0.1:8788']);
   });
 
   it('is not ready when the service cannot be reached', async () => {
@@ -208,7 +208,7 @@ describe('checkReadiness — the sensor', () => {
     const { ready, checks } = await checkReadiness();
     expect(ready).toBe(false);
     expect(check(checks, 'sensor-data')).toMatchObject({ ok: false });
-    expect(check(checks, 'sensor-data').detail).toContain('ต่อบริการเซนเซอร์ที่ ws://127.0.0.1:8888 ไม่ได้');
+    expect(check(checks, 'sensor-data').detail).toContain('ต่อบริการเซนเซอร์ที่ ws://127.0.0.1:8788 ไม่ได้');
   });
 
   it('is not ready when the service answers but sends no reading: an open port is not a working sensor', async () => {
