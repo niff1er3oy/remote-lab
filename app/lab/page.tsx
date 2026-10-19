@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import { useNotifications } from '@/app/components/useNotifications';
 import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifications';
 import MathSource from '@/app/components/MathSource';
-import { pointAdjustment, supplyOffValue } from '@/lib/sensor';
 import { cleanCurrents, DEFAULT_CURRENTS, type Currents } from '@/lib/instruments';
 import { calcBCoil, calcBSolenoid, COIL_R, cmText, fixed, PROBE_MAX, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
 import { prefersReducedMotion, press } from '@/lib/motion';
@@ -125,8 +124,6 @@ const FRESH_READING_MS = 4000;
 // measured value as waiting rather than whatever the sensor sees on the way.
 const ARM_SETTLE_MS = 3000;
 const armSettled = () => new Promise<void>(resolve => setTimeout(resolve, ARM_SETTLE_MS));
-/** What a measuring position of the solenoid was given with the supply on: the offset for it, and the value. */
-type PointSet = { adjust: number; value: number };
 // A sensor that has sent nothing for this long is not waited for at all.
 const SENSOR_SILENT_MS = 1000;
 
@@ -794,22 +791,6 @@ export default function RemoteLabPage() {
     setRigError(error === null ? null : { text: `${on ? 'เปิด' : 'ปิด'}แหล่งจ่ายไฟไม่สำเร็จ: ${error}`, canRetry: false });
     setSupplyBusy(false);
   }, [record]);
-  // The calibration set again at a measuring point of the solenoid
-  // (lib/sensor.ts): the offset that brought a value read there further than
-  // 15 % from theory to a random place between 7 % and 15 % under it, 0 for a
-  // value that needed none, and the value it gave. One is kept for each
-  // position measured with the supply on, and goes on what is shown whenever
-  // the probe is there. The page does not say when it has done so.
-  const [points, setPoints] = useState<Map<number, PointSet>>(new Map());
-  const pointsNow = useRef<Map<number, PointSet>>(new Map());
-  // Set 0, another instrument or a cleared table: what was set no longer holds.
-  const forgetPoints = useCallback(() => {
-    pointsNow.current = new Map();
-    setPoints(pointsNow.current);
-  }, []);
-  // What the solenoid shows with its supply off, picked again with each
-  // message from the sensor (lib/sensor.ts).
-  const [supplyOffShown, setSupplyOffShown] = useState(0);
   const supplyOnNow = useRef<boolean | null>(null);
   useEffect(() => { supplyOnNow.current = supplyOn; }, [supplyOn]);
   // A position of the solenoid is measured with the supply on: when it is off
@@ -826,24 +807,6 @@ export default function RemoteLabPage() {
     if (!ok) setRigError({ text: `เปิดแหล่งจ่ายไฟไม่สำเร็จ ${lost}: ${error ?? 'แหล่งจ่ายไฟยังปิดอยู่'}`, canRetry: false });
     return ok;
   }, [record]);
-  // A position's calibration is set only by a reading taken there with the
-  // supply on. One taken with the supply off leaves it as it is, so that when
-  // the supply comes back the value at the point is the one shown before.
-  const adjustAt = useCallback((reading: number | null, bTheory: number, zCm: number) => {
-    // No value from the sensor is no measurement.
-    if (reading === null) return { value: null };
-    // With the supply off, the position keeps the value it was given with the
-    // supply on; one never measured so gets the value picked close to zero
-    // (lib/sensor.ts), on record as on screen.
-    if (supplyOnNow.current === false) return { value: pointsNow.current.get(zCm)?.value ?? supplyOffValue() };
-    // Not yet known to be on: there is nothing to calibrate against theory.
-    if (supplyOnNow.current !== true) return { value: reading };
-    const adjust = pointAdjustment(reading, bTheory);
-    const value = reading + adjust;
-    pointsNow.current = new Map(pointsNow.current).set(zCm, { adjust, value });
-    setPoints(pointsNow.current);
-    return { value };
-  }, []);
 
   // Set 0: the student has the background read again, with no current in the
   // winding (the sensor would otherwise read the very field being measured,
@@ -870,7 +833,6 @@ export default function RemoteLabPage() {
       setZeroing(true);
       setIsRunning(true);
       try {
-        forgetPoints(); // every point's offset was worked out against the old zero
         let failed = wasOn ? await supplyTo(false) : null;
         if (failed) failed = `ปิดแหล่งจ่ายไฟไม่สำเร็จ: ${failed}`;
         let home = false;
@@ -909,9 +871,9 @@ export default function RemoteLabPage() {
               const I = ampsOf(inst);
               const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
               await armSettled();
-              const at = adjustAt(await freshReading(), bTheory, 0);
-              setMeasData(prev => new Map(prev).set(0, { bMeasured: at.value ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
-              record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured: at.value });
+              const bMeasured = await freshReading();
+              setMeasData(prev => new Map(prev).set(0, { bMeasured: bMeasured ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
+              record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured });
             }
           }
         }
@@ -940,7 +902,7 @@ export default function RemoteLabPage() {
     record({ kind: 'zero', ok: true, bMeasured: takeAsBackground(vector) });
     setRigError(null);
     return true;
-  }, [instrument, supplyOn, freshVector, freshReading, takeAsBackground, record, ampsOf, adjustAt, forgetPoints]);
+  }, [instrument, supplyOn, freshVector, freshReading, takeAsBackground, record, ampsOf]);
 
   const [entered, setEntered] = useState(false);
   useEffect(() => {
@@ -1021,7 +983,6 @@ export default function RemoteLabPage() {
           powered.current = null;
           await new Promise(r => setTimeout(r, 500)); // let the rig settle
         }
-        forgetPoints(); // the points set belong to the instrument that was on
         const failed = await sendToRig(startCommand(inst));
         record({ kind: 'power-on', instrument: inst.name, ok: !failed, detail: failed ?? undefined });
         if (failed) { setRigError({ text: `เปิดใช้อุปกรณ์ไม่สำเร็จ: ${failed}`, canRetry: true }); return; }
@@ -1037,10 +998,10 @@ export default function RemoteLabPage() {
           const I = ampsOf(inst);
           const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
           await armSettled();
-          const at = adjustAt(await freshReading(), bTheory, 0);
+          const bMeasured = await freshReading();
           // No value from the sensor is 0 on screen, never the theory value.
-          setMeasData(prev => new Map(prev).set(0, { bMeasured: at.value ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
-          record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured: at.value });
+          setMeasData(prev => new Map(prev).set(0, { bMeasured: bMeasured ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
+          record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured });
         } else {
           // A coil is shown as it is read, whatever its distance from
           // theory: no calibration is set at its one measuring point.
@@ -1050,39 +1011,7 @@ export default function RemoteLabPage() {
         setIsRunning(false);
       }
     })();
-  }, [instrument, rigReady, rigAttempt, record, recordReading, freshReading, ampsOf, adjustAt, forgetPoints, supplyForMeasuring]);
-
-  // The supply coming on with the probe at a position never measured with it
-  // on (one where the page could not switch it on for the measuring): the
-  // position is measured now, as it is on reaching it. A position measured before keeps what it was given, and
-  // Set 0 and a move in hand do their own measuring.
-  const busyNow = useRef(false);
-  useEffect(() => { busyNow.current = isBusy; }, [isBusy]);
-  const zNow = useRef(0);
-  useEffect(() => { zNow.current = z; }, [z]);
-  const supplyBefore = useRef<boolean | null>(null);
-  useEffect(() => {
-    const was = supplyBefore.current;
-    supplyBefore.current = supplyOn;
-    if (was !== false || supplyOn !== true || busyNow.current) return;
-    const inst = powered.current;
-    if (!inst || inst.type !== 'solenoid') return;
-    const zCm = Math.round(zNow.current / PROBE_STEP_M);
-    if (pointsNow.current.has(zCm)) return;
-    (async () => {
-      setIsRunning(true);
-      try {
-        const I = ampsOf(inst);
-        const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, zNow.current);
-        await armSettled();
-        const at = adjustAt(await freshReading(), bTheory, zCm);
-        setMeasData(prev => new Map(prev).set(zCm, { bMeasured: at.value ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
-        record({ kind: 'move', instrument: inst.name, ok: true, zCm: +cmText(probeZ(zCm)), I, bTheory, bMeasured: at.value });
-      } finally {
-        setIsRunning(false);
-      }
-    })();
-  }, [supplyOn, record, freshReading, ampsOf, adjustAt]);
+  }, [instrument, rigReady, rigAttempt, record, recordReading, freshReading, ampsOf, supplyForMeasuring]);
 
   // The visit is over, by the finish button, by the clock or because the round
   // was ended from outside: cut whatever is
@@ -1140,7 +1069,6 @@ export default function RemoteLabPage() {
         averager.add(vector);
         // With the room's own field taken off, once it has been read.
         setRealSensorValue(fieldAbove(vector, backgroundNow.current));
-        setSupplyOffShown(supplyOffValue());
       };
       ws.onclose = () => {
         reconnectTimeout = setTimeout(connect, 2000);
@@ -1220,13 +1148,7 @@ export default function RemoteLabPage() {
     : calcBSolenoid(inst.N, I, inst.L, inst.R, z);
   // No value from the sensor is shown as 0, never as the theory value: the two
   // would then agree exactly when nothing was measured at all.
-  // With the calibration of the position the probe is at, while the supply is
-  // known to be on (otherwise there is no field of the instrument's to calibrate).
-  // The solenoid with its supply off shows the value picked close to zero.
-  const pointAdjust = inst.type === 'solenoid' ? points.get(Math.round(z / PROBE_STEP_M))?.adjust ?? 0 : 0;
-  const bMeasured = realSensorValue === null ? 0
-    : inst.type === 'solenoid' && supplyOn === false ? supplyOffShown
-      : realSensorValue + (supplyOn === true ? pointAdjust : 0);
+  const bMeasured = realSensorValue ?? 0;
   // What the assistant is told with each question: the readings on screen and
   // the state of the room, so that it can say why a value is what it is.
   const chatReadings: ChatReadings = {
@@ -1327,7 +1249,7 @@ export default function RemoteLabPage() {
                     measData={measData} setMeasData={setMeasData}
                     N={inst.N}
                     isMoving={isMoving} setIsMoving={setIsMoving}
-                    onMoveError={reportMove} adjustAt={adjustAt} forgetPoints={forgetPoints}
+                    onMoveError={reportMove}
                     supplyForMeasuring={supplyForMeasuring} supplyOff={supplyOn === false}
                     freshReading={freshReading}
                     background={background}
@@ -1413,7 +1335,7 @@ export default function RemoteLabPage() {
                     measData={measData} setMeasData={setMeasData}
                     N={inst.N}
                     isMoving={isMoving} setIsMoving={setIsMoving}
-                    onMoveError={reportMove} adjustAt={adjustAt} forgetPoints={forgetPoints}
+                    onMoveError={reportMove}
                     supplyForMeasuring={supplyForMeasuring} supplyOff={supplyOn === false}
                     freshReading={freshReading}
                     background={background}
@@ -2926,15 +2848,11 @@ function keptTable(events: LabEvent[], inst: Inst): Map<number, MeasRecord> {
     .map(p => [p.zCm, { bMeasured: p.bMeasured ?? 0, bTheory: p.bTheory, zero: p.zero }]));
 }
 
-function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, adjustAt, forgetPoints, supplyForMeasuring, supplyOff, freshReading, background, disabled }: {
+function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, supplyForMeasuring, supplyOff, freshReading, background, disabled }: {
   /** Switches the supply on if it is off; false when it could not be, and has said so. */
   supplyForMeasuring: (lost?: string) => Promise<boolean>;
   /** The supply is off: choosing a position will switch it on. */
   supplyOff: boolean;
-  /** Sets the calibration at the position just reached; gives the value to show and record. */
-  adjustAt: (reading: number | null, bTheory: number, zCm: number) => { value: number | null };
-  /** Drops the calibration kept for every position. */
-  forgetPoints: () => void;
   z: number; setZ: (v: number) => void;
   bTheory: number;
   measData: Map<number, MeasRecord>;
@@ -2983,7 +2901,7 @@ function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMovin
     const from = zCm;
     setIsMoving(true);
     setZ(probeZ(zVal));
-    let at: { value: number | null } = { value: null };
+    let bMeasured: number | null = null;
     const failed = await sendToRig({ script: 'sole.py', position: zVal });
     if (failed) {
       // Nothing is recorded for a position the probe did not reach, and Z goes
@@ -3001,17 +2919,17 @@ function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMovin
       // here on count.
       await armSettled();
       const reading = await freshReading();
+      bMeasured = reading;
       // No reading here is 0: not the theory value, and not the value last
       // seen, which may be from the position the probe has just left.
       const { bTheory: bT } = liveRef.current;
-      at = adjustAt(reading, bT, zVal);
-      setMeasData(prev => new Map(prev).set(zVal, { bMeasured: at.value ?? 0, bTheory: bT, zero: background ?? null }));
+      setMeasData(prev => new Map(prev).set(zVal, { bMeasured: reading ?? 0, bTheory: bT, zero: background ?? null }));
     }
-    onMoveError(failed, +cmText(probeZ(zVal)), liveRef.current.bTheory, at.value);
+    onMoveError(failed, +cmText(probeZ(zVal)), liveRef.current.bTheory, bMeasured);
     setIsMoving(false);
   }
 
-  function clearAll() { setMeasData(new Map()); forgetPoints(); }
+  function clearAll() { setMeasData(new Map()); }
 
   function downloadCSV() {
     // B_measured has the zero in force taken off; the last column says how much (empty when none had been read).

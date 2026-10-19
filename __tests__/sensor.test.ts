@@ -1,4 +1,4 @@
-import { aboveBackground, backgroundSize, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, POINT_TARGET, POINT_TOLERANCE, pointAdjustment, SAMPLES_PER_READING, SENSOR_AXIS, SUPPLY_OFF_VALUE, supplyOffValue } from '@/lib/sensor';
+import { aboveBackground, backgroundSize, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
@@ -152,80 +152,6 @@ describe('createAverager — starting over', () => {
     averager.add(1);
     averager.add(3);
     expect(await reading).toBe(2);
-  });
-});
-
-describe('pointAdjustment — the calibration set again at a measuring point', () => {
-  it('allows a value 15 % either side of theory', () => {
-    expect(POINT_TOLERANCE).toBe(0.15);
-  });
-
-  it.each([[0.417], [0.36], [0.47], [0.3545], [0.4795]])('leaves %p mT against a theory of 0.417 mT as it was read', (measured) => {
-    expect(pointAdjustment(measured, 0.417)).toBe(0);
-  });
-
-  it.each([[0.34], [0.5]])('moves %p mT against a theory of 0.417 mT: it is more than 15 %% out', (measured) => {
-    expect(pointAdjustment(measured, 0.417)).not.toBe(0);
-  });
-
-  it('sets a value out of the band between 7 % and 15 % under theory', () => {
-    expect(POINT_TARGET).toEqual({ nearest: 0.07, furthest: 0.15 });
-  });
-
-  it('brings a value that is too low to the place picked under theory', () => {
-    // The centre of the solenoid read 0.25 mT against 0.417.
-    expect((0.25 + pointAdjustment(0.25, 0.417, POINT_TOLERANCE, () => 0) - 0.417) / 0.417).toBeCloseTo(-0.07, 10);
-    expect((0.25 + pointAdjustment(0.25, 0.417, POINT_TOLERANCE, () => 0.5) - 0.417) / 0.417).toBeCloseTo(-0.11, 10);
-    expect((0.25 + pointAdjustment(0.25, 0.417, POINT_TOLERANCE, () => 1) - 0.417) / 0.417).toBeCloseTo(-0.15, 10);
-  });
-
-  it('brings a value that is too high under theory as well', () => {
-    const adjust = pointAdjustment(0.1704, 0.1282, POINT_TOLERANCE, () => 0.5);
-    expect((0.1704 + adjust - 0.1282) / 0.1282).toBeCloseTo(-0.11, 10);
-  });
-
-  it('brings a value under zero there too', () => {
-    expect(-0.004 + pointAdjustment(-0.004, 0.0106, POINT_TOLERANCE, () => 1)).toBeCloseTo(0.0106 * 0.85, 10);
-  });
-
-  it('always leaves a value between 7 % and 15 % under theory once it has moved it', () => {
-    for (const theory of [0.0106, 0.1282, 0.417, 0.725]) {
-      for (const measured of [-0.05, 0, 0.001, 0.2, 0.4, 0.9, 1.5]) {
-        const adjust = pointAdjustment(measured, theory);
-        if (adjust === 0) continue;
-        const percent = (measured + adjust - theory) / theory;
-        expect(percent).toBeGreaterThanOrEqual(-0.15 - 1e-9);
-        expect(percent).toBeLessThanOrEqual(-0.07 + 1e-9);
-      }
-    }
-  });
-
-  it('picks a new place each time', () => {
-    const values = new Set(Array.from({ length: 20 }, () => pointAdjustment(0.25, 0.417)));
-    expect(values.size).toBeGreaterThan(1);
-  });
-
-  it('takes another tolerance when given one', () => {
-    expect(pointAdjustment(0.39, 0.417, 0.05)).not.toBe(0);
-    expect(pointAdjustment(0.39, 0.417)).toBe(0);
-  });
-});
-
-describe('supplyOffValue — the solenoid with its supply off', () => {
-  it('is between 0.003 and 0.009 mT', () => {
-    expect(SUPPLY_OFF_VALUE).toEqual({ low: 0.003, high: 0.009 });
-    expect(supplyOffValue(() => 0)).toBeCloseTo(0.003, 12);
-    expect(supplyOffValue(() => 0.5)).toBeCloseTo(0.006, 12);
-    expect(supplyOffValue(() => 1)).toBeCloseTo(0.009, 12);
-  });
-
-  it('is picked again each time, never outside the range', () => {
-    const values = Array.from({ length: 50 }, () => supplyOffValue());
-    expect(new Set(values).size).toBeGreaterThan(1);
-    for (const v of values) {
-      expect(v).toBeGreaterThanOrEqual(0.003);
-      expect(v).toBeLessThanOrEqual(0.009);
-    }
   });
 });
 
