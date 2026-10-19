@@ -2,10 +2,10 @@
 
 ไฟล์นี้สร้างโดย `npm run test:report` จากผลการรันจริง ไม่ต้องแก้ด้วยมือ
 
-- รันเมื่อ: 11 ตุลาคม 2569 เวลา 20:56
+- รันเมื่อ: 15 ตุลาคม 2569 เวลา 20:49
 - ผลรวม: **ผ่านทั้งหมด**
-- จำนวนเทสต์: 1776 ข้อ ใน 52 ไฟล์ (ผ่าน 1776 ไม่ผ่าน 0)
-- เวลาที่ใช้: 10.8 วินาที
+- จำนวนเทสต์: 1810 ข้อ ใน 54 ไฟล์ (ผ่าน 1810 ไม่ผ่าน 0)
+- เวลาที่ใช้: 14.9 วินาที
 
 ทุกเทสต์รันกับตัวจำลองของ Firebase, ผู้ช่วย AI, กล้อง และเครื่องแลป จึงไม่แตะระบบจริง ชื่อเทสต์แต่ละข้อเขียนเป็นประโยคภาษาอังกฤษที่บอกพฤติกรรมที่ตรวจ
 
@@ -14,8 +14,8 @@
 | หมวด | ไฟล์ | เทสต์ | ผ่าน | ไม่ผ่าน |
 |---|---|---|---|---|
 | API ฝั่งเซิร์ฟเวอร์ | 19 | 738 | 738 | 0 |
-| หน้าเว็บและคอมโพเนนต์ | 15 | 524 | 524 | 0 |
-| ไลบรารีและตรรกะกลาง | 18 | 514 | 514 | 0 |
+| หน้าเว็บและคอมโพเนนต์ | 16 | 536 | 536 | 0 |
+| ไลบรารีและตรรกะกลาง | 19 | 536 | 536 | 0 |
 
 ## สรุปตามไฟล์
 
@@ -50,6 +50,7 @@
 | `components/FieldDiagram.test.tsx` | ภาพเส้นสนามในหน้าแรก | 31 | ผ่าน |
 | `components/FieldViz.test.tsx` | แบบจำลองสนามแม่เหล็กในห้องแลป: ภาพตัด 2D หัววัดกับลูกศรทฤษฎีและค่าวัด การสลับ 2D/3D และกรณีเครื่องไม่มี WebGL | 35 | ผ่าน |
 | `components/GlobalNotifications.test.tsx` | กระดิ่ง แผงแจ้งเตือน และ toast: การแสดง การปิด การหายเอง และ reduced motion | 47 | ผ่าน |
+| `components/LabGraphs.test.tsx` | หน้าต่างกราฟผลการทดลองในหน้าสรุป: แท็บสองตอน ค่าของแต่ละจุด การปิด และปุ่มบันทึก PNG | 12 | ผ่าน |
 | `components/LabSummary.test.tsx` | หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV | 60 | ผ่าน |
 | `components/LoginPage.test.tsx` | หน้าเข้าสู่ระบบ | 10 | ผ่าน |
 | `components/PortraitGuard.test.tsx` | ข้อความให้หมุนจอเมื่อถือแนวตั้ง | 3 | ผ่าน |
@@ -60,6 +61,7 @@
 | `field-lines.test.ts` | ข้อมูลเส้นสนามที่ใช้วาดภาพในหน้าแรก: สมมาตร ไม่ตัดกัน และได้สัดส่วนจริงของอุปกรณ์ | 36 | ผ่าน |
 | `field-model.test.ts` | ข้อมูลเส้นสนามของแบบจำลองในห้องแลป: ตรวจทิศและขนาดสนามกับกฎบีโอต์-ซาวาร์โดยตรง ความสมมาตร ระยะห่างของเส้นตามความเข้มสนาม และจำนวนเส้นตามจำนวนรอบ | 39 | ผ่าน |
 | `lab-activity.test.ts` | บันทึกกิจกรรมในห้องแลป: ตัวเลขสรุป ค่าที่วัดได้ ค่าพื้นหลังและการตั้งศูนย์ (Set 0) ข้อความแต่ละเหตุการณ์ และไฟล์ CSV | 67 | ผ่าน |
+| `lab-graphs.test.ts` | การคำนวณของกราฟผลการทดลอง: เส้นตรงผ่านจุดกำเนิด μ₀ จากความชัน เปอร์เซ็นต์คลาดเคลื่อน และเส้นทฤษฎีของโซลีนอยด์ | 22 | ผ่าน |
 | `lab-presence.test.ts` |  | 28 | ผ่าน |
 | `lab-readiness.test.ts` | การตรวจความพร้อมของเครื่องแลปจริง: ไฟล์สคริปต์ Python ไลบรารี ค่าจากเซนเซอร์ กล้อง ฐานข้อมูล และการไม่สั่งอุปกรณ์ทำงานระหว่างตรวจ | 22 | ผ่าน |
 | `lab-status.test.ts` | การตรวจว่ากล้องและเซนเซอร์ตอบสนองหรือไม่ และ API สถานะอุปกรณ์ของ admin | 12 | ผ่าน |
@@ -859,7 +861,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — is nothing for 3
 **the current of each instrument**
 
-- ผ่าน — is 5 A for each single coil and 0.3 A for the solenoid until an admin sets another
+- ผ่าน — is 5 A for each single coil and 0.27 A for the solenoid until an admin sets another
 - ผ่าน — accepts 0.001 A
 - ผ่าน — accepts 0.3 A
 - ผ่าน — accepts 0.25 A
@@ -1688,6 +1690,29 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — still shows a notification whose type it does not know
 - ผ่าน — limits its height to what the caller asks for
 
+#### `components/LabGraphs.test.tsx`
+
+หน้าต่างกราฟผลการทดลองในหน้าสรุป: แท็บสองตอน ค่าของแต่ละจุด การปิด และปุ่มบันทึก PNG
+
+ผล: ผ่านทั้ง 12 ข้อ
+
+**LabGraphs**
+
+- ผ่าน — is a dialog that opens on part 1, with its tab in focus
+- ผ่าน — draws one point per coil measured, and gives μ0 and the % error from the fitted line
+- ผ่าน — switches to part 2 with the tab, or with the arrow keys
+- ผ่าน — shows a point's values when it is pointed at or focused
+- ผ่าน — says what is missing when a part has no values, and offers nothing to save
+- ผ่าน — leaves out, and names, readings that had no sensor value
+- ผ่าน — closes with the close button
+- ผ่าน — closes with Escape
+- ผ่าน — closes with a click outside it
+- ผ่าน — does not close for a click inside it
+- ผ่าน — brings the points in when a graph is shown, and keeps still for reduced motion
+**the summary's graph button**
+
+- ผ่าน — opens the graphs, and closing them hands focus back to it
+
 #### `components/LabSummary.test.tsx`
 
 หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV
@@ -2246,6 +2271,43 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — says why in the CSV
 - ผ่าน — still blames the sensor when no reason is given
 
+#### `lab-graphs.test.ts`
+
+การคำนวณของกราฟผลการทดลอง: เส้นตรงผ่านจุดกำเนิด μ₀ จากความชัน เปอร์เซ็นต์คลาดเคลื่อน และเส้นทฤษฎีของโซลีนอยด์
+
+ผล: ผ่านทั้ง 22 ข้อ
+
+**coilPart — B against the number of turns**
+
+- ผ่าน — gives back μ0 itself from values that are exactly the theory
+- ผ่าน — fits the line through the origin by least squares
+- ผ่าน — works out μ0 from each point's own current when they differ
+- ผ่าน — puts the coils in order of turns, and leaves out a reading without a sensor value
+- ผ่าน — takes no solenoid positions, and has no line with no coil measured
+**solenoidPart — B along the axis**
+
+- ผ่าน — keeps the measured positions in order along the axis, and those without a value apart
+- ผ่าน — draws the theory curve from -10 to +10 cm for the current the points were taken at
+- ผ่าน — says so when the points were taken at more than one current, and draws for the latest
+- ผ่าน — has no curve with no position taken
+- ผ่าน — marks the ends of the winding at ±4 cm
+**niceTicks — round numbers for an axis**
+
+- ผ่าน — covers 0.44 with about four steps
+- ผ่าน — covers 0.76 with about four steps
+- ผ่าน — covers 1.2 with about four steps
+- ผ่าน — covers 0.03 with about four steps
+- ผ่าน — gives a usable axis for 0
+- ผ่าน — gives a usable axis for -1
+- ผ่าน — gives a usable axis for NaN
+- ผ่าน — gives a usable axis for Infinity
+**smoothPath — the measured values joined by a smooth line**
+
+- ผ่าน — starts at the first point and ends at the last, passing through every one
+- ผ่าน — never goes beyond the two points it joins: no overshoot at a peak
+- ผ่าน — is flat at a peak
+- ผ่าน — is a straight segment for two points, and nothing for fewer
+
 #### `lab-presence.test.ts`
 
 ผล: ผ่านทั้ง 28 ข้อ
@@ -2453,7 +2515,7 @@ API สั่งอุปกรณ์: สิทธิ์ คำสั่งท�
 - ผ่าน — approaches the long-solenoid value μ₀(N/L)I when the solenoid is long
 **the solenoid on the rig and its probe positions**
 
-- ผ่าน — is 8 cm long with 100 turns, 42 mm across, at 0.3 A
+- ผ่าน — is 8 cm long with 100 turns, 42 mm across, at 0.27 A
 - ผ่าน — has 21 positions, from -10 to 10
 - ผ่าน — steps 1 cm at a time from the middle of the solenoid, so the ends are at 10 cm
 - ผ่าน — gives the field worked by hand at the centre and at the last position

@@ -67,6 +67,8 @@ const NOTES = {
   'components/ReadinessCheck.test.tsx': 'ปุ่มตรวจความพร้อมของเครื่องแลปในหน้า admin และรายการผลที่แสดง',
   'components/AdminPage.test.tsx': 'หน้า admin: การกันสิทธิ์ ห้องแลปตอนนี้ ปุ่มอุปกรณ์ การเปิดปิดแลปและอุปกรณ์ การปิดช่วงเวลา และตารางการจอง',
   'components/EquipmentStatus.test.tsx': 'ส่วนสถานะอุปกรณ์ในหน้า admin: ชุดทดลอง แหล่งจ่ายไฟ กล้อง และเซนเซอร์',
+  'lab-graphs.test.ts': 'การคำนวณของกราฟผลการทดลอง: เส้นตรงผ่านจุดกำเนิด μ₀ จากความชัน เปอร์เซ็นต์คลาดเคลื่อน และเส้นทฤษฎีของโซลีนอยด์',
+  'components/LabGraphs.test.tsx': 'หน้าต่างกราฟผลการทดลองในหน้าสรุป: แท็บสองตอน ค่าของแต่ละจุด การปิด และปุ่มบันทึก PNG',
   'components/LabSummary.test.tsx': 'หน้าสรุปการทดลองเมื่อออกจากห้องแลป และการดาวน์โหลด CSV',
 };
 
@@ -82,7 +84,7 @@ const CATEGORIES = [
   ['ฟิสิกส์และแบบจำลองสนาม', 'สูตรสนามแม่เหล็ก เส้นสนามที่คำนวณจากกฎบีโอต์-ซาวาร์ และแบบจำลอง 2D/3D ในห้องแลป',
     ['physics.test.ts', 'field-lines.test.ts', 'field-model.test.ts', 'field-geometry.test.ts', 'components/FieldDiagram.test.tsx', 'components/FieldViz.test.tsx']],
   ['เซนเซอร์และบันทึกการทดลอง', 'การอ่านค่าเซนเซอร์ การคาลิเบต ค่าพื้นหลัง บันทึกกิจกรรม หน้าสรุป และการเก็บลงฐานข้อมูล',
-    ['sensor.test.ts', 'lab-activity.test.ts', 'api/lab-record.test.ts', 'components/LabSummary.test.tsx']],
+    ['sensor.test.ts', 'lab-activity.test.ts', 'lab-graphs.test.ts', 'api/lab-record.test.ts', 'components/LabSummary.test.tsx', 'components/LabGraphs.test.tsx']],
   ['อุปกรณ์และห้องแลป', 'การสั่งชุดทดลอง แหล่งจ่ายไฟ สิทธิ์ใช้อุปกรณ์ กล้อง และสถานะอุปกรณ์',
     ['rig.test.ts', 'rig-access.test.ts', 'lab-readiness.test.ts', 'components/ReadinessCheck.test.tsx', 'lab-presence.test.ts', 'lab-status.test.ts', 'webrtc-latency.test.ts', 'api/hardware.test.ts', 'api/lab-presence.test.ts', 'api/instruments.test.ts', 'api/cam.test.ts']],
   ['การจองและแดชบอร์ด', 'การจองรอบ ช่องเวลาว่าง ประวัติ สถิติ และการแจ้งเตือน',

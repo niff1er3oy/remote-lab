@@ -170,13 +170,13 @@ describe('the relay of each instrument', () => {
 });
 
 describe('the current of each instrument', () => {
-  const DEFAULTS = { 'coil_1.py': 5, 'coil_2.py': 5, 'coil_3.py': 5, 'sole.py': 0.3 };
+  const DEFAULTS = { 'coil_1.py': 5, 'coil_2.py': 5, 'coil_3.py': 5, 'sole.py': 0.27 };
   const set = async (currents: unknown) => {
     const res = await setCurrents(new NextRequest('http://localhost/api/admin/rig/currents', { method: 'PATCH', body: JSON.stringify({ currents }) }));
     return { status: res.status, body: await res.json() };
   };
 
-  it('is 5 A for each single coil and 0.3 A for the solenoid until an admin sets another', async () => {
+  it('is 5 A for each single coil and 0.27 A for the solenoid until an admin sets another', async () => {
     expect(DEFAULT_CURRENTS).toEqual(DEFAULTS);
     expect(await instrumentCurrents()).toEqual(DEFAULTS);
   });

@@ -39,7 +39,7 @@ export const SEED = {
   // created here so that the settings can be seen and edited from the start.
   'settings/rig': {
     // The current each instrument's circuit is set to, in amperes, by the script that starts it.
-    currents: { 'coil_1.py': 5, 'coil_2.py': 5, 'coil_3.py': 5, 'sole.py': 0.3 },
+    currents: { 'coil_1.py': 5, 'coil_2.py': 5, 'coil_3.py': 5, 'sole.py': 0.27 },
     // The scripts of the instruments closed to students. None to begin with.
     disabled_instruments: [],
   },

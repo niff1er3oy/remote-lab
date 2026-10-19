@@ -9,7 +9,7 @@ import { BellIcon, UnreadBadge, NotifPanel } from '@/app/components/GlobalNotifi
 import MathSource from '@/app/components/MathSource';
 import { pointAdjustment, supplyOffValue } from '@/lib/sensor';
 import { cleanCurrents, DEFAULT_CURRENTS, type Currents } from '@/lib/instruments';
-import { calcBCoil, calcBSolenoid, cmText, fixed, PROBE_MAX, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
+import { calcBCoil, calcBSolenoid, COIL_R, cmText, fixed, PROBE_MAX, PROBE_POSITIONS, PROBE_STEP_M, probeZ, signedFixed, SOLENOID } from '@/lib/physics';
 import { prefersReducedMotion, press } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { clockTime, describeEvent, positionsOf, readingsOf, type EndReason, type LabEvent, type LabReading } from '@/lib/lab-activity';
@@ -45,7 +45,7 @@ const instruments: Inst[] = [
   // ตอนที่ 1 — ขดลวดเดี่ยว  I₀ = 5 A
   {
     id: 0, type: 'coil', name: 'ขดลวดเดี่ยว 1 รอบ', sub: 'n=1 · R=13 มม.',
-    script: 'coil_1.py', I0: DEFAULT_CURRENTS['coil_1.py'], turns: 1, R: 0.013,
+    script: 'coil_1.py', I0: DEFAULT_CURRENTS['coil_1.py'], turns: 1, R: COIL_R,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" />
@@ -54,7 +54,7 @@ const instruments: Inst[] = [
   },
   {
     id: 1, type: 'coil', name: 'ขดลวดเดี่ยว 2 รอบ', sub: 'n=2 · R=13 มม.',
-    script: 'coil_2.py', I0: DEFAULT_CURRENTS['coil_2.py'], turns: 2, R: 0.013,
+    script: 'coil_2.py', I0: DEFAULT_CURRENTS['coil_2.py'], turns: 2, R: COIL_R,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5.5" /><circle cx="12" cy="12" r="2" />
@@ -63,7 +63,7 @@ const instruments: Inst[] = [
   },
   {
     id: 2, type: 'coil', name: 'ขดลวดเดี่ยว 3 รอบ', sub: 'n=3 · R=13 มม.',
-    script: 'coil_3.py', I0: DEFAULT_CURRENTS['coil_3.py'], turns: 3, R: 0.013,
+    script: 'coil_3.py', I0: DEFAULT_CURRENTS['coil_3.py'], turns: 3, R: COIL_R,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="6.5" />
@@ -71,7 +71,7 @@ const instruments: Inst[] = [
       </svg>
     ),
   },
-  // ตอนที่ 2 — โซลีนอยด์  L=80 mm · R=21 mm · I₀ = 0.3 A (ผู้ดูแลระบบปรับได้)
+  // ตอนที่ 2 — โซลีนอยด์  L=80 mm · R=21 mm · I₀ = 0.27 A (ผู้ดูแลระบบปรับได้)
   // ชุดทดลองจริงมีโซลีนอยด์อันเดียวคือ 100 รอบ (ใบแลปกล่าวถึง 150 รอบด้วย แต่ไม่มีบนเครื่อง)
   {
     id: 3, type: 'solenoid', name: 'โซลีนอยด์ 100 รอบ', sub: 'n=100 · L=80 มม.',

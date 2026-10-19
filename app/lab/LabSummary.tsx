@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { animate, stagger } from 'animejs';
 import { prefersReducedMotion } from '@/lib/motion';
 import { fixed, signedFixed } from '@/lib/physics';
@@ -8,6 +8,7 @@ import {
   clockTime, describeEvent, difference, differencePercent, END_HEADLINE, endReasonOf, summarise, visitCsv,
   type LabEvent, type LabReading,
 } from '@/lib/lab-activity';
+import LabGraphs from './LabGraphs';
 
 function durationText(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -46,6 +47,8 @@ export default function LabSummary({ events, experimentName, onLeave, save, onRe
   onRetrySave?: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const graphButton = useRef<HTMLButtonElement>(null);
+  const [graphsOpen, setGraphsOpen] = useState(false);
   const summary = summarise(events);
   const backgroundTried = events.some((e) => e.kind === 'background' || e.kind === 'zero');
   // A record saved before the visit ended (the page was left) has no ending.
@@ -178,6 +181,15 @@ export default function LabSummary({ events, experimentName, onLeave, save, onRe
             ดาวน์โหลด CSV
           </button>
           <button
+            ref={graphButton} onClick={() => setGraphsOpen(true)} aria-haspopup="dialog"
+            className="flex items-center gap-2 rounded-full border border-[#c8ff00]/40 px-5 py-2 text-sm font-semibold text-[#c8ff00] transition-colors hover:bg-[#c8ff00]/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c8ff00]"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 20V4M4 20h16M8 16l4-5 3 3 5-7" />
+            </svg>
+            กราฟ
+          </button>
+          <button
             onClick={onLeave}
             className="rounded-full border border-white/10 px-5 py-2 text-sm text-gray-300 transition-colors hover:border-cyan-500/30 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
           >
@@ -200,6 +212,9 @@ export default function LabSummary({ events, experimentName, onLeave, save, onRe
           )}
         </div>
       </div>
+      {graphsOpen && (
+        <LabGraphs readings={summary.readings} onClose={() => { setGraphsOpen(false); graphButton.current?.focus(); }} />
+      )}
     </div>
   );
 }

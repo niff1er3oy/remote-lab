@@ -45,6 +45,11 @@ app/
 │   └── LabSummary.tsx              — shown in place of the lab room when a visit ends (finish
 │                                     button, time up, or the round ended from outside): what was
 │                                     done, the values, CSV download.
+│                                     Its "กราฟ" button opens LabGraphs.tsx: a dialog with
+│                                     the worksheet's two graphs (B against n with the line
+│                                     through the origin, μ0 and % error; B along Z against
+│                                     the theory curve), each savable as a PNG
+│                                     (lib/lab-graphs.ts holds the fit and the curve)
 │                                     Also what dashboard/record/[id] draws for a past visit
 ├── components/                     — BookingCalendar, DashboardNav, GlobalNotifications,
 │                                     PortraitGuard, useNotifications (poll-based hook),
@@ -125,7 +130,7 @@ There is no fixed schema file — Firestore is schemaless — but the app expect
 - **`bookings/{bookingId}`** (auto-ID) — `user_id`, `lab_id`, `start_time`/`end_time` (Timestamps), `status` (`pending`/`confirmed`/`in_progress`/`completed`/`cancelled`), plus `notified_can_enter_at`/`notified_starting_soon_at` (reminder de-dup flags).
 - **`sessions/{bookingId}`** — one doc per booking, **keyed by the booking's own ID** (not a separate auto-ID) so "start" is a plain existence-check-then-create instead of an upsert. Fields: `user_id`, `lab_id`, `booking_id`, `start_time`, `end_time`, `duration_seconds`, `status`.
 - **`lab_records/{bookingId}`** — what a student did in the lab room during one round (every entry of that round, one after the other, when they left and came back), **keyed by the booking's ID**: `user_id`, `booking_id`, `lab_id`, `events` (the list `lib/lab-activity.ts` describes: each command, probe move, reading, zero and question with its time), `saved_at`. Written by `lab/record`; the booking gets `has_record: true` alongside, so the history list need not open the record to know. Bookings from before this was kept have neither.
-- **`settings/rig`** — one document of rig settings an admin changes at run time: `currents` (the current of each instrument in amperes, by script, e.g. `{ "sole.py": 0.3 }`; an instrument with none stored has its default from `lib/instruments.ts`: 5 A for each single coil, 0.3 A for the solenoid), and `disabled_instruments` (the scripts of the instruments closed to students, e.g. `["coil_1.py", "coil_2.py", "coil_3.py"]`), `updated_by`, `updated_at`. Absent until an admin first closes something.
+- **`settings/rig`** — one document of rig settings an admin changes at run time: `currents` (the current of each instrument in amperes, by script, e.g. `{ "sole.py": 0.27 }`; an instrument with none stored has its default from `lib/instruments.ts`: 5 A for each single coil, 0.27 A for the solenoid), and `disabled_instruments` (the scripts of the instruments closed to students, e.g. `["coil_1.py", "coil_2.py", "coil_3.py"]`), `updated_by`, `updated_at`. Absent until an admin first closes something.
 - **`notifications/{notificationId}`** (auto-ID) — `user_id`, `title`, `message`, `type`, `action_url`, `is_read`, `created_at`.
 
 Leftovers from the removed room-sharing feature may still exist in the database and are no longer read or written: the `lab_chat` collection, and a `room_code` field on bookings created before the removal.
