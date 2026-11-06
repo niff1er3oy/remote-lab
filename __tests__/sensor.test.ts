@@ -1,4 +1,4 @@
-import { aboveBackground, backgroundSize, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, SAMPLES_PER_READING, SENSOR_AXIS } from '@/lib/sensor';
+import { aboveBackground, backgroundSize, calibrated, CALIBRATION, createAverager, createVectorAverager, fieldAbove, fieldFromSensor, fieldSize, vectorFromSensor, READINGS_PER_MEASUREMENT, SAMPLES_PER_READING, SENSOR_AXIS, trimmedMean } from '@/lib/sensor';
 
 describe('fieldFromSensor — one message from the magnetometer', () => {
   it('turns the three components in microtesla into the calibrated size of the field in millitesla', () => {
@@ -214,6 +214,100 @@ describe('fieldAbove — the background taken off size from size, then calibrate
   it('shows the background as its raw size with the calibration on it', () => {
     // 1.1076 x 0.05 + 0.0692
     expect(backgroundSize({ x: 0.03, y: 0.04, z: 0 })).toBeCloseTo(0.12458, 12);
+  });
+});
+
+describe('trimmedMean — a run of readings with the smallest and the largest left out', () => {
+  it('measures with twenty readings', () => {
+    expect(READINGS_PER_MEASUREMENT).toBe(20);
+  });
+
+  it('leaves out the reading with the smallest field and the one with the largest, and averages the rest', () => {
+    const run = [1, 5, 2, 3, 100].map(x => ({ x, y: 0, z: 0 }));
+    expect(trimmedMean(run).x).toBeCloseTo(10 / 3, 12);
+  });
+
+  it('goes by the size of the field, not by one component', () => {
+    // Sizes 5, 6, 1 and 2: the 1 and the 6 go.
+    const run = [{ x: 3, y: 4, z: 0 }, { x: -6, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }];
+    expect(trimmedMean(run)).toEqual({ x: 1.5, y: 3, z: 0 });
+  });
+
+  it('leaves out only one of each when several are of the same size', () => {
+    const run = [2, 2, 2, 8, 8].map(x => ({ x, y: 0, z: 0 }));
+    expect(trimmedMean(run).x).toBeCloseTo(4, 12);
+  });
+
+  it('leaves out two even when every reading is of the same size', () => {
+    const run = [{ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: -1, y: 0, z: 0 }];
+    expect(trimmedMean(run)).toEqual({ x: 0, y: 1, z: 0 });
+  });
+
+  it('of twenty readings is the mean of the eighteen in between', () => {
+    const run = Array.from({ length: READINGS_PER_MEASUREMENT }, (_, i) => ({ x: i + 1, y: 0, z: 0 }));
+    // 2 + 3 + ... + 19 = 189; 189 / 18 = 10.5
+    expect(trimmedMean(run).x).toBeCloseTo(10.5, 12);
+  });
+
+  it('is the plain mean of fewer than three, and a single reading as it is', () => {
+    expect(trimmedMean([{ x: 1, y: 0, z: 0 }, { x: 3, y: 0, z: 0 }])).toEqual({ x: 2, y: 0, z: 0 });
+    expect(trimmedMean([{ x: 1, y: 2, z: 3 }])).toEqual({ x: 1, y: 2, z: 3 });
+  });
+});
+
+describe('freshRun — readings in a row from now on', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('gives as many readings as asked for, each the mean of its own block, none left out between them', async () => {
+    const averager = createAverager(2);
+    // Taken while the probe was still moving.
+    averager.add(9);
+    const run = averager.freshRun(3, 1000);
+    [1, 3, 5, 7, 9, 11].forEach((v) => averager.add(v));
+    expect(await run).toEqual([2, 6, 10]);
+  });
+
+  it('waits for each reading in turn, not for the whole run at once', async () => {
+    jest.useFakeTimers();
+    const averager = createAverager(2);
+    const run = averager.freshRun(2, 1000);
+    jest.advanceTimersByTime(900);
+    averager.add(1);
+    averager.add(3);
+    jest.advanceTimersByTime(900);
+    averager.add(5);
+    averager.add(7);
+    expect(await run).toEqual([2, 6]);
+  });
+
+  it('is null when the sensor stops before the run is complete', async () => {
+    jest.useFakeTimers();
+    const averager = createAverager(2);
+    const run = averager.freshRun(3, 4000);
+    averager.add(1);
+    averager.add(3);
+    jest.advanceTimersByTime(4000);
+    expect(await run).toBeNull();
+    // The late values complete ordinary readings and disturb nothing.
+    averager.add(5);
+    expect(averager.add(7)).toBe(6);
+  });
+
+  it('leaves someone waiting for a single fresh reading to it', async () => {
+    const averager = createAverager(2);
+    const single = averager.fresh(1000);
+    const run = averager.freshRun(2, 1000);
+    [1, 3, 5, 7].forEach((v) => averager.add(v));
+    expect(await single).toBe(2);
+    expect(await run).toEqual([2, 6]);
+  });
+
+  it('with trimmedMean is what one measurement of the solenoid is', async () => {
+    const averager = createVectorAverager(2);
+    const run = averager.freshRun(4, 1000);
+    // Four readings of sizes 0.2, 0.5, 0.3 and 0.4 mT: the 0.2 and the 0.5 go.
+    [0.2, 0.2, 0.5, 0.5, 0.3, 0.3, 0.4, 0.4].forEach((x) => averager.add({ x, y: 0, z: 0 }));
+    expect(trimmedMean((await run)!).x).toBeCloseTo(0.35, 12);
   });
 });
 

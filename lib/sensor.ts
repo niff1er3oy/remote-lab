@@ -104,9 +104,31 @@ export const aboveBackground = (reading: number, background: number | null) => r
 // about twenty a second, so a reading takes about a second.
 export const SAMPLES_PER_READING = 20;
 
+// A measurement of the solenoid, and every reading of the room's own field, is
+// not one reading but this many in a row: about twenty seconds. The one with
+// the smallest field and the one with the largest are left out, and the
+// measurement is the mean of the rest (`trimmedMean`).
+export const READINGS_PER_MEASUREMENT = 20;
+
 const meanOf = (values: number[]) => values.reduce((sum, v) => sum + v, 0) / values.length;
 const meanVector = (values: FieldVector[]): FieldVector =>
   ({ x: meanOf(values.map(v => v.x)), y: meanOf(values.map(v => v.y)), z: meanOf(values.map(v => v.z)) });
+
+/**
+ * The mean of a run of readings with one of the smallest and one of the
+ * largest left out, by the size of the field; each component is averaged over
+ * the rest. With fewer than three there is nothing to leave out, and it is the
+ * plain mean.
+ */
+export function trimmedMean(readings: FieldVector[]): FieldVector {
+  if (readings.length < 3) return meanVector(readings);
+  const sizes = readings.map(fieldSize);
+  // The first of the smallest and the last of the largest: two readings even
+  // when every one is of the same size.
+  const smallest = sizes.indexOf(Math.min(...sizes));
+  const largest = sizes.lastIndexOf(Math.max(...sizes));
+  return meanVector(readings.filter((_, i) => i !== smallest && i !== largest));
+}
 
 /**
  * Turns the stream of single values into readings: every `size` values make
@@ -147,6 +169,27 @@ function averagerOf<T>(size: number, mean: (values: T[]) => T) {
       return new Promise((resolve) => {
         const tell = (reading: T) => { clearTimeout(timer); resolve(reading); };
         const timer = setTimeout(() => { waiting = waiting.filter((w) => w !== tell); resolve(null); }, timeoutMs);
+        waiting.push(tell);
+      });
+    },
+    /**
+     * `count` readings in a row made only of values that arrive from now on,
+     * with none left out between them. Resolves to null when the sensor stops
+     * sending: when any one of them is not complete within `timeoutMs`.
+     */
+    freshRun(count: number, timeoutMs: number): Promise<T[] | null> {
+      block = [];
+      return new Promise((resolve) => {
+        const run: T[] = [];
+        const giveUp = () => { waiting = waiting.filter((w) => w !== tell); resolve(null); };
+        let timer = setTimeout(giveUp, timeoutMs);
+        const tell = (reading: T) => {
+          clearTimeout(timer);
+          run.push(reading);
+          if (run.length >= count) { resolve(run); return; }
+          timer = setTimeout(giveUp, timeoutMs);
+          waiting.push(tell);
+        };
         waiting.push(tell);
       });
     },

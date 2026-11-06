@@ -13,7 +13,7 @@ import { prefersReducedMotion, press } from '@/lib/motion';
 import { readLatency, type LatencyReading, type LatencySample } from '@/lib/webrtc-latency';
 import { clockTime, describeEvent, positionsOf, readingsOf, type EndReason, type LabEvent, type LabReading } from '@/lib/lab-activity';
 import { createSaveQueue, fitToSave, MAX_EVENTS } from '@/lib/lab-record';
-import { backgroundSize, createVectorAverager, fieldAbove, vectorFromSensor, type FieldVector } from '@/lib/sensor';
+import { backgroundSize, createVectorAverager, fieldAbove, READINGS_PER_MEASUREMENT, trimmedMean, vectorFromSensor, type FieldVector } from '@/lib/sensor';
 import { FieldViz } from './FieldViz';
 import LabSummary, { type SaveState } from './LabSummary';
 
@@ -116,8 +116,8 @@ async function sendToRig(command: RigCommand): Promise<string | null> {
   }
 }
 
-// How long a fresh reading is waited for after the probe arrives. Twenty
-// values take about a second; longer than this and the sensor is not sending.
+// How long each reading of a fresh run is waited for. Twenty values take
+// about a second; longer than this and the sensor is not sending.
 const FRESH_READING_MS = 4000;
 // How long the probe is left to come to rest once the arm has stopped, before
 // a reading is taken there. Until the reading is in, the page shows the
@@ -556,6 +556,18 @@ export default function RemoteLabPage() {
   const [z, setZ] = useState(0); // Z position in metres (solenoid only, one of the probe's 21 positions)
   const [measData, setMeasData] = useState<Map<number, MeasRecord>>(new Map());
   const [realSensorValue, setRealSensorValue] = useState<number | null>(null);
+  // What the solenoid's screen shows: its last measurement, held until the
+  // next (a coil shows each value as it arrives). Null when there is none: 0
+  // is shown then. `shownStale` when that is out of date (the supply switched
+  // by itself, or a measuring that ended without a value): it is then measured
+  // again for the screen alone, nothing going on record, while `refreshing`.
+  const [shown, setShown] = useState<number | null>(null);
+  const [shownStale, setShownStale] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  // Each start of something that sets what is shown takes the next number:
+  // only the latest may set it.
+  const showToken = useRef(0);
+  const refreshNo = useRef(0);
   const [isRunning, setIsRunning] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
   const isBusy = isRunning || isMoving;
@@ -586,28 +598,42 @@ export default function RemoteLabPage() {
   const [background, setBackground] = useState<number | null | undefined>(undefined);
   const backgroundNow = useRef<FieldVector | null>(null);
   const backgroundTried = useRef(false);
-  // The screen shows every value as it arrives. What goes on record is not one
-  // value but a reading: twenty in a row, taken where the probe now is, and
-  // their mean.
+  // What goes on record is not one value but a reading: twenty in a row,
+  // taken where the probe now is, and their mean; for a measurement of the
+  // solenoid and for the room's own field, twenty such readings (lib/sensor.ts).
   const [averager] = useState(() => createVectorAverager());
-  // Takes a reading from now on, which takes about a second; the next command
-  // waits for it. Null, at once, when the sensor is not sending. This is the
-  // field as the sensor has it, all three components, the background still in it.
-  const freshVector = useCallback(async () => {
+  // Takes `readings` readings from now on, one unless told otherwise, each
+  // about a second; the next command waits for them. Gives their mean with
+  // the smallest and the largest left out (lib/sensor.ts). Null, at once,
+  // when the sensor is not sending, and when it stops before they are all in.
+  // This is the field as the sensor has it, all three components, the
+  // background still in it.
+  const freshVector = useCallback(async (readings = 1) => {
     const silent = Date.now() - lastValueAt.current > SENSOR_SILENT_MS;
-    const reading = silent ? null : await averager.fresh(FRESH_READING_MS);
+    const run = silent ? null : await averager.freshRun(readings, FRESH_READING_MS);
+    const reading = run === null ? null : trimmedMean(run);
     // A silent sensor has no reading, and its last value is no longer shown.
     if (reading === null) setRealSensorValue(null);
     return reading;
   }, [averager]);
   // The same as the one number the lab works with: the size of the field with
   // the background in force taken off.
-  const freshReading = useCallback(async () => {
-    const vector = await freshVector();
+  const freshReading = useCallback(async (readings = 1) => {
+    const vector = await freshVector(readings);
     const reading = vector === null ? null : fieldAbove(vector, backgroundNow.current);
     sensorNow.current = reading;
     return reading;
   }, [freshVector]);
+  // A measurement at a position of the solenoid: what goes on record, and
+  // what its screen shows from then on.
+  const measurePoint = useCallback(async () => {
+    const token = ++showToken.current;
+    const value = await freshReading(READINGS_PER_MEASUREMENT);
+    if (token === showToken.current) setShown(value);
+    // The sensor stopped: the screen has the position measured again.
+    if (value === null) setShownStale(true);
+    return value;
+  }, [freshReading]);
   // Makes `vector` the background from here on.
   const takeAsBackground = useCallback((vector: FieldVector) => {
     backgroundNow.current = vector;
@@ -685,6 +711,7 @@ export default function RemoteLabPage() {
   if (instrument !== prevInstrumentForReset) {
     setPrevInstrumentForReset(instrument);
     setZ(0);
+    setShown(null);
     // Back in the same round: the first time the solenoid is chosen, its table
     // holds the positions measured before leaving.
     const chosen = instruments[instrument];
@@ -793,6 +820,27 @@ export default function RemoteLabPage() {
   }, [record]);
   const supplyOnNow = useRef<boolean | null>(null);
   useEffect(() => { supplyOnNow.current = supplyOn; }, [supplyOn]);
+  // A measuring starting is what will set what is shown: nothing is out of
+  // date then. With the solenoid in use, the supply switching by itself (not
+  // as part of a measuring) leaves what is shown out of date, and so does the
+  // sensor coming back when there is nothing to show.
+  const solenoidInUse = instruments[instrument].type === 'solenoid';
+  const [busyWas, setBusyWas] = useState(isBusy);
+  if (busyWas !== isBusy) {
+    setBusyWas(isBusy);
+    if (isBusy) setShownStale(false);
+  }
+  const [supplyWas, setSupplyWas] = useState(supplyOn);
+  if (supplyWas !== supplyOn) {
+    setSupplyWas(supplyOn);
+    if (supplyWas !== null && supplyOn !== null && solenoidInUse && !isBusy) setShownStale(true);
+  }
+  const sensorLive = realSensorValue !== null;
+  const [liveWas, setLiveWas] = useState(sensorLive);
+  if (liveWas !== sensorLive) {
+    setLiveWas(sensorLive);
+    if (sensorLive && solenoidInUse && shown === null && !isBusy) setShownStale(true);
+  }
   // A position of the solenoid is measured with the supply on: when it is off
   // as the probe gets there, the page switches it on first, and leaves it on.
   // False when it could not be switched on: nothing is measured there then.
@@ -805,6 +853,8 @@ export default function RemoteLabPage() {
     const ok = error === null && supply === true;
     record({ kind: 'supply', ok, detail: 'on' });
     if (!ok) setRigError({ text: `เปิดแหล่งจ่ายไฟไม่สำเร็จ ${lost}: ${error ?? 'แหล่งจ่ายไฟยังปิดอยู่'}`, canRetry: false });
+    // Nothing is measured where the probe now is: the screen has it measured as it is.
+    if (!ok) setShownStale(true);
     return ok;
   }, [record]);
 
@@ -832,6 +882,9 @@ export default function RemoteLabPage() {
       };
       setZeroing(true);
       setIsRunning(true);
+      // What the solenoid showed was worked out against the old zero.
+      setShown(null);
+      let measured = false;
       try {
         let failed = wasOn ? await supplyTo(false) : null;
         if (failed) failed = `ปิดแหล่งจ่ายไฟไม่สำเร็จ: ${failed}`;
@@ -843,7 +896,7 @@ export default function RemoteLabPage() {
           else { home = true; powered.current = null; }
         }
         if (!failed) await armSettled();
-        const vector = failed ? null : await freshVector();
+        const vector = failed ? null : await freshVector(READINGS_PER_MEASUREMENT);
         if (!failed && vector === null) failed = 'เซนเซอร์ไม่ส่งค่า';
         if (vector !== null) record({ kind: 'zero', ok: true, bMeasured: takeAsBackground(vector) });
         else record({ kind: 'zero', ok: false, bMeasured: null, detail: failed ?? undefined });
@@ -871,12 +924,15 @@ export default function RemoteLabPage() {
               const I = ampsOf(inst);
               const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
               await armSettled();
-              const bMeasured = await freshReading();
+              const bMeasured = await measurePoint();
+              measured = true;
               setMeasData(prev => new Map(prev).set(0, { bMeasured: bMeasured ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
               record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured });
             }
           }
         }
+        // Nothing measured: the screen has the solenoid measured as it is now.
+        if (!measured) setShownStale(true);
         setRigError(failed
           ? { text: `ตั้งศูนย์ไม่สำเร็จ: ${failed} ค่าศูนย์เดิมยังใช้อยู่`, canRetry: false }
           : back ? { text: `ตั้งศูนย์แล้ว แต่เปิดแหล่งจ่ายไฟคืนไม่สำเร็จ: ${back}`, canRetry: false }
@@ -892,7 +948,7 @@ export default function RemoteLabPage() {
       return false;
     }
     setZeroing(true);
-    const vector = await freshVector();
+    const vector = await freshVector(READINGS_PER_MEASUREMENT);
     setZeroing(false);
     if (vector === null) {
       record({ kind: 'zero', ok: false, bMeasured: null });
@@ -902,7 +958,7 @@ export default function RemoteLabPage() {
     record({ kind: 'zero', ok: true, bMeasured: takeAsBackground(vector) });
     setRigError(null);
     return true;
-  }, [instrument, supplyOn, freshVector, freshReading, takeAsBackground, record, ampsOf]);
+  }, [instrument, supplyOn, freshVector, measurePoint, takeAsBackground, record, ampsOf]);
 
   const [entered, setEntered] = useState(false);
   useEffect(() => {
@@ -912,7 +968,7 @@ export default function RemoteLabPage() {
       // First the room's own field, while nothing is switched on: the supply
       // comes on only once it has been read.
       if (!backgroundTried.current) {
-        const vector = await freshVector();
+        const vector = await freshVector(READINGS_PER_MEASUREMENT);
         if (gone) return;
         backgroundTried.current = true;
         const size = vector === null ? null : takeAsBackground(vector);
@@ -998,7 +1054,7 @@ export default function RemoteLabPage() {
           const I = ampsOf(inst);
           const bTheory = calcBSolenoid(inst.N, I, inst.L, inst.R, 0);
           await armSettled();
-          const bMeasured = await freshReading();
+          const bMeasured = await measurePoint();
           // No value from the sensor is 0 on screen, never the theory value.
           setMeasData(prev => new Map(prev).set(0, { bMeasured: bMeasured ?? 0, bTheory, zero: backgroundNow.current && backgroundSize(backgroundNow.current) }));
           record({ kind: 'move', instrument: inst.name, ok: true, zCm: 0, I, bTheory, bMeasured });
@@ -1011,7 +1067,7 @@ export default function RemoteLabPage() {
         setIsRunning(false);
       }
     })();
-  }, [instrument, rigReady, rigAttempt, record, recordReading, freshReading, ampsOf, supplyForMeasuring]);
+  }, [instrument, rigReady, rigAttempt, record, recordReading, freshReading, measurePoint, ampsOf, supplyForMeasuring]);
 
   // The visit is over, by the finish button, by the clock or because the round
   // was ended from outside: cut whatever is
@@ -1045,11 +1101,34 @@ export default function RemoteLabPage() {
 
   const reportMove = useCallback((text: string | null, zCm: number, bTheory: number, bMeasured: number | null = null) => {
     setRigError(text === null ? null : { text: `เลื่อนหัววัดไม่สำเร็จ ค่าที่ตำแหน่งนี้จึงไม่ถูกบันทึก: ${text}`, canRetry: false });
+    // The probe did not get there: the screen has it measured where it is.
+    if (text !== null) setShownStale(true);
     const inst = instruments[instrument];
     record(text === null
       ? { kind: 'move', instrument: inst.name, ok: true, zCm, I: ampsOf(inst), bTheory, bMeasured }
       : { kind: 'move', instrument: inst.name, ok: false, zCm, detail: text });
   }, [instrument, record, ampsOf]);
+
+  // A measuring starting takes over from a measuring for the screen in hand.
+  useEffect(() => { if (isBusy) showToken.current++; }, [isBusy]);
+  // What the solenoid shows is out of date and nothing else is measuring: it
+  // is measured again for the screen alone, as a position is (the field left
+  // to settle, then the readings), and nothing goes on record.
+  useEffect(() => {
+    if (!shownStale || isBusy) return;
+    const inst = powered.current;
+    if (!inst || inst.type !== 'solenoid' || ending.current) return;
+    const token = ++showToken.current;
+    const mine = ++refreshNo.current;
+    (async () => {
+      setShownStale(false);
+      setRefreshing(true);
+      await armSettled();
+      const value = token === showToken.current ? await freshReading(READINGS_PER_MEASUREMENT) : null;
+      if (token === showToken.current) setShown(value);
+      if (mine === refreshNo.current) setRefreshing(false);
+    })();
+  }, [shownStale, isBusy, freshReading]);
 
   // Read real sensor data via WebSocket
   useEffect(() => {
@@ -1147,14 +1226,19 @@ export default function RemoteLabPage() {
     ? calcBCoil(inst.turns, I, inst.R)
     : calcBSolenoid(inst.N, I, inst.L, inst.R, z);
   // No value from the sensor is shown as 0, never as the theory value: the two
-  // would then agree exactly when nothing was measured at all.
-  const bMeasured = realSensorValue ?? 0;
+  // would then agree exactly when nothing was measured at all. The solenoid
+  // shows its last measurement, a coil each value as it arrives.
+  const bMeasured = realSensorValue === null ? 0 : inst.type === 'solenoid' ? shown ?? 0 : realSensorValue;
+  // "รอค่า" while the rig carries out a command, while the room's own field is
+  // read (on entering, or at Set 0), and while the solenoid is measured again
+  // for the screen.
+  const waiting = isBusy || !entered || zeroing || (inst.type === 'solenoid' && refreshing);
   // What the assistant is told with each question: the readings on screen and
   // the state of the room, so that it can say why a value is what it is.
   const chatReadings: ChatReadings = {
     inst, I, bTheory, bMeasured, z, background,
     supply: supplyHeld ? 'held' : supplyOn === true ? 'on' : supplyOn === false ? 'off' : undefined,
-    busy: isRunning,
+    busy: isRunning || zeroing || (inst.type === 'solenoid' && refreshing),
     sensor: realSensorValue !== null,
     rezeroed: events.filter(e => e.kind === 'zero' && e.ok).length,
     error: rigError?.text,
@@ -1228,7 +1312,7 @@ export default function RemoteLabPage() {
               <SensorPanel
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured} background={background}
-                z={z} waiting={isBusy}
+                z={z} waiting={waiting}
                 zero={{ set: setZero, busy: zeroing || isBusy || !rigReady, blocked: supplyOn === true && inst.type === 'coil', arm: inst.type === 'solenoid' }}
               />
             </div>
@@ -1238,7 +1322,7 @@ export default function RemoteLabPage() {
                 <SplitFieldPanel
                   instType={inst.type} turns={inst.type === 'coil' ? inst.turns : 0}
                   bTheory={bTheory} bMeasured={bMeasured} bPeak={bPeak}
-                  I={I} z={z} waiting={isBusy}
+                  I={I} z={z} waiting={waiting}
                 />
               </div>
               {inst.type === 'solenoid' && (
@@ -1251,7 +1335,7 @@ export default function RemoteLabPage() {
                     isMoving={isMoving} setIsMoving={setIsMoving}
                     onMoveError={reportMove}
                     supplyForMeasuring={supplyForMeasuring} supplyOff={supplyOn === false}
-                    freshReading={freshReading}
+                    measurePoint={measurePoint}
                     background={background}
                     disabled={isBusy}
                   />
@@ -1311,7 +1395,7 @@ export default function RemoteLabPage() {
               <SensorPanel
                 inst={inst} I={I}
                 bTheory={bTheory} bMeasured={bMeasured} background={background}
-                z={z} waiting={isBusy}
+                z={z} waiting={waiting}
                 zero={{ set: setZero, busy: zeroing || isBusy || !rigReady, blocked: supplyOn === true && inst.type === 'coil', arm: inst.type === 'solenoid' }}
               />
               <FormulaPanel inst={inst} I={I} z={z} widthClassName="w-full" />
@@ -1324,7 +1408,7 @@ export default function RemoteLabPage() {
                 <SplitFieldPanel
                   instType={inst.type} turns={inst.type === 'coil' ? inst.turns : 0}
                   bTheory={bTheory} bMeasured={bMeasured} bPeak={bPeak}
-                  I={I} z={z} waiting={isBusy}
+                  I={I} z={z} waiting={waiting}
                 />
               </div>
               {inst.type === 'solenoid' && (
@@ -1337,7 +1421,7 @@ export default function RemoteLabPage() {
                     isMoving={isMoving} setIsMoving={setIsMoving}
                     onMoveError={reportMove}
                     supplyForMeasuring={supplyForMeasuring} supplyOff={supplyOn === false}
-                    freshReading={freshReading}
+                    measurePoint={measurePoint}
                     background={background}
                     disabled={isBusy}
                   />
@@ -2848,7 +2932,7 @@ function keptTable(events: LabEvent[], inst: Inst): Map<number, MeasRecord> {
     .map(p => [p.zCm, { bMeasured: p.bMeasured ?? 0, bTheory: p.bTheory, zero: p.zero }]));
 }
 
-function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, supplyForMeasuring, supplyOff, freshReading, background, disabled }: {
+function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMoving, setIsMoving, onMoveError, supplyForMeasuring, supplyOff, measurePoint, background, disabled }: {
   /** Switches the supply on if it is off; false when it could not be, and has said so. */
   supplyForMeasuring: (lost?: string) => Promise<boolean>;
   /** The supply is off: choosing a position will switch it on. */
@@ -2861,8 +2945,8 @@ function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMovin
   isMoving: boolean; setIsMoving: (v: boolean) => void;
   /** Called with a message when the rig did not move the probe, and with null when it did. */
   onMoveError: (message: string | null, zCm: number, bTheory: number, bMeasured?: number | null) => void;
-  /** A reading made of values taken from now on; null when the sensor sends none. */
-  freshReading: () => Promise<number | null>;
+  /** A measurement made of values taken from now on, which the screen then shows; null when the sensor sends none. */
+  measurePoint: () => Promise<number | null>;
   /** The zero the sensor's values have had taken off, kept with each position measured. */
   background: number | null | undefined;
   disabled?: boolean;
@@ -2918,7 +3002,7 @@ function SolenoidDataPanel({ z, setZ, bTheory, measData, setMeasData, N, isMovin
       // was off): once the probe has come to rest, only values taken from
       // here on count.
       await armSettled();
-      const reading = await freshReading();
+      const reading = await measurePoint();
       bMeasured = reading;
       // No reading here is 0: not the theory value, and not the value last
       // seen, which may be from the position the probe has just left.

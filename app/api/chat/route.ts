@@ -31,7 +31,7 @@ interface ChatContext {
   z?: number;
   /** The power supply: on, off, or held off by an admin. */
   supply?: 'on' | 'off' | 'held';
-  /** The rig is carrying out a command right now. */
+  /** The rig is carrying out a command, or a measurement is being taken, right now. */
   busy?: boolean;
   /** Whether the sensor is sending values. When it is not, bMeasured is 0 for want of one. */
   sensor?: boolean;
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
   const SUPPLY = { on: 'เปิดอยู่', off: 'ปิดอยู่ จึงไม่มีกระแสในขดลวด', held: 'ผู้ดูแลระบบปิดและล็อกไว้ นักเรียนเปิดเองไม่ได้' };
   const state = [
     context.supply && `- แหล่งจ่ายไฟ: ${SUPPLY[context.supply]}`,
-    context.busy && '- ชุดทดลองกำลังทำตามคำสั่งอยู่ (กำลังสลับอุปกรณ์หรือเลื่อนหัววัด) ค่าที่เห็นอาจยังไม่นิ่ง',
+    context.busy && '- ชุดทดลองกำลังทำตามคำสั่งอยู่ (สลับอุปกรณ์ เลื่อนหัววัด ตั้งศูนย์ หรือเก็บค่าเฉลี่ย 20 ชุด) หน้าจอขึ้น "รอค่า" ค่า B_measured ข้างบนจึงยังไม่ใช่ผลวัดล่าสุด',
     context.sensor === false && '- เซนเซอร์ไม่ส่งค่าในขณะนี้ ค่า B_measured = 0 ข้างบนจึงไม่ใช่ค่าที่วัดได้',
     context.sensor === true && '- เซนเซอร์ส่งค่าตามปกติ',
     context.rezeroed ? `- นักเรียนกด Set 0 ตั้งค่าศูนย์ใหม่แล้ว ${context.rezeroed} ครั้ง` : '',
